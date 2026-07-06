@@ -10,6 +10,9 @@ namespace ModSettingsMenu
     /// </summary>
     public sealed class ModSettingsMenuMod : IMod
     {
+        // Free id outside the vanilla RadicalMenu.MenuType enum; distinct from GMCM(1493)/HealthBars(19901).
+        public const RadicalMenu.MenuType SettingsMenuType = (RadicalMenu.MenuType)29314;
+
         public void EarlyInit()
         {
         }
