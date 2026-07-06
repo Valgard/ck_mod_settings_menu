@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+
+# Worktrees
+.worktrees/
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+
+# Build artifacts
+bin/
+obj/
+build/
+*.dll
+*.pdb
+
+# Unity generated
+Library/
+Temp/
+Logs/
+UserSettings/
+*.csproj
+*.sln
+
+# Env / secrets
+.env
+.envrc
+.envrc.local
+
+# Shared editor helpers — symlinked in by utils/link.sh (the .cs are symlinks
+# into ../utils, the .meta are Unity-generated locally; no asset references
+# them by GUID, so neither belongs in the repo).
+unity/ModSettingsMenu/Editor/CLIBuildHelper.cs
+unity/ModSettingsMenu/Editor/CLIBuildHelper.cs.meta
+unity/ModSettingsMenu/Editor/CLIPublishHelper.cs
+unity/ModSettingsMenu/Editor/CLIPublishHelper.cs.meta
+unity/ModSettingsMenu/Editor/LocalizationGenerator.cs
+unity/ModSettingsMenu/Editor/LocalizationGenerator.cs.meta

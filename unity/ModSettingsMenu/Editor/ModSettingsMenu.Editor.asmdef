@@ -1,0 +1,22 @@
+{
+    "name": "ModSettingsMenu.Editor",
+    "rootNamespace": "ModSettingsMenu.Editor",
+    "references": [
+        "ModSettingsMenu",
+        "ModSDK.Editor",
+        "PugMod.SDK"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "modio.UnityPlugin.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

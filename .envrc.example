@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# ModSettingsMenu — environment variables.
+#
+# Machine-level shared values (UNITY_BIN, SDK_PATH, CK_GAME_VERSION,
+# MODIO_DEPS_MAP, LOC_TABLE, the ilspycmd PATH entry) are inherited from the
+# parent core_keeper/.envrc — define them once there, not here.
+#
+#   cp .envrc.example .envrc
+#   direnv allow                     # then `cd` triggers the chain
+#   # or, without direnv:  source .envrc && ../utils/build.sh
+
+# --- Inherit shared values from the parent core_keeper/.envrc ---------------
+if command -v source_up_if_exists >/dev/null 2>&1; then
+    source_up_if_exists          # direnv: walk up to core_keeper/.envrc
+elif [ -f ../.envrc ]; then
+    source ../.envrc             # manual `source .envrc` fallback
+fi
+
+# --- Mod identity (project-inherent — leave as-is) --------------------------
+
+# PascalCase name — drives SDK symlink paths and the build entry point.
+export MOD_NAME="ModSettingsMenu"
+
+# kebab-case id, written as `name_id` in the fake mod.io state.json.
+export MOD_NAME_ID="mod-settings-menu"
+
+# One-line summary, written into state.json by utils/install-macos.sh.
+export MOD_SUMMARY="A shared in-game Options-menu screen where other mods register their settings."
+
+# Fake mod.io ID — must be DISTINCT per mod.
+export FAKE_MOD_ID="9999991"
+
+# ModBuilder output staging dir (build.sh → install-macos.sh copies onward).
+# MOD_INSTALL_BASE_PATH is inherited from the parent core_keeper/.envrc above.
+export MOD_INSTALL_PATH="$MOD_INSTALL_BASE_PATH/$MOD_NAME_ID-build"
+
+# Repo root, read by the shared CLIPublishHelper to locate CHANGELOG.md.
+export MOD_REPO_ROOT="$PWD"
