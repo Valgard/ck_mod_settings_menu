@@ -60,20 +60,21 @@ namespace ModSettingsMenu
             entry.GetComponent<RadicalOptionsMenuOption_PushMenu>().menuToPush = ModSettingsMenuMod.SettingsMenuType;
         }
 
-        // Instantiate our (Phase-1 empty) menu: clone the vanilla options menu, clear it, title it.
+        // Instantiate our own menu prefab + populate it from the registry.
         [HarmonyPatch(typeof(MenuManager), nameof(MenuManager.Init)), HarmonyPostfix]
         public static void MenuManager_PostInit()
         {
-            var menu = Object.Instantiate(Manager.menu.uiOptionsMenuPrefab, Manager.camera.uiCamera.transform)
-                             .GetComponent<RadicalOptionsMenu>();
+            var prefab = ModSettingsMenuMod.MenuPrefab;
+            if (prefab == null)
+            {
+                Debug.LogWarning("[ModSettingsMenu] MenuPrefab not loaded; Mod Settings entry will have no menu.");
+                MenuInstance = null;
+                return;
+            }
+            var menu = Object.Instantiate(prefab, Manager.camera.uiCamera.transform)
+                             .GetComponent<ModSettingsMenu.UI.SettingsMenu>();
             menu.gameObject.SetActive(false);
-            // Title bigtext + shadow keep their own style-default colours (light / dark).
-            RenderRaw(menu.transform.Find("Title/Title bigtext").GetComponent<PugText>(), "Mod Settings");
-            RenderRaw(menu.transform.Find("Title/Title bigtext shadow").GetComponent<PugText>(), "Mod Settings");
-            var scroll = menu.transform.Find("Options/Scroll");
-            menu.menuOptions.Clear();
-            for (int i = scroll.childCount - 1; i >= 0; i--)
-                Object.Destroy(scroll.GetChild(i).gameObject);
+            menu.Populate();
             MenuInstance = menu;
         }
 
