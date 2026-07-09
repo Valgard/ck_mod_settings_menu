@@ -74,7 +74,6 @@ namespace ModSettingsMenu
             var menu = Object.Instantiate(prefab, Manager.camera.uiCamera.transform)
                              .GetComponent<ModSettingsMenu.UI.SettingsMenu>();
             menu.gameObject.SetActive(false);
-            menu.Populate();
             MenuInstance = menu;
         }
 
@@ -89,5 +88,7 @@ namespace ModSettingsMenu
             }
             return true;
         }
+        // Populate now runs in SettingsMenu.OnFirstOpened() (before ActivateTopMenu),
+        // so no PushMenu postfix is needed here.
     }
 }

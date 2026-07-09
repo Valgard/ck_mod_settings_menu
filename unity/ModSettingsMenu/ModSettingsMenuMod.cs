@@ -1,4 +1,5 @@
 using CoreLib.Util.Extension;
+using ModSettingsMenu.Settings;
 using ModSettingsMenu.UI;
 using PugMod;
 using UnityEngine;
@@ -31,6 +32,11 @@ namespace ModSettingsMenu
         public void Init()
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
+            // TEMP self-test (Phase 2b): register toggles so Populate has content to render.
+            ModSettings.Section(this)
+                .Toggle(out _, "showHud", true)
+                .Toggle(out _, "verbose", false)
+                .Build();
         }
 
         public void ModObjectLoaded(Object obj)
