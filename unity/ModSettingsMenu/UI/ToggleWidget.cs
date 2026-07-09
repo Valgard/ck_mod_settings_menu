@@ -30,7 +30,10 @@ namespace ModSettingsMenu.UI
 
         // Mod settings must be reachable everywhere; the vanilla default returns INACTIVE in the
         // title screen for options cloned from an in-game-only entry, which Activate() would hide.
-        public override OptionActiveState GetActiveStateInCurrentScene() => OptionActiveState.ACTIVE;
+        // Gate on binding so the inactive ToggleTemplate (never bound → _def null) stays hidden;
+        // only real, bound toggles activate.
+        public override OptionActiveState GetActiveStateInCurrentScene()
+            => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
         public override void OnParentMenuActivation()
         {
