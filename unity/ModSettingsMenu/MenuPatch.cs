@@ -15,7 +15,7 @@ namespace ModSettingsMenu
     [HarmonyPatch]
     public static class MenuPatch
     {
-        private static RadicalMenu MenuInstance;
+        internal static ModSettingsMenu.UI.SettingsMenu MenuInstance { get; private set; }
 
         // Render a raw (non-localised) string and set its colour. Cloned vanilla
         // PugText inherits localize=true (→ "missing: <term>") and keeps a stale

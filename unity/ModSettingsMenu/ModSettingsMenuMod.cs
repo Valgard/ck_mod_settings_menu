@@ -58,8 +58,19 @@ namespace ModSettingsMenu
         {
         }
 
+        // One-shot guard: pre-warm the menu on the first frame the instance exists (MenuManager.Init
+        // postfix has run). All IMod.Init — including consumers — run before the first Update, so the
+        // registry is already populated here.
+        private bool _warmed;
+
         public void Update()
         {
+            if (_warmed) return;
+            var menu = MenuPatch.MenuInstance;
+            if (menu == null) return;                 // instance not created yet → retry next frame
+            _warmed = true;
+            if (ModSettings.Sections.Count > 0)       // no consumer → don't spend 1 s at startup for nothing
+                menu.PreWarm();
         }
     }
 }

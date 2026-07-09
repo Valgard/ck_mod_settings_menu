@@ -50,6 +50,18 @@ namespace ModSettingsMenu.UI
             RenderContent();
         }
 
+        // Pay the one-time first-enable cost (bundle asset load / shader-variant compile, ~1 s
+        // under Wine) once at load instead of on the first open: build the real rows, then fire
+        // the OnEnable cascade with a same-frame SetActive cycle. NOT RadicalMenu.Activate() — so
+        // no HUD toggle, SFX, or menu-stack push; OnEnable runs synchronously inside SetActive(true),
+        // and disabling in the same frame means no active frame is ever rendered (no flash).
+        public void PreWarm()
+        {
+            Populate();
+            gameObject.SetActive(true);
+            gameObject.SetActive(false);
+        }
+
         public void Populate()
         {
             _scroll = GetComponent<UIScrollWindow>();
