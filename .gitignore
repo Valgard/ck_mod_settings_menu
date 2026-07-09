@@ -38,3 +38,6 @@ unity/ModSettingsMenu/Editor/CLIPublishHelper.cs
 unity/ModSettingsMenu/Editor/CLIPublishHelper.cs.meta
 unity/ModSettingsMenu/Editor/LocalizationGenerator.cs
 unity/ModSettingsMenu/Editor/LocalizationGenerator.cs.meta
+
+# Superpowers plans + brainstorming scratch — never committed (docs/specs + docs/adrs stay tracked)
+docs/superpowers/
