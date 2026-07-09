@@ -68,14 +68,15 @@ namespace ModSettingsMenu.UI
             if (pt != null && pt.style != null) pt.style.maskInteraction = SpriteMaskInteraction.None;
         }
 
-        // Cloned vanilla PugText inherits localize=true (→ "missing: <term>" in red);
-        // render raw + re-apply the style colour.
+        // Cloned vanilla PugText inherits localize=true (→ it resolves the raw key as a loc
+        // term); render raw instead. Colour is not set here: PugFont.Render paints glyphs
+        // from the prefab's style.color, and once the row is navigable the menu-option
+        // effect drives the selection colour (bright/blue selected, dimmed otherwise).
         private static void SetText(PugText pt, string s)
         {
             if (pt == null) return;
             pt.localize = false;
             pt.Render(s, rewindEffectAnims: false, force: true);
-            pt.SetTempColor(pt.color, keepColorOnStart: true);
         }
     }
 }
