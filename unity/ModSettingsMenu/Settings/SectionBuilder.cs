@@ -19,6 +19,13 @@ namespace ModSettingsMenu.Settings
             _file = file;
         }
 
+        /// <summary>Optional one-line hint shown under the section heading.</summary>
+        public SectionBuilder Hint(string text)
+        {
+            _section.HintText = text;
+            return this;
+        }
+
         public SectionBuilder Toggle(out SettingHandle<bool> handle, string key, bool def)
         {
             var entry = _file.Bind("Settings", key, def, new ConfigDescription(key));

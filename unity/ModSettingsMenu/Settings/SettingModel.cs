@@ -30,7 +30,8 @@ namespace ModSettingsMenu.Settings
     {
         public string ModId;           // Metadata.name — internal id + term prefix
         public string DisplayName;     // Metadata.displayName — shown heading
-        public string HintTerm;        // "<ModId>-Config/_hint" (opt-in render in 2b)
+        public string HintTerm;        // "<ModId>-Config/_hint" (loc term, resolved in Phase 3)
+        public string HintText;        // optional literal hint shown under the heading (pre-loc)
         public readonly List<SettingDef> Settings = new List<SettingDef>();
     }
 }

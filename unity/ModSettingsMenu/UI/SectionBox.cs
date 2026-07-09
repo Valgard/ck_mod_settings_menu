@@ -10,6 +10,7 @@ namespace ModSettingsMenu.UI
     public sealed class SectionBox : MonoBehaviour
     {
         public PugText header;            // "DisplayName" heading
+        public PugText hint;              // optional dimmed sub-line under the heading
         public Transform widgetContainer; // parent for the widget rows
     }
 }
