@@ -1272,7 +1272,7 @@ MonoBehaviour:
   menuEntryStartPositionY: -1
   menuEntryHorizontalSpacing: 1.4
   placeOptionsHorizontally: 0
-  autoPositioning: 1
+  autoPositioning: 0
   autoPositioningOverride: []
   rememberSelectedIndex: 1
   pausesGame: 1

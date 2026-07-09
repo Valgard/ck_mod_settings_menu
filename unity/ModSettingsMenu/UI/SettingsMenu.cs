@@ -5,30 +5,37 @@ namespace ModSettingsMenu.UI
 {
     /// <summary>
     /// Own settings menu — the adapted vanilla UISettings prefab (this component swapped
-    /// in for RadicalOptionsMenu, + a UIScrollWindow + an inactive ToggleTemplate).
-    /// Populate() runs in OnFirstOpened() (before ActivateTopMenu, after all consumer
-    /// Inits) and stamps one ToggleWidget per registered Toggle setting; RadicalMenu's
-    /// UpdatePosition() lays them out from menuEntryStartPositionY. The vanilla scroll
-    /// viewport (SpriteMask) was disabled in the prefab — its sprite+material were
-    /// unresolved (deadbeef) after the decompile import; toggles render unmasked.
-    /// Section headers / boxes are a later polish step.
+    /// in for RadicalOptionsMenu). Layout follows CK's ControlMapper (ControlMappingMenu):
+    /// RadicalMenu with autoPositioning=0 (its own menuOption layout off) + a
+    /// LinearLayoutUIComponent on contentRoot that vertically stacks children. Each toggle
+    /// gets a WrapperUIComponent so the layout measures it; the toggles stay in menuOptions
+    /// for keyboard navigation. GetCurrentWindowHeight returns the layout's render height
+    /// (feeds scroll). Section headers land under the same layout (Phase-2c).
     /// </summary>
     [RequireComponent(typeof(UIScrollWindow))]
     public sealed class SettingsMenu : RadicalMenu, IScrollable
     {
-        public Transform contentRoot;      // where toggle rows are stamped (Options/Scroll)
+        public Transform contentRoot;      // Options/Scroll — hosts the LinearLayout
         public GameObject sectionTemplate; // reserved for Phase-2c section headers/boxes
         public GameObject toggleTemplate;  // inactive; has a ToggleWidget + Label/Value
 
-        private UIScrollWindow _scroll;
+        private const int ToggleHeightPx = 32; // ~2 units (matches menuEntryVirtualHeight)
 
-        // Populate before ActivateTopMenu: PushMenu calls OnFirstOpened() first, then
-        // ActivateTopMenu() — so menuOptions are filled before the menu positions +
-        // activates them (which renders their PugTexts via OnParentMenuActivation).
+        private UIScrollWindow _scroll;
+        private LinearLayoutUIComponent _layout;
+
         public override void OnFirstOpened()
         {
             base.OnFirstOpened();
             Populate();
+        }
+
+        // Re-stack after activation (base.Activate re-renders the menu options); mirrors
+        // ControlMappingMenu.Activate → RenderUIComponent.
+        public override void Activate()
+        {
+            base.Activate();
+            _layout?.RenderUIComponent(force: true);
         }
 
         public void Populate()
@@ -41,7 +48,16 @@ namespace ModSettingsMenu.UI
             }
             RenderTitle();
 
-            // Clear old content, then stamp toggles as menu options.
+            // contentRoot stacks its children via a vertical LinearLayout (like ControlMapper);
+            // autoPositioning=0 means RadicalMenu no longer positions the options itself.
+            _layout = contentRoot.GetComponent<LinearLayoutUIComponent>();
+            if (_layout == null)
+            {
+                _layout = contentRoot.gameObject.AddComponent<LinearLayoutUIComponent>();
+                _layout.horizontal = false;
+                _layout.gapBetweenItems = 0;
+            }
+
             for (int i = contentRoot.childCount - 1; i >= 0; i--)
                 Object.Destroy(contentRoot.GetChild(i).gameObject);
             menuOptions.Clear();
@@ -55,6 +71,9 @@ namespace ModSettingsMenu.UI
                     wGo.SetActive(true);
                     wGo.name = "Toggle " + def.Key;
                     StripMenuEffects(wGo);
+                    // A WrapperUIComponent makes the LinearLayout measure + stack this row.
+                    var wrap = wGo.GetComponent<WrapperUIComponent>() ?? wGo.AddComponent<WrapperUIComponent>();
+                    wrap.renderHeightPixels = ToggleHeightPx;
                     var toggle = wGo.GetComponent<ToggleWidget>();
                     toggle.Bind(def);
                     toggle.SetParentMenu(this);
@@ -62,7 +81,7 @@ namespace ModSettingsMenu.UI
                 }
             }
 
-            UpdatePosition(); // vanilla RadicalMenu option layout (menuEntryStartPositionY + spacing)
+            _layout.RenderUIComponent(force: true); // stack the rows vertically
             if (_scroll != null)
             {
                 _scroll.scrollingContent = contentRoot;
@@ -72,8 +91,7 @@ namespace ModSettingsMenu.UI
 
         // Cloned vanilla PugTexts carry a PugTextEffectMenuOption that NREs without a
         // menu-option context. DISABLE it — do NOT Destroy: PugText keeps a ref in its
-        // effect list, so destroying leaves a dangling null → NRE in ManagedLateUpdate
-        // (which also aborts glyph rendering → invisible). enabled=false is skipped safely.
+        // effect list, so destroying leaves a dangling null → NRE in ManagedLateUpdate.
         private static void StripMenuEffects(GameObject go)
         {
             foreach (var fx in go.GetComponentsInChildren<PugTextEffectMenuOption>(true))
@@ -88,17 +106,17 @@ namespace ModSettingsMenu.UI
                 var t = transform.Find(path);
                 var pt = t != null ? t.GetComponent<PugText>() : null;
                 if (pt == null) continue;
-                StripMenuEffects(pt.gameObject); // title PugText also carries the NRE-prone effect
+                StripMenuEffects(pt.gameObject);
                 pt.localize = false;
                 pt.Render("Mod Settings", rewindEffectAnims: false, force: true);
                 pt.SetTempColor(pt.color, keepColorOnStart: true);
             }
         }
 
-        // IScrollable — flat list is short; no custom scroll sizing yet.
+        // IScrollable — window height comes from the layout (basis for scroll clipping, #3).
         public void UpdateContainingElements(float scroll) { }
         public bool IsBottomElementSelected() => false;
         public bool IsTopElementSelected() => false;
-        public float GetCurrentWindowHeight() => 0f;
+        public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
     }
 }
