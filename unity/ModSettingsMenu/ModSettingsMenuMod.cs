@@ -32,10 +32,19 @@ namespace ModSettingsMenu
         public void Init()
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
-            // TEMP self-test (Phase 2b): register toggles so Populate has content to render.
-            ModSettings.Section(this)
+            // TEMP self-test (Phase 2b): multiple sections to exercise the section-grouped
+            // layout. Remove before publish — a framework mod registers no settings of its own.
+            ModSettings.Section(this, "FasterTalents", "Faster Talents")
+                .Hint("Talent + XP tuning")
+                .Toggle(out _, "xpBoost", true)
+                .Build();
+            ModSettings.Section(this, "ItemChecklist", "Item Checklist")
+                .Hint("HUD + discovery tracking")
                 .Toggle(out _, "showHud", true)
                 .Toggle(out _, "verbose", false)
+                .Build();
+            ModSettings.Section(this, "ReusableCattleBox", "Reusable Cattle Box")
+                .Toggle(out _, "refundCage", true)
                 .Build();
         }
 
