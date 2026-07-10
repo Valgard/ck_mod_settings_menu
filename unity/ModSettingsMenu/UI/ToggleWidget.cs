@@ -20,11 +20,8 @@ namespace ModSettingsMenu.UI
         {
             _def = def;
             _entry = (ConfigEntry<bool>)def.Entry;
-            // The vanilla options text style tags its glyphs VisibleInsideMask on every render
-            // (for the scroll viewport we removed). PugText.style is per-instance (new PugTextStyle()),
-            // so set it to None once here — all renders (initial, selection, toggle) then show text.
-            DisableMasking(labelText);
-            DisableMasking(valueText);
+            // Glyphs clip to the scroll viewport: style.maskInteraction = VisibleInsideMask is the
+            // prefab default on Label/Value (rendered by PugFont.Render), so nothing is forced here.
             Refresh();
         }
 
@@ -61,11 +58,6 @@ namespace ModSettingsMenu.UI
         {
             if (_def != null) SetText(labelText, _def.Key);
             if (_entry != null) SetText(valueText, _entry.Value ? "on" : "off");
-        }
-
-        private static void DisableMasking(PugText pt)
-        {
-            if (pt != null && pt.style != null) pt.style.maskInteraction = SpriteMaskInteraction.None;
         }
 
         // Cloned vanilla PugText inherits localize=true (→ it resolves the raw key as a loc

@@ -201,17 +201,15 @@ namespace ModSettingsMenu.UI
             wrap.renderHeightPixels = px;
         }
 
-        // Render a static (non-localized) string into a PugText. Colour is NOT set here:
-        // PugFont.Render paints every glyph from style.color, so the per-PugText styling
-        // (bright header, dimmed hint) lives entirely in the prefab. localize=false renders
-        // the raw string instead of resolving it as a loc term; maskInteraction=None keeps
-        // the text visible until scroll clipping lands (#3).
+        // Render a static (non-localized) string into a PugText. Colour + maskInteraction are NOT
+        // set here: PugFont.Render paints every glyph from the (prefab-authored) style — its color
+        // (bright header, dimmed hint) AND its maskInteraction (VisibleInsideMask, so glyphs clip to
+        // the scroll viewport). localize=false renders the raw string instead of a loc term.
         private static void RenderStatic(PugText pt, string text)
         {
             if (pt == null) return;
             pt.localize = false;
             pt.Render(text, rewindEffectAnims: false, force: true);
-            if (pt.style != null) pt.style.maskInteraction = SpriteMaskInteraction.None;
         }
 
         // Vanilla RadicalOptionsMenu rendered the title; we removed it in the swap.
