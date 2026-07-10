@@ -1271,7 +1271,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   scrollingContent: {fileID: 4833703512093738}
-  scrollable: {fileID: 0}
+  scrollable: {fileID: 6799915445171723091}
   windowHeight: 11
   windowWidth: 20
   windowLocalCenter: {x: 0, y: -0.5}
