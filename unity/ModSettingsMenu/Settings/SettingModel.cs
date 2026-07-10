@@ -3,8 +3,11 @@ using CoreLib.Data.Configuration;
 
 namespace ModSettingsMenu.Settings
 {
-    /// <summary>Widget type a setting renders as (consumed by the Phase-2b menu UI).</summary>
-    public enum SettingKind { Toggle, Slider, Stepper }
+    /// <summary>Widget type a setting renders as (consumed by the menu UI).</summary>
+    public enum SettingKind { Toggle, Slider, Stepper, Choice }
+
+    /// <summary>How a Slider renders its value.</summary>
+    public enum SliderDisplay { Steps, Number, Percent }
 
     /// <summary>
     /// Non-generic descriptor of one registered setting. Carries everything the
@@ -19,7 +22,10 @@ namespace ModSettingsMenu.Settings
         public string Term;            // e.g. "FasterTalents-Config/xpMultiplier"
         public float Min;              // Slider/Stepper only (ignored for Toggle)
         public float Max;              // Slider/Stepper only (ignored for Toggle)
-        public ConfigEntryBase Entry;  // live handle; 2b uses GetSerializedValue/SetSerializedValue
+        public float Step = 1f;        // Slider only: increment per ←/→ (bar segments = (Max-Min)/Step)
+        public SliderDisplay Display;  // Slider only
+        public string[] Tokens;        // Choice only: ordered value.ToString() list (cycle order)
+        public ConfigEntryBase Entry;  // live handle; widget reads/writes via BoxedValue
     }
 
     /// <summary>

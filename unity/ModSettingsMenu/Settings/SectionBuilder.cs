@@ -37,14 +37,43 @@ namespace ModSettingsMenu.Settings
             return this;
         }
 
-        public SectionBuilder Slider(out SettingHandle<float> handle, string key, float min, float max, float def)
+        public SectionBuilder Slider(out SettingHandle<float> handle, string key,
+            float min, float max, float def, float step, SliderDisplay display = SliderDisplay.Steps)
         {
             var entry = _file.Bind("Settings", key, def,
                 new ConfigDescription(key, new AcceptableValueRange<float>(min, max)));
             handle = new SettingHandle<float>(entry);
             _section.Settings.Add(new SettingDef
             {
-                Key = key, Kind = SettingKind.Slider, Term = Term(key), Min = min, Max = max, Entry = entry
+                Key = key, Kind = SettingKind.Slider, Term = Term(key),
+                Min = min, Max = max, Step = step > 0f ? step : (max - min), Display = display, Entry = entry
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// A discrete choice cycling a fixed, ordered set of values of any type T. The
+        /// displayed text + persistence key is value.ToString() (the "token"); Phase 5
+        /// localizes via a derived term, falling back to the token. Prefer an enum for T
+        /// (self-documenting tokens). Values must have distinct ToString().
+        /// </summary>
+        public SectionBuilder Choice<T>(out SettingHandle<T> handle, string key, T[] values, T def)
+        {
+            var tokens = new string[values.Length];
+            for (int i = 0; i < values.Length; i++) tokens[i] = values[i].ToString();
+            // Store a string token (arbitrary T needs no CoreLib converter); validate it stays valid.
+            var entry = _file.Bind("Settings", key, def.ToString(),
+                new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
+            T FromToken(string t)
+            {
+                for (int i = 0; i < values.Length; i++)
+                    if (tokens[i] == t) return values[i];
+                return def; // unknown/removed token → default
+            }
+            handle = new SettingHandle<T>(entry, FromToken, v => v.ToString());
+            _section.Settings.Add(new SettingDef
+            {
+                Key = key, Kind = SettingKind.Choice, Term = Term(key), Tokens = tokens, Entry = entry
             });
             return this;
         }
