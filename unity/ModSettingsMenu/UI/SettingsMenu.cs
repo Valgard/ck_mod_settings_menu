@@ -71,6 +71,7 @@ namespace ModSettingsMenu.UI
                 return;
             }
             RenderTitle();
+            DeactivateTemplates();
 
             // contentRoot stacks one instance per section via its (prefab-authored) vertical
             // LinearLayout; autoPositioning=0 means RadicalMenu no longer positions options itself.
@@ -221,6 +222,18 @@ namespace ModSettingsMenu.UI
                 var pt = t != null ? t.GetComponent<PugText>() : null;
                 if (pt != null) RenderStatic(pt, "Mod Settings");
             }
+        }
+
+        // Templates under WidgetTemplates (SectionTemplate, ToggleTemplate, and future
+        // Slider/Stepper ones) are instantiation sources only — never rendered. Force them
+        // inactive at setup so a stray Editor activation can't leak a phantom row/section into
+        // the menu. Instantiate works fine on inactive templates; the clones are SetActive(true).
+        private void DeactivateTemplates()
+        {
+            var templates = transform.Find("WidgetTemplates");
+            if (templates == null) return;
+            for (int i = 0; i < templates.childCount; i++)
+                templates.GetChild(i).gameObject.SetActive(false);
         }
 
         // IScrollable — window height comes from the layout (basis for scroll clipping, #3).
