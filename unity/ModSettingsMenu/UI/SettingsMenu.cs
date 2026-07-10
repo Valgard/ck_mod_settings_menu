@@ -22,8 +22,8 @@ namespace ModSettingsMenu.UI
         public GameObject toggleTemplate;  // inactive; has a ToggleWidget + Label/Value
 
         private const int RowPaddingPx = 6;      // vertical breathing room added to each row's text height
-        private const float ContentTopY = 5f;    // anchor the stacked content just under the title
         // Inter-item gaps (contentRoot=6, SectionTemplate=12) live on the prefab's LinearLayouts, not here.
+        // Content position is owned by UIScrollWindow, not this component (no anchor constant).
 
         // Row height follows the rendered text (PugText.dimensions.height, in units) + padding,
         // like CK's ControlMapper (renderHeightPixels = 16 * height). Single-line rows stay
@@ -134,11 +134,8 @@ namespace ModSettingsMenu.UI
                 sGo.GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
             }
             _layout?.RenderUIComponent(force: true);
-
-            // Anchor contentRoot under the title AFTER base.Activate — setting it in Populate is too
-            // early (base.Activate moves it, which left a reopen mispositioned at the bottom).
-            var cp = contentRoot.localPosition;
-            contentRoot.localPosition = new Vector3(cp.x, ContentTopY, cp.z);
+            // contentRoot's position is owned by UIScrollWindow (LateUpdate → SetScrollablePosition),
+            // so no manual anchoring here — an anchor set now is overwritten the same frame.
         }
 
         private static Transform ContainerOf(GameObject sGo)
