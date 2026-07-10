@@ -19,7 +19,7 @@ namespace ModSettingsMenu.UI
     {
         public Transform contentRoot;      // Options/Scroll — hosts the top LinearLayout
         public GameObject sectionTemplate; // inactive; SectionBox (Header + Hint + Widgets-box)
-        public GameObject toggleTemplate;  // inactive; has a ToggleWidget + Label/Value
+        public GameObject toggleTemplate;  // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
 
         private const int RowPaddingPx = 6;      // vertical breathing room added to each row's text height
         // Inter-item gaps (contentRoot=6, SectionTemplate=12) live on the prefab's LinearLayouts, not here.
@@ -98,17 +98,16 @@ namespace ModSettingsMenu.UI
 
                 foreach (var def in section.Settings)
                 {
-                    if (def.Kind != SettingKind.Toggle) continue;
                     var wGo = Object.Instantiate(toggleTemplate, container);   // nest INTO the box
                     wGo.SetActive(true);
-                    wGo.name = "Toggle " + def.Key;
-                    var toggle = wGo.GetComponent<ToggleWidget>();
-                    toggle.Bind(def);            // renders label/value → dimensions available
-                    toggle.SetParentMenu(this);
-                    // The toggle template's WrapperUIComponent lets the box layout measure this row;
+                    wGo.name = def.Kind + " " + def.Key;
+                    var widget = wGo.GetComponent<SettingWidget>();
+                    widget.Bind(def);            // renders label/value → dimensions available
+                    widget.SetParentMenu(this);
+                    // The template's WrapperUIComponent lets the box layout measure this row;
                     // only its (content-adaptive) height is set here.
-                    SetRowHeight(wGo, RowHeightPx(toggle.labelText));
-                    menuOptions.Add(toggle);
+                    SetRowHeight(wGo, RowHeightPx(widget.labelText));
+                    menuOptions.Add(widget);
                 }
             }
 
