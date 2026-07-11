@@ -59,6 +59,13 @@ namespace ModSettingsMenu.Settings
         /// </summary>
         public SectionBuilder Choice<T>(out SettingHandle<T> handle, string key, T[] values, T def)
         {
+            // Empty/null values would make AcceptableValueList throw a cryptic ArgumentException at
+            // bind. Fail gracefully with a clear message and degrade to a single (default) option.
+            if (values == null || values.Length == 0)
+            {
+                UnityEngine.Debug.LogWarning($"[ModSettingsMenu] Choice '{key}' declared with no values — using the default only.");
+                values = new[] { def };
+            }
             var tokens = new string[values.Length];
             for (int i = 0; i < values.Length; i++) tokens[i] = values[i].ToString();
             // Store a string token (arbitrary T needs no CoreLib converter); validate it stays valid.

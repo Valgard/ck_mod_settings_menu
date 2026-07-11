@@ -75,8 +75,8 @@ namespace ModSettingsMenu.UI
                     var toks = _def.Tokens;
                     if (toks == null || toks.Length == 0) break;
                     int cur = System.Array.IndexOf(toks, (string)e.BoxedValue);
-                    if (cur < 0) cur = 0;
-                    int next = ((cur + dir) % toks.Length + toks.Length) % toks.Length; // wrap
+                    // Unknown/removed token → snap to the first option; else step and wrap.
+                    int next = cur < 0 ? 0 : ((cur + dir) % toks.Length + toks.Length) % toks.Length;
                     e.BoxedValue = toks[next];
                     break;
                 }
