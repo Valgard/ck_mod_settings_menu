@@ -8,8 +8,8 @@ namespace ModSettingsMenu.Settings
     /// <summary>
     /// Owns one CoreLib ConfigFile per consumer mod (keyed by ModId). CoreLib does
     /// all System.IO inside its own trusted assembly via API.ConfigFilesystem, so
-    /// this stays sandbox-clean (no skipSafetyChecks). Files land at
-    /// "ModSettingsMenu/&lt;ModId&gt;.cfg" in CoreLib's config filesystem; auto-save
+    /// this stays sandbox-clean (no skipSafetyChecks). Files land at the consumer-owned
+    /// "&lt;ModId&gt;/config.cfg" in CoreLib's config filesystem; auto-save
     /// (SaveOnConfigSet) is on by default, so setting a value persists immediately.
     /// </summary>
     internal static class ConfigStore
@@ -22,7 +22,7 @@ namespace ModSettingsMenu.Settings
                 return file;
             // GetModInfo resolves the IMod ref to its LoadedMod via Handlers.Contains.
             var info = consumer.GetModInfo();
-            file = new ConfigFile($"ModSettingsMenu/{modId}.cfg", saveOnInit: true, info);
+            file = new ConfigFile($"{modId}/config.cfg", saveOnInit: true, info);
             _files[modId] = file;
             return file;
         }
