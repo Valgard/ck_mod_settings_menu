@@ -15,7 +15,7 @@ namespace ModSettingsMenu
     [HarmonyPatch]
     public static class MenuPatch
     {
-        internal static ModSettingsMenu.UI.SettingsMenu MenuInstance { get; private set; }
+        internal static ModSettingsMenu.UI.ModSettingsScreen MenuInstance { get; private set; }
 
         // Set the Options-menu entry label to our localised title. Use SetText (which only sets
         // textString), NOT Render: the vanilla prefab entries are unrendered templates (0 glyphs)
@@ -71,7 +71,7 @@ namespace ModSettingsMenu
                 return;
             }
             var menu = Object.Instantiate(prefab, Manager.camera.uiCamera.transform)
-                             .GetComponent<ModSettingsMenu.UI.SettingsMenu>();
+                             .GetComponent<ModSettingsMenu.UI.ModSettingsScreen>();
             menu.gameObject.SetActive(false);
             MenuInstance = menu;
         }
@@ -87,7 +87,7 @@ namespace ModSettingsMenu
             }
             return true;
         }
-        // Populate now runs in SettingsMenu.OnFirstOpened() (before ActivateTopMenu),
+        // Populate now runs in ModSettingsScreen.Activate() (before ActivateTopMenu),
         // so no PushMenu postfix is needed here.
     }
 }

@@ -15,7 +15,7 @@ namespace ModSettingsMenu.UI
     /// keyboard navigation. GetCurrentWindowHeight returns the top layout's render height (feeds scroll).
     /// </summary>
     [RequireComponent(typeof(UIScrollWindow))]
-    public sealed class SettingsMenu : RadicalMenu, IScrollable
+    public sealed class ModSettingsScreen : RadicalMenu, IScrollable
     {
         public Transform contentRoot;      // Options/Scroll — hosts the top LinearLayout
         public GameObject sectionTemplate; // inactive; SectionBox (Header + Hint + Widgets-box)
@@ -67,7 +67,7 @@ namespace ModSettingsMenu.UI
             _scroll = GetComponent<UIScrollWindow>();
             if (contentRoot == null || toggleTemplate == null || sectionTemplate == null)
             {
-                Debug.LogWarning("[ModSettingsMenu] SettingsMenu prefab not wired (contentRoot/toggleTemplate/sectionTemplate) — menu stays empty.");
+                Debug.LogWarning("[ModSettingsMenu] menu prefab not wired (contentRoot/toggleTemplate/sectionTemplate) — menu stays empty.");
                 return;
             }
             RenderTitle();

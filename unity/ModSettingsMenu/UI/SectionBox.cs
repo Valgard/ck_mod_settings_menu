@@ -4,7 +4,7 @@ namespace ModSettingsMenu.UI
 {
     /// <summary>
     /// Component on the section-box template prefab. Exposes the box's header
-    /// PugText and the transform under which widgets are placed, so SettingsMenu
+    /// PugText and the transform under which widgets are placed, so ModSettingsScreen
     /// wires them by serialized reference (robust) rather than by Find() paths.
     /// </summary>
     public sealed class SectionBox : MonoBehaviour

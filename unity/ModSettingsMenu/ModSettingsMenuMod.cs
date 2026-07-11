@@ -50,7 +50,7 @@ namespace ModSettingsMenu
 
         public void ModObjectLoaded(Object obj)
         {
-            if (obj is GameObject go && go.GetComponent<SettingsMenu>() != null)
+            if (obj is GameObject go && go.GetComponent<ModSettingsScreen>() != null)
                 MenuPrefab = go;
         }
 
