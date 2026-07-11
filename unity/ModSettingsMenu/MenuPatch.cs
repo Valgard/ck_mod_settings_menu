@@ -17,18 +17,17 @@ namespace ModSettingsMenu
     {
         internal static ModSettingsMenu.UI.SettingsMenu MenuInstance { get; private set; }
 
-        // Render a raw (non-localised) string and set its colour. Cloned vanilla
-        // PugText inherits localize=true (→ "missing: <term>") and keeps a stale
-        // tmpColor that Render() does not reset, so we set both explicitly.
-        // color == null → the PugText's own style default (text.color getter =
-        // style.color); used for the menu title (light) + its dark shadow.
-        // Phase 3 replaces the raw strings with Loc.T terms.
-        private static void RenderRaw(PugText text, string s, Color? color = null)
+        // Set the Options-menu entry label to our localised title. Use SetText (which only sets
+        // textString), NOT Render: the vanilla prefab entries are unrendered templates (0 glyphs)
+        // that the LIVE menu renders on activate. Rendering here builds glyphs into the shared
+        // optionsMenuPrefab that InstantiateMenu then clones as ORPHANED (untracked) SpriteRenderers
+        // — a frozen, never-cleared duplicate label (the red twin). SetText leaves the prefab entry a
+        // clean template; the live instance renders our term fresh, relocalizes (localize=true is
+        // inherited), and its PugTextEffectMenuOption drives the colour — exactly like every sibling.
+        private static void SetEntryLabel(PugText text)
         {
             if (text == null) return;
-            text.localize = false;
-            text.Render(s, rewindEffectAnims: false, force: true);
-            text.SetTempColor(color ?? text.color, keepColorOnStart: true);
+            text.SetText("ModSettingsMenu-UI/Title");
         }
 
         // Add a "Mod Settings" entry to the Options menu by cloning the vanilla
@@ -56,7 +55,7 @@ namespace ModSettingsMenu
             entry.name = "GoToModSettings";
             // Menu-entry label uses the vanilla unselected colour (grey, alpha 0.725);
             // the option's own PugTextEffectMenuOption drives the hover/selected colour.
-            RenderRaw(entry.gameObject.GetComponentInChildren<PugText>(), "Mod Settings", PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+            SetEntryLabel(entry.gameObject.GetComponentInChildren<PugText>());
             entry.GetComponent<RadicalOptionsMenuOption_PushMenu>().menuToPush = ModSettingsMenuMod.SettingsMenuType;
         }
 

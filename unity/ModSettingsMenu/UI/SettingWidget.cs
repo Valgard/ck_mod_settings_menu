@@ -87,7 +87,7 @@ namespace ModSettingsMenu.UI
         private void Refresh()
         {
             if (_def == null) return;
-            SetText(labelText, _def.Key);      // Phase 5: Loc.T(_def.Term) ?? _def.Key
+            SetText(labelText, Loc.T(_def.Term, _def.Key));   // localized; falls back to the raw key
             SetText(valueText, ValueString());
         }
 
@@ -96,9 +96,13 @@ namespace ModSettingsMenu.UI
             var e = _def.Entry;
             switch (_def.Kind)
             {
-                case SettingKind.Toggle:  return (bool)e.BoxedValue ? "on" : "off";
+                case SettingKind.Toggle:  return (bool)e.BoxedValue ? Loc.T("ModSettingsMenu-UI/On") : Loc.T("ModSettingsMenu-UI/Off");
                 case SettingKind.Stepper: return ((int)e.BoxedValue).ToString();
-                case SettingKind.Choice:  return (string)e.BoxedValue;  // Phase 5: Loc.T(term/token) ?? token
+                case SettingKind.Choice:
+                {
+                    var tok = (string)e.BoxedValue;
+                    return Loc.T(_def.Term + "/" + tok, tok);   // localized per-option; falls back to the token
+                }
                 case SettingKind.Slider:
                 {
                     float v = (float)e.BoxedValue;

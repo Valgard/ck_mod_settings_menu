@@ -171,7 +171,7 @@ namespace ModSettingsMenu.UI
                 box.hint.gameObject.SetActive(hasHint);
                 if (hasHint)
                 {
-                    RenderStatic(box.hint, section.HintText);
+                    RenderStatic(box.hint, Loc.T(section.HintTerm, section.HintText));
                     SetRowHeight(box.hint.gameObject, RowHeightPx(box.hint));
                 }
             }
@@ -219,7 +219,7 @@ namespace ModSettingsMenu.UI
             {
                 var t = transform.Find(path);
                 var pt = t != null ? t.GetComponent<PugText>() : null;
-                if (pt != null) RenderStatic(pt, "Mod Settings");
+                if (pt != null) RenderStatic(pt, Loc.T("ModSettingsMenu-UI/Title"));
             }
         }
 

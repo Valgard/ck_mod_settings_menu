@@ -36,3 +36,9 @@ export MOD_INSTALL_PATH="$MOD_INSTALL_BASE_PATH/$MOD_NAME_ID-build"
 
 # Repo root, read by the shared CLIPublishHelper to locate CHANGELOG.md.
 export MOD_REPO_ROOT="$PWD"
+
+# --- Localisation (read by utils/CLIBuildHelper.cs -> LocalizationGenerator.GenerateFromEnv) ---
+# LOC_YAML lives OUTSIDE unity/ so the ModBuilder doesn't pack the source yaml.
+# LOC_TABLE is the shared CK language-address table, inherited from the parent.
+export LOC_YAML="$PWD/localization/localization.yaml"
+export LOC_OUT="$PWD/unity/$MOD_NAME/Localization/Generated"
