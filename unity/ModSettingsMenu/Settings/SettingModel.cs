@@ -9,6 +9,11 @@ namespace ModSettingsMenu.Settings
     /// <summary>How a Slider renders its value.</summary>
     public enum SliderDisplay { Steps, Number, Percent }
 
+    /// <summary>How the options WITHIN a section are ordered in the menu. Default AsDeclared keeps
+    /// the consumer's builder-chain order; ByKey/ByLabel sort alphabetically by the raw key / the
+    /// localized label (`Loc.T(term, key)`, so ByLabel re-sorts per active language).</summary>
+    public enum OptionSort { AsDeclared, ByKey, ByLabel }
+
     /// <summary>
     /// Non-generic descriptor of one registered setting. Carries everything the
     /// Phase-2b menu needs to render + drive it: the derived loc term, the widget
@@ -38,6 +43,7 @@ namespace ModSettingsMenu.Settings
         public string DisplayName;     // Metadata.displayName — shown heading
         public string HintTerm;        // "<ModId>-Config/_hint" (loc term, resolved in Phase 3)
         public string HintText;        // optional literal hint shown under the heading (pre-loc)
+        public OptionSort OptionSort = OptionSort.AsDeclared;  // order of options within this box
         public readonly List<SettingDef> Settings = new List<SettingDef>();
     }
 }

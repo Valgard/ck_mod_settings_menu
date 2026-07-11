@@ -89,14 +89,20 @@ namespace ModSettingsMenu.UI
             menuOptions.Clear();
             _sectionRoots.Clear();
 
-            foreach (var section in ModSettings.Sections)
+            // Boxes render alphabetically by DisplayName — a stable, findable order regardless of mod
+            // load/registration order. Sort a LOCAL copy so the registry keeps its insertion order.
+            // Options WITHIN a box keep declaration order (the consumer's author intent).
+            var sortedSections = new List<ModSection>(ModSettings.Sections);
+            sortedSections.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, System.StringComparison.OrdinalIgnoreCase));
+
+            foreach (var section in sortedSections)
             {
                 var sGo = BuildSection(section);
                 _sectionRoots.Add(sGo);
                 var box = sGo.GetComponent<SectionBox>();
                 var container = (box != null && box.widgetContainer != null) ? box.widgetContainer : sGo.transform;
 
-                foreach (var def in section.Settings)
+                foreach (var def in OrderedSettings(section))
                 {
                     var wGo = Object.Instantiate(toggleTemplate, container);   // nest INTO the box
                     wGo.SetActive(true);
@@ -142,6 +148,24 @@ namespace ModSettingsMenu.UI
         {
             var box = sGo.GetComponent<SectionBox>();
             return (box != null && box.widgetContainer != null) ? box.widgetContainer : sGo.transform;
+        }
+
+        // Order a section's options per its OptionSort: AsDeclared keeps the builder-chain order;
+        // ByKey/ByLabel sort a LOCAL copy by the raw key / the localized label (Loc.T(term,key) — so
+        // ByLabel follows the active language). The section's Settings list itself stays untouched.
+        private static List<SettingDef> OrderedSettings(ModSection section)
+        {
+            var list = new List<SettingDef>(section.Settings);
+            switch (section.OptionSort)
+            {
+                case OptionSort.ByKey:
+                    list.Sort((a, b) => string.Compare(a.Key, b.Key, System.StringComparison.OrdinalIgnoreCase));
+                    break;
+                case OptionSort.ByLabel:
+                    list.Sort((a, b) => string.Compare(Loc.T(a.Term, a.Key), Loc.T(b.Term, b.Key), System.StringComparison.OrdinalIgnoreCase));
+                    break;
+            }
+            return list;
         }
 
         // Build one section (Option A): instantiate the sectionTemplate and render its heading

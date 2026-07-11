@@ -26,6 +26,14 @@ namespace ModSettingsMenu.Settings
             return this;
         }
 
+        /// <summary>How the options in this section are ordered in the menu. Default AsDeclared keeps
+        /// the builder-chain order; ByKey/ByLabel sort alphabetically by the raw key / localized label.</summary>
+        public SectionBuilder SortOptions(OptionSort mode)
+        {
+            _section.OptionSort = mode;
+            return this;
+        }
+
         public SectionBuilder Toggle(out SettingHandle<bool> handle, string key, bool def)
         {
             var entry = _file.Bind("Settings", key, def, new ConfigDescription(key));
