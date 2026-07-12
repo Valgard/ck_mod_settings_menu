@@ -3,6 +3,14 @@
 All notable changes to this mod are documented here. The topmost `## [x.y.z]`
 entry is the version published to mod.io; its body is the modfile changelog.
 
+## [1.1.0]
+
+- Settings can now require a game restart. A mod author marks such a setting with
+  the new `RequiresRestart()` API (for values only read at bake / world load);
+  changing it and leaving the menu then raises Core Keeper's own "restart to apply
+  mod changes" prompt — the same dialog the game shows when your mods change.
+- Wider setting rows so longer option labels and values fit without clipping.
+
 ## [1.0.0]
 
 Initial release.
