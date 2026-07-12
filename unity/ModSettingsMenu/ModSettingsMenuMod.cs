@@ -49,8 +49,19 @@ namespace ModSettingsMenu
         // registry is already populated here.
         private bool _warmed;
 
+        // Deferred restart prompt. ModSettingsScreen.Deactivate requests it, but the prompt must NOT be
+        // shown synchronously during the menu-pop: StartNewDisplaySequence → Manager.menu.ShowPopUpMenu
+        // → PushMenu(POP_UP) re-enters the menu stack mid-pop and orphans the Cancel/Yes buttons (they
+        // persist across every later menu). Update fires it a few frames later, off that call stack,
+        // once the stack has settled — mirroring CK's own Invoke("RestartToApplyModChanges", 0.1f).
+        private static int _restartPromptCountdown = -1;
+        internal static void RequestRestartPrompt() => _restartPromptCountdown = 3;
+
         public void Update()
         {
+            if (_restartPromptCountdown >= 0 && _restartPromptCountdown-- == 0)
+                ModSettingsScreen.ShowRestartPrompt();
+
             if (_warmed) return;
             var menu = MenuPatch.MenuInstance;
             if (menu == null) return;                 // instance not created yet → retry next frame

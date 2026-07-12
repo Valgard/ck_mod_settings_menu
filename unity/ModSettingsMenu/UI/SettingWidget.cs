@@ -59,6 +59,7 @@ namespace ModSettingsMenu.UI
         {
             if (_def?.Entry == null) return;
             var e = _def.Entry;
+            var before = e.BoxedValue;   // for the RequiresRestart change-detection below
             switch (_def.Kind)
             {
                 case SettingKind.Toggle:
@@ -81,6 +82,12 @@ namespace ModSettingsMenu.UI
                     break;
                 }
             }
+            // A restart-required setting that actually changed marks the menu dirty; leaving the
+            // screen (ModSettingsScreen.Deactivate) then raises CK's restart prompt. The value-compare
+            // avoids a false positive when a clamp/no-op left the value unchanged (e.g. skimming a
+            // slider already at its bound).
+            if (_def.RequiresRestart && !object.Equals(before, e.BoxedValue))
+                ModSettingsScreen.RestartPending = true;
             Refresh();
         }
 

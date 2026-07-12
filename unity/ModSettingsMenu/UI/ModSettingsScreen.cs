@@ -43,11 +43,52 @@ namespace ModSettingsMenu.UI
         // structure + fills menuOptions; the layouts are rendered in RenderContent AFTER
         // base.Activate, because LinearLayout skips children while the hierarchy is inactive (their
         // heights would compute as 0).
+        // Set true (in SettingWidget.Adjust) when a RequiresRestart-flagged setting actually changes
+        // during this menu visit; reset on open (Activate); consumed on leave (Deactivate) to raise
+        // CK's restart prompt. Static: MenuInstance is a singleton (MenuPatch), so no per-instance
+        // plumbing from the widgets is needed.
+        internal static bool RestartPending;
+
         public override void Activate()
         {
+            RestartPending = false;   // fresh visit — only changes made from now on count
             Populate();
             base.Activate();
             RenderContent();
+        }
+
+        // Leaving the Mod Settings screen (RadicalMenu's deactivate/back hook). If a restart-required
+        // setting changed this visit, mirror CK's own mods-changed flow: raise the vanilla restart popup.
+        public override void Deactivate(bool pop)
+        {
+            base.Deactivate(pop);
+            if (RestartPending)
+            {
+                RestartPending = false;
+                // Defer the prompt OFF this Deactivate call stack. StartNewDisplaySequence pushes a
+                // popup menu (Manager.menu.ShowPopUpMenu → PushMenu(POP_UP)); pushing it while we are
+                // still inside the menu-stack pop that triggered this Deactivate re-enters the stack,
+                // so the popup never pops and its Cancel/Yes buttons persist across every later menu.
+                // ModSettingsMenuMod.Update shows it a few frames later, once the pop has settled —
+                // the same reason CK's own restart flow uses Invoke("RestartToApplyModChanges", 0.1f).
+                ModSettingsMenuMod.RequestRestartPrompt();
+            }
+        }
+
+        // CK's exact "restart to apply mod changes" popup (Pug.Other ModChanged / RestartToApplyModChanges):
+        // the shipped Menu/RestartToApplyModChanges term (localized in every language) with Cancel/Yes
+        // buttons; Yes → Manager.platform.Restart() (CK's real relaunch). Reusing CK's popup + term + restart
+        // means no own dialog, no own localization — identical look to the game's own mod-changed prompt.
+        internal static void ShowRestartPrompt()
+        {
+            Manager.menu.centerPopUpText.StartNewDisplaySequence(
+                "Menu/RestartToApplyModChanges", null, menuInputCooldown: true, 0f, 1.5f,
+                useUnscaledTime: true, 0f, 1f, localize: true, TextManager.FontFace.boldMedium,
+                delegate (PopupResponse response)
+                {
+                    if (response.IsConfirm) Manager.platform.Restart();
+                },
+                new List<string> { "cancelDialogue", "yes" }, 10f, 0.8f, 0, 20f);
         }
 
         // Pay the one-time first-enable cost (bundle asset load / shader-variant compile, ~1 s

@@ -113,9 +113,12 @@ Each widget method binds a persisted CoreLib entry, hands you a typed
 | `Slider(out SettingHandle<float> h, string key, float min, float max, float def, float step, SliderDisplay display = SliderDisplay.Steps)` | slider bar | `float` | `step ≤ 0` → whole range as one step; bar segments = `(max-min)/step` |
 | `Choice<T>(out SettingHandle<T> h, string key, T[] values, T def)` | ←/→ cycle | `T` | any `T`; token = `value.ToString()` |
 | `Stepper(out SettingHandle<int> h, string key, int min, int max, int def)` | ←/→ integer | `int` | clamped to `[min, max]` |
+| `RequiresRestart()` | — | — | marks the **last-declared** setting as restart-required (see below) |
 | `Build()` | — | — | registers the section |
 
 `key` is the persistence key and the loc-term leaf (see **Localization**). Keep it stable across releases — changing it orphans the saved value.
+
+`RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key", …).RequiresRestart()`) to mark that setting as needing a game restart to take effect (e.g. a bake-time / load-time value that is only read at world load). When a so-marked setting is actually changed and you leave the Mod Settings screen, the framework raises Core Keeper's own *restart to apply mod changes* popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod subscriptions change. Settings whose value applies live (read every frame / tick) should **not** be marked.
 
 ### `SettingHandle<T>` — reading and writing values
 

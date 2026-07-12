@@ -31,6 +31,7 @@ namespace ModSettingsMenu.Settings
         public SliderDisplay Display;  // Slider only
         public string[] Tokens;        // Choice only: ordered value.ToString() list (cycle order)
         public ConfigEntryBase Entry;  // live handle; widget reads/writes via BoxedValue
+        public bool RequiresRestart;   // true → changing this in the menu raises CK's restart prompt on leave
     }
 
     /// <summary>
