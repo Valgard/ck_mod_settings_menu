@@ -62,7 +62,7 @@ MonoBehaviour:
   localizePlaceholders: 0
   dontResetEffectsOnRender: 0
   hideInStreamerMode: 0
-  maxWidth: 9
+  maxWidth: 11
   textString: Toggle Label
   textSuffix: 
   formatFields: []
@@ -640,7 +640,7 @@ MonoBehaviour:
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
   hideInStreamerMode: 0
-  maxWidth: 9
+  maxWidth: 11
   textString: Toggle Value
   textSuffix: 
   formatFields: []
