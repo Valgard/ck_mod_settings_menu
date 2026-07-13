@@ -89,7 +89,8 @@ Everything lives in the `ModSettingsMenu.Settings` namespace.
 
 ### `ModSettings.Section(IMod consumer)` → `SectionBuilder`
 
-Begins a section for the calling mod. Call it in `IMod.Init` and pass `this`.
+Begins a section for the calling mod. Call it in `IMod.Init` (or `IMod.EarlyInit` for
+bake-time settings — see **Behaviour & gotchas**) and pass `this`.
 The framework resolves your mod's identity from the `IMod` reference:
 
 - **Section id / term prefix** ← `metadata.name` (your internal PascalCase name).
@@ -118,7 +119,7 @@ Each widget method binds a persisted CoreLib entry, hands you a typed
 
 `key` is the persistence key and the loc-term leaf (see **Localization**). Keep it stable across releases — changing it orphans the saved value.
 
-`RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key", …).RequiresRestart()`) to mark that setting as needing a game restart to take effect (e.g. a bake-time / load-time value that is only read at world load). When a so-marked setting is actually changed and you leave the Mod Settings screen, the framework raises Core Keeper's own *restart to apply mod changes* popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod subscriptions change. Settings whose value applies live (read every frame / tick) should **not** be marked.
+`RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key", …).RequiresRestart()`) to mark that setting as needing a game restart to take effect (e.g. a bake-time / load-time value that is only read at world load). When a so-marked setting is actually changed and you leave the Mod Settings screen, the framework raises Core Keeper's own *restart to apply mod changes* popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod subscriptions change. Settings whose value applies live (read every frame / tick) should **not** be marked. ⚠️ A bake-time setting consumed during world/database conversion must be registered in `IMod.EarlyInit`, not `Init` — that conversion runs before `Init` (see **Behaviour & gotchas**), so an `Init`-bound handle makes the bake read your hardcoded default instead of the saved value.
 
 ### `SettingHandle<T>` — reading and writing values
 
@@ -271,9 +272,18 @@ in the patch, so changing the Choice in the menu takes effect immediately.
 
 ## Behaviour & gotchas
 
-- **Call in `IMod.Init`.** Every mod's `Init` (consumers included) runs before
-  the first `Update`, so all sections are registered before the menu first
-  renders. The framework pre-warms the menu after `Init`.
+- **Call in `IMod.Init` — or `IMod.EarlyInit` for values read during world/database
+  conversion.** Every mod's `Init` (consumers included) runs before the first
+  `Update`, so registering in `Init` still has all sections in place before the menu
+  first renders (the framework pre-warms after `Init`). **But** Core Keeper runs its
+  world/database conversion — where `PugDatabasePostConverter.PostConvert` bakes
+  recipes and other object data — *after* `EarlyInit` and *before* `Init`. If your
+  setting is consumed at that bake (a bake-time `RequiresRestart` knob), register the
+  section **and** bind its handle in `EarlyInit`; binding in `Init` lets the bake read
+  the handle before it exists, silently falling back to your hardcoded default.
+  `API.ConfigFilesystem` is initialised before any mod's `EarlyInit`, so the persisted
+  value is already loadable there. Settings read live (every frame/tick, long after
+  `Init`) can stay in `Init`.
 - **`modId` = `metadata.name`.** The term prefix and config folder both use your
   internal name, not the display name.
 - **Values are live.** Read `handle.Value` at the point of use; don't cache it at
