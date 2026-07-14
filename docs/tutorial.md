@@ -400,7 +400,7 @@ colour = Neutral
 - The file is created on first run with your declared defaults.
 - **No `System.IO` on your side.** CoreLib does all file access in its own
   trusted assembly, so your mod stays inside the RoslynCSharp sandbox — you do
-  **not** need `skipSafetyChecks`. (See the parent CLAUDE.md on the sandbox.)
+  **not** need `skipSafetyChecks`.
 
 Because the folder is `<ModId>` (= `metadata.name`), two mods never collide, and
 you can inspect or hand-edit a config while the game is closed.

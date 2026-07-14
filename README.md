@@ -58,7 +58,7 @@ with your mod's display name, and `enabled`/`power` persist to
 Mod Settings Menu is a **hard dependency**. Declare it — and CoreLib, which it
 needs at runtime — in **both** places:
 
-**1. Runtime asmdef** (`unity/<Mod>/<Mod>.asmdef`) — add the references so your
+**1. Runtime asmdef** (your mod's runtime `.asmdef`) — add the references so your
 code compiles against the API:
 
 ```json
@@ -69,8 +69,9 @@ code compiles against the API:
 ]
 ```
 
-**2. ModBuilderSettings `.asset`** (`unity/<Mod>.asset`, the `metadata:` block) —
-add the loader dependencies so the game refuses to load your mod without them:
+**2. ModBuilderSettings `.asset`** (the `metadata:` block of your mod's
+ModBuilderSettings `.asset`) — add the loader dependencies so the game refuses to
+load your mod without them:
 
 ```yaml
 dependencies:
@@ -239,9 +240,8 @@ those.
 > exported, *changing* its text in a rebuilt bundle does **not** refresh the CSV
 > row unless the mod's version changes. So while iterating on loc during
 > development (re-testing the same local build), edit or remove the stale
-> `<ModId>-Config/*` rows in
-> `…/steamapps/common/Core Keeper/localization/Localization.csv` (back it up
-> first) so the new text takes. A published mod.io update (new version) is not
+> `<ModId>-Config/*` rows in the game's `localization/Localization.csv` (back it
+> up first) so the new text takes. A published mod.io update (new version) is not
 > affected.
 
 ---
@@ -300,8 +300,7 @@ in the patch, so changing the Choice in the menu takes effect immediately.
 ## Building
 
 Built with Unity and Pugstorm's Core Keeper Mod SDK (batchmode, with the Editor
-closed). This repo's own build/publish helpers live in the sibling `utils/`
-scripts; see the parent `core_keeper/CLAUDE.md` for the setup.
+closed).
 
 ## License
 
