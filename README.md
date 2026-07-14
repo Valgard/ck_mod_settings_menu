@@ -8,7 +8,9 @@ lines of `IMod.Init`; the framework renders them as a box of widgets under
 
 - **Players:** install this mod because a mod you use depends on it. There is
   nothing to configure here directly — each dependent mod adds its own section.
-- **Mod authors:** read the API below. Adding a settings section is ~5 lines.
+- **Mod authors:** read the API below — or the full
+  **[tutorial](docs/tutorial.md)** for a guided, end-to-end walkthrough
+  (integration *and* internals). Adding a settings section is ~5 lines.
 
 Personal-use, non-commercial (Pugstorm EULA). Built against Pugstorm's
 `CoreKeeperModSDK`; distributed on mod.io (not Thunderstore/BepInEx).
