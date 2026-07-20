@@ -22,7 +22,7 @@ namespace ModSettingsMenu.UI
         public GameObject toggleTemplate;  // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
         public GameObject listTemplate;    // inactive list-widget row; has a ListWidget + ListWidgetBox (wired in the Editor)
 
-        private const int RowPaddingPx = 6;      // vertical breathing room added to each row's text height
+        internal const int RowPaddingPx = 6;     // vertical breathing room added to each row's text height
         // Inter-item gaps (contentRoot=6, SectionTemplate=12) live on the prefab's LinearLayouts, not here.
         // Content position is owned by UIScrollWindow, not this component (no anchor constant).
 
@@ -32,8 +32,12 @@ namespace ModSettingsMenu.UI
         private static int RowHeightPx(PugText pt)
         {
             float unitsHigh = (pt != null && pt.dimensions.height > 0f) ? pt.dimensions.height : 1f;
-            return Mathf.RoundToInt(16f * unitsHigh) + RowPaddingPx;
+            return RowHeightPx(unitsHigh);
         }
+
+        // Same convention for a pre-measured content height (units): list rows feed the item
+        // container's rendered height here, so they share RowPaddingPx with the text-based rows.
+        private static int RowHeightPx(float unitsHigh) => Mathf.RoundToInt(16f * unitsHigh) + RowPaddingPx;
 
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
@@ -161,8 +165,8 @@ namespace ModSettingsMenu.UI
                         var lw = lGo.GetComponent<ListWidget>();
                         lw.Bind(def, this);
                         lw.SetParentMenu(this);
-                        var lbox = lGo.GetComponent<ListWidgetBox>();
-                        SetRowHeight(lGo, RowHeightPx(lbox != null ? lbox.label : null));
+                        // Row height is set in RenderContent (SetRowHeight(RowHeightPx(RenderAndMeasure)))
+                        // after activation, like the normal rows — it depends on the rendered item count.
                         menuOptions.Add(lw);
                         _listWidgets.Add(lw);
                         continue;
@@ -193,10 +197,11 @@ namespace ModSettingsMenu.UI
         // stacks the sections.
         internal void RenderContent()
         {
-            // List rows first: render each item container and grow the row to fit — so the section
-            // boxes below measure the grown rows and nothing overflows onto neighbours.
+            // List rows first: render each item container and size the row via the SAME path as the
+            // normal rows — SetRowHeight(RowHeightPx(..)) — so the boxes below measure the grown rows
+            // and nothing overflows. RenderAndMeasure also aligns the row's label to the first item.
             foreach (var lw in _listWidgets)
-                if (lw != null) lw.RenderItems();
+                if (lw != null) SetRowHeight(lw.gameObject, RowHeightPx(lw.RenderAndMeasure()));
 
             foreach (var sGo in _sectionRoots)
             {
