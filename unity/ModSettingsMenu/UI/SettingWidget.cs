@@ -94,6 +94,10 @@ namespace ModSettingsMenu.UI
                     if (toks == null || toks.Length == 0) break;
                     string cur = _def.Foreign ? e.GetSerializedValue() : (string)e.BoxedValue;
                     int idx = System.Array.IndexOf(toks, cur);
+                    // A foreign value not among the member names is a [Flags] combination (serialized
+                    // "A, B") or an undefined value — single-select cycling can't represent it, so leave
+                    // it untouched rather than clobbering the .cfg to one flag. (flags editing = v2.)
+                    if (idx < 0 && _def.Foreign) break;
                     // Unknown/removed token -> snap to the first option; else step and wrap.
                     int next = idx < 0 ? 0 : ((idx + dir) % toks.Length + toks.Length) % toks.Length;
                     if (_def.Foreign) e.SetSerializedValue(toks[next]);
