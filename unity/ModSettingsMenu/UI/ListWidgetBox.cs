@@ -9,9 +9,11 @@ namespace ModSettingsMenu.UI
     /// </summary>
     public sealed class ListWidgetBox : MonoBehaviour
     {
-        public PugText label;          // the setting key (left)
-        public PugText toggleValue;    // on/off state of "show as list" (right, like a Toggle row)
-        public Transform itemContainer;// LinearLayout parent for the item lines
-        public GameObject itemTemplate;// inactive PugText row cloned once per item
+        public PugText label;            // the option name (left)
+        public Transform itemContainer;  // value-column LinearLayout: list items (list) or 1 plain line
+        public GameObject itemTemplate;  // inactive PugText row cloned once per item
+        public SpriteRenderer toggleIcon;// 2-state toggle sprite, far-right on line 1
+        public Sprite listIcon;          // toggleIcon sprite in list view
+        public Sprite plainIcon;         // toggleIcon sprite in plain view
     }
 }

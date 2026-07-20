@@ -49,13 +49,33 @@ namespace ModSettingsMenu.UI
         public override bool OnSkimLeft()  { OnActivated(); return true; }
         public override bool OnSkimRight() { OnActivated(); return true; }
 
+        // Called by ModSettingsScreen.RenderContent (after activation): render the item container's
+        // layout so the lines stack, then size THIS row to header + container height so the items
+        // never overflow onto the rows below. Uses the real rendered height (handles wrapped items).
+        public void RenderItems()
+        {
+            if (_box == null || _box.itemContainer == null) return;
+            var layout = _box.itemContainer.GetComponent<LinearLayoutUIComponent>();
+            layout?.RenderUIComponent(force: true);
+            float itemsH = layout != null ? layout.GetUIComponentRenderHeight() : 0f;
+            var wrap = GetComponent<WrapperUIComponent>();
+            if (wrap != null)
+            {
+                float headerH = (_box.label != null && _box.label.dimensions.height > 0f)
+                    ? 16f * _box.label.dimensions.height : 16f;
+                wrap.renderHeightPixels = Mathf.RoundToInt(headerH + itemsH) + 6;
+            }
+        }
+
         private string Value() => _def?.Entry?.BoxedValue?.ToString() ?? "";
 
         private void Render()
         {
             if (_def == null || _box == null) return;
             SetText(_box.label, Loc.T(_def.Term, _def.Key));
-            SetText(_box.toggleValue, _listView ? Loc.T("ModSettingsMenu-UI/On") : Loc.T("ModSettingsMenu-UI/Off"));
+            // Swap the 2-state toggle sprite (far-right); the value column holds the list/plain text.
+            if (_box.toggleIcon != null)
+                _box.toggleIcon.sprite = _listView ? _box.listIcon : _box.plainIcon;
 
             // Clear previous item lines (keep the template).
             if (_box.itemContainer != null)
