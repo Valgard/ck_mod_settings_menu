@@ -50,21 +50,49 @@ namespace ModSettingsMenu.UI
         public override bool OnSkimRight() { OnActivated(); return true; }
 
         // Called by ModSettingsScreen.RenderContent (after activation): render the item container's
-        // layout so the lines stack, then size THIS row to header + container height so the items
-        // never overflow onto the rows below. Uses the real rendered height (handles wrapped items).
-        public void RenderItems()
+        // inner layout so the lines stack, align the row's label + toggle icon to the first item's
+        // line, and RETURN the container's rendered height in UNITS. The screen turns that into the
+        // row height via SetRowHeight(RowHeightPx(..)) — the same path the normal rows use — so this
+        // method sets no row height and no top padding itself. The row's WrapperUIComponent keeps its
+        // prefab pivot (TopLeft, like Header/Hint, the other rows whose content grows downward).
+        public float RenderAndMeasure()
         {
-            if (_box == null || _box.itemContainer == null) return;
+            if (_box == null || _box.itemContainer == null) return 0f;
             var layout = _box.itemContainer.GetComponent<LinearLayoutUIComponent>();
             layout?.RenderUIComponent(force: true);
-            float itemsH = layout != null ? layout.GetUIComponentRenderHeight() : 0f;
-            var wrap = GetComponent<WrapperUIComponent>();
-            if (wrap != null)
+            // Center the content within the row's RowPaddingPx (RowHeightPx adds it), the way a normal
+            // MiddleLeft row's centering splits it 50/50. This TopLeft row would otherwise leave all the
+            // padding at the bottom, so line 1 sits RowPaddingPx/2 higher than a normal row's label
+            // (measured: normal label = rowH/2 below the box top, the list's only textH/2). Only matters
+            // once the value is taller than the label; when they match, this equals a normal row exactly.
+            SetLocalY(_box.itemContainer, -ModSettingsScreen.RowPaddingPx / 2f / 16f);
+            AlignHeaderToFirstItem();
+            return layout != null ? layout.GetUIComponentRenderHeight() : 0f;
+        }
+
+        // The item container centers each line in its slot (a half-line offset), so the first item
+        // sits on line 1's centre — not at the container's top edge. The label + toggle icon are
+        // static siblings, so move them onto that same line, read from the item's actual position.
+        // This is the list analogue of a normal MiddleLeft row whose label sits on its single centred
+        // line: it aligns the label with the list AND lifts it off the box's top border, with no
+        // hand-tuned top padding.
+        private void AlignHeaderToFirstItem()
+        {
+            Transform first = null;
+            for (int i = 0; i < _box.itemContainer.childCount; i++)
             {
-                float headerH = (_box.label != null && _box.label.dimensions.height > 0f)
-                    ? 16f * _box.label.dimensions.height : 16f;
-                wrap.renderHeightPixels = Mathf.RoundToInt(headerH + itemsH) + 6;
+                var c = _box.itemContainer.GetChild(i);
+                if (c.gameObject.activeSelf) { first = c; break; }
             }
+            if (first == null) return;
+            float lineY = _box.itemContainer.localPosition.y + first.localPosition.y;
+            if (_box.label != null) SetLocalY(_box.label.transform, lineY);
+            if (_box.toggleIcon != null) SetLocalY(_box.toggleIcon.transform, lineY);
+        }
+
+        private static void SetLocalY(Transform t, float y)
+        {
+            var p = t.localPosition; p.y = y; t.localPosition = p;
         }
 
         private string Value() => _def?.Entry?.BoxedValue?.ToString() ?? "";
@@ -114,8 +142,12 @@ namespace ModSettingsMenu.UI
             var pt = line.GetComponent<PugText>();
             SetText(pt, text);
             var wrap = line.GetComponent<WrapperUIComponent>();
+            // Slot height = EXACTLY the rendered text height (no padding). PugText forces single-line
+            // text to center on its transform; with the slot equal to the text, that centre sits so
+            // the text is flush to the slot's top — i.e. centered == top-aligned. The lines then stack
+            // tight and top-aligned, and the header (aligned to line 1) lands on the same top edge.
             if (wrap != null && pt != null)
-                wrap.renderHeightPixels = Mathf.RoundToInt(16f * (pt.dimensions.height > 0f ? pt.dimensions.height : 1f)) + 4;
+                wrap.renderHeightPixels = Mathf.RoundToInt(16f * (pt.dimensions.height > 0f ? pt.dimensions.height : 1f));
         }
 
         // Render a raw (non-localized) string into a PugText, like the sibling widgets.
