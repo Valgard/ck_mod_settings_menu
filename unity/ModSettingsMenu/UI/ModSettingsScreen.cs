@@ -38,6 +38,7 @@ namespace ModSettingsMenu.UI
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
         private readonly List<GameObject> _sectionRoots = new List<GameObject>();   // rendered inner-to-outer after activation
+        private readonly List<ListWidget> _listWidgets = new List<ListWidget>();    // sized in RenderContent (rows grow to fit their items)
 
         // Rebuild on every open (Populate) — the vanilla PugTexts free their glyphs on disable
         // (freeResourcesOnDisable), so a once-only build shows empty on reopen. Populate builds the
@@ -130,6 +131,7 @@ namespace ModSettingsMenu.UI
             }
             menuOptions.Clear();
             _sectionRoots.Clear();
+            _listWidgets.Clear();
 
             // Boxes render alphabetically by DisplayName — a stable, findable order regardless of mod
             // load/registration order. Sort a LOCAL copy so the registry keeps its insertion order.
@@ -162,6 +164,7 @@ namespace ModSettingsMenu.UI
                         var lbox = lGo.GetComponent<ListWidgetBox>();
                         SetRowHeight(lGo, RowHeightPx(lbox != null ? lbox.label : null));
                         menuOptions.Add(lw);
+                        _listWidgets.Add(lw);
                         continue;
                     }
                     var wGo = Object.Instantiate(toggleTemplate, container);   // nest INTO the box
@@ -190,6 +193,11 @@ namespace ModSettingsMenu.UI
         // stacks the sections.
         internal void RenderContent()
         {
+            // List rows first: render each item container and grow the row to fit — so the section
+            // boxes below measure the grown rows and nothing overflows onto neighbours.
+            foreach (var lw in _listWidgets)
+                if (lw != null) lw.RenderItems();
+
             foreach (var sGo in _sectionRoots)
             {
                 if (sGo == null) continue;
