@@ -70,8 +70,13 @@ namespace ModSettingsMenu.UI
                 case SettingKind.Stepper:
                     if (e.SettingType == typeof(float))
                     {
-                        // Foreign unbounded float stepper: step by _def.Step, no bounds.
-                        e.BoxedValue = (float)e.BoxedValue + dir * _def.Step;
+                        // Foreign unbounded float stepper: step by _def.Step, no bounds. Store the
+                        // DISPLAYED value verbatim (SetSerializedValue) so the .cfg matches the row to
+                        // the decimal: float arithmetic like 0.1f-0.05f would otherwise persist noise
+                        // (0.09999993). Formatting to the same "0.0##" the row shows, then re-parsing,
+                        // yields the canonical float; the next step re-reads that clean value.
+                        float stepped = (float)e.BoxedValue + dir * _def.Step;
+                        e.SetSerializedValue(stepped.ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture));
                     }
                     else
                     {
