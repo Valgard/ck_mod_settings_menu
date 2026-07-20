@@ -20,6 +20,11 @@ namespace ModSettingsMenu
         public static AssetBundle AssetBundle { get; private set; }
         public static GameObject MenuPrefab { get; private set; }
 
+        // MSM's own master toggle (dogfooded via the public API). Read by ModSettingsScreen.Populate
+        // to gate foreign discovery. Its ConfigFile is created via ConfigStore, so ConfigStore.IsOwn
+        // excludes it from discovery - MSM never lists its own section as a "foreign" one.
+        public static SettingHandle<bool> ShowForeignConfigs;
+
         public void EarlyInit()
         {
             var info = ((IMod)this).GetModInfo();
@@ -32,6 +37,9 @@ namespace ModSettingsMenu
         public void Init()
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
+            ModSettings.Section(this)
+                .Toggle(out ShowForeignConfigs, "showForeignConfigs", true)
+                .Build();
         }
 
         public void ModObjectLoaded(Object obj)
