@@ -134,6 +134,11 @@ namespace ModSettingsMenu.UI
             // load/registration order. Sort a LOCAL copy so the registry keeps its insertion order.
             // Options WITHIN a box keep declaration order (the consumer's author intent).
             var sortedSections = new List<ModSection>(ModSettings.Sections);
+            // GMCM-style generic discovery: fold in every foreign CoreLib config, unless the user
+            // turned it off via MSM's own master toggle (null before Init -> default on).
+            bool showForeign = ModSettingsMenuMod.ShowForeignConfigs == null || ModSettingsMenuMod.ShowForeignConfigs.Value;
+            if (showForeign)
+                sortedSections.AddRange(ForeignConfigDiscovery.Discover());
             sortedSections.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, System.StringComparison.OrdinalIgnoreCase));
 
             foreach (var section in sortedSections)
@@ -225,7 +230,12 @@ namespace ModSettingsMenu.UI
             var box = sGo.GetComponent<SectionBox>();
             if (box != null && box.header != null)
             {
-                RenderStatic(box.header, section.DisplayName);
+                // Auto-detected mods get a marker so their raw keys / inferred widgets read as
+                // "discovered", not author-curated.
+                string heading = section.Foreign
+                    ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected")
+                    : section.DisplayName;
+                RenderStatic(box.header, heading);
                 SetRowHeight(box.header.gameObject, RowHeightPx(box.header));
             }
             if (box != null && box.hint != null)
