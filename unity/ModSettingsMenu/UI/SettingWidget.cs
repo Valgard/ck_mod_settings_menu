@@ -53,11 +53,13 @@ namespace ModSettingsMenu.UI
         public override bool OnSkimLeft()  { Adjust(-1); return true; }
         public override bool OnSkimRight() { Adjust(+1); return true; }
 
-        // Change the value one step in `dir` (Toggle flips regardless of sign). All writes go
-        // through ConfigEntryBase.BoxedValue → CoreLib clamps to the AcceptableValue* + auto-saves.
+        // Change the value one step in `dir` (Toggle flips regardless of sign). Numeric writes go
+        // through ConfigEntryBase.BoxedValue with type-exact casts; foreign Choice round-trips via
+        // the serialized value (BoxedValue of a foreign enum is not a string).
         private void Adjust(int dir)
         {
             if (_def?.Entry == null) return;
+            if (_def.Kind == SettingKind.Info) return;   // read-only row: never changes
             var e = _def.Entry;
             var before = e.BoxedValue;   // for the RequiresRestart change-detection below
             switch (_def.Kind)
@@ -66,7 +68,17 @@ namespace ModSettingsMenu.UI
                     e.BoxedValue = !(bool)e.BoxedValue;
                     break;
                 case SettingKind.Stepper:
-                    e.BoxedValue = Mathf.Clamp((int)e.BoxedValue + dir, (int)_def.Min, (int)_def.Max);
+                    if (e.SettingType == typeof(float))
+                    {
+                        // Foreign unbounded float stepper: step by _def.Step, no bounds.
+                        e.BoxedValue = (float)e.BoxedValue + dir * _def.Step;
+                    }
+                    else
+                    {
+                        int nv = (int)e.BoxedValue + dir;
+                        if (!_def.Unbounded) nv = Mathf.Clamp(nv, (int)_def.Min, (int)_def.Max);
+                        e.BoxedValue = nv;
+                    }
                     break;
                 case SettingKind.Slider:
                     e.BoxedValue = Mathf.Clamp((float)e.BoxedValue + dir * _def.Step, _def.Min, _def.Max);
@@ -75,17 +87,17 @@ namespace ModSettingsMenu.UI
                 {
                     var toks = _def.Tokens;
                     if (toks == null || toks.Length == 0) break;
-                    int cur = System.Array.IndexOf(toks, (string)e.BoxedValue);
-                    // Unknown/removed token → snap to the first option; else step and wrap.
-                    int next = cur < 0 ? 0 : ((cur + dir) % toks.Length + toks.Length) % toks.Length;
-                    e.BoxedValue = toks[next];
+                    string cur = _def.Foreign ? e.GetSerializedValue() : (string)e.BoxedValue;
+                    int idx = System.Array.IndexOf(toks, cur);
+                    // Unknown/removed token -> snap to the first option; else step and wrap.
+                    int next = idx < 0 ? 0 : ((idx + dir) % toks.Length + toks.Length) % toks.Length;
+                    if (_def.Foreign) e.SetSerializedValue(toks[next]);
+                    else e.BoxedValue = toks[next];
                     break;
                 }
             }
             // A restart-required setting that actually changed marks the menu dirty; leaving the
-            // screen (ModSettingsScreen.Deactivate) then raises CK's restart prompt. The value-compare
-            // avoids a false positive when a clamp/no-op left the value unchanged (e.g. skimming a
-            // slider already at its bound).
+            // screen (ModSettingsScreen.Deactivate) then raises CK's restart prompt.
             if (_def.RequiresRestart && !object.Equals(before, e.BoxedValue))
                 ModSettingsScreen.RestartPending = true;
             Refresh();
@@ -103,12 +115,23 @@ namespace ModSettingsMenu.UI
             var e = _def.Entry;
             switch (_def.Kind)
             {
+                case SettingKind.Info:
+                {
+                    // Read-only: show the raw value (BoxedValue.ToString, NOT the escaped serialized
+                    // form), truncated so a long string (e.g. a comma-list) can't overflow the row.
+                    var v = e.BoxedValue;
+                    string s = v == null ? "" : v.ToString();
+                    return s.Length > 40 ? s.Substring(0, 40) + "..." : s;
+                }
                 case SettingKind.Toggle:  return (bool)e.BoxedValue ? Loc.T("ModSettingsMenu-UI/On") : Loc.T("ModSettingsMenu-UI/Off");
-                case SettingKind.Stepper: return ((int)e.BoxedValue).ToString();
+                case SettingKind.Stepper:
+                    return e.SettingType == typeof(float)
+                        ? ((float)e.BoxedValue).ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture)
+                        : ((int)e.BoxedValue).ToString();
                 case SettingKind.Choice:
                 {
-                    var tok = (string)e.BoxedValue;
-                    return Loc.T(_def.Term + "/" + tok, tok);   // localized per-option; falls back to the token
+                    string tok = _def.Foreign ? e.GetSerializedValue() : (string)e.BoxedValue;
+                    return Loc.T(_def.Term + "/" + tok, tok);   // localized per-option; foreign -> raw token
                 }
                 case SettingKind.Slider:
                 {
@@ -116,10 +139,9 @@ namespace ModSettingsMenu.UI
                     float frac = (_def.Max - _def.Min) > 0f ? (v - _def.Min) / (_def.Max - _def.Min) : 0f;
                     switch (_def.Display)
                     {
-                        // Always >=1 decimal, dot separator (4 -> "4.0", 4.5 -> "4.5").
                         case SliderDisplay.Number:  return v.ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture);
                         case SliderDisplay.Percent: return Mathf.RoundToInt(frac * 100f) + "%";
-                        default: // Steps: ♦/♢ chain (boldLarge, set in Bind), segments = (Max-Min)/Step
+                        default: // Steps: diamond chain (boldLarge, set in Bind), segments = (Max-Min)/Step
                         {
                             int seg = Mathf.Max(1, Mathf.RoundToInt((_def.Max - _def.Min) / _def.Step));
                             int n = Mathf.Clamp(Mathf.RoundToInt(frac * seg), 0, seg);
