@@ -210,6 +210,50 @@ TextureImporter:
       indices: 
       edges: []
       weights: []
+    - serializedVersion: 2
+      name: ToggleListView
+      rect:
+        serializedVersion: 2
+        x: 108
+        y: 8
+        width: 16
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6aaafe1f059238094bd62d5f096a1716
+      internalID: 100005
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: TogglePlainView
+      rect:
+        serializedVersion: 2
+        x: 126
+        y: 8
+        width: 16
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4ae8b28f07a46df6c237f378628f8508
+      internalID: 100006
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
     outline: []
     customData: 
     physicsShape: []
@@ -228,6 +272,8 @@ TextureImporter:
       menu_border: 100002
       progress_border: 100003
       scrollbar_hover: 100004
+      ToggleListView: 100005
+      TogglePlainView: 100006
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
