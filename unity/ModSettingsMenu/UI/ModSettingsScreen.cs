@@ -20,6 +20,7 @@ namespace ModSettingsMenu.UI
         public Transform contentRoot;      // Options/Scroll — hosts the top LinearLayout
         public GameObject sectionTemplate; // inactive; SectionBox (Header + Hint + Widgets-box)
         public GameObject toggleTemplate;  // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
+        public GameObject listTemplate;    // inactive list-widget row; has a ListWidget + ListWidgetBox (wired in the Editor)
 
         private const int RowPaddingPx = 6;      // vertical breathing room added to each row's text height
         // Inter-item gaps (contentRoot=6, SectionTemplate=12) live on the prefab's LinearLayouts, not here.
@@ -174,7 +175,7 @@ namespace ModSettingsMenu.UI
         // LinearLayout counts the rows + computes real heights): each box sizes its 9-slice
         // background to its toggles, each section stacks [heading, hint, box], then the top layout
         // stacks the sections.
-        private void RenderContent()
+        internal void RenderContent()
         {
             foreach (var sGo in _sectionRoots)
             {
@@ -189,6 +190,10 @@ namespace ModSettingsMenu.UI
             // contentRoot's position is owned by UIScrollWindow (LateUpdate → SetScrollablePosition),
             // so no manual anchoring here — an anchor set now is overwritten the same frame.
         }
+
+        // Re-render all section layouts now (used when a ListWidget toggle changes a row's height
+        // mid-menu, so the boxes and the scroll window resize without a full reopen).
+        public void RefreshLayout() => RenderContent();
 
         private static Transform ContainerOf(GameObject sGo)
         {
