@@ -112,7 +112,19 @@ namespace ModSettingsMenu.Settings
                 return d;
             }
 
-            // 7. string and everything else -> read-only.
+            // 7. ANY string -> the dedicated list widget (togglable list/plain view). v1 renders
+            //    strings read-only, so every string is uniformly a list-capable widget — no comma or
+            //    eligibility gate, so single-item / empty / prose strings are all togglable. The prose
+            //    heuristic only picks the DEFAULT view; the ListWidget reads it (override ?? heuristic).
+            //    Here we just route + stamp the override key.
+            if (t == typeof(string))
+            {
+                d.Kind = SettingKind.List;
+                d.OverrideKey = e.ConfigFile.ConfigFilePath + "|" + e.Definition.Section + "|" + e.Definition.Key;
+                return d;
+            }
+
+            // 8. everything else (unhandled type) -> read-only.
             d.Kind = SettingKind.Info;
             return d;
         }
@@ -133,6 +145,24 @@ namespace ModSettingsMenu.Settings
             if (av is AcceptableValueRange<int> ri) { min = ri.MinValue; max = ri.MaxValue; return true; }
             if (av is AcceptableValueRange<float> rf) { min = rf.MinValue; max = rf.MaxValue; return true; }
             min = 0f; max = 0f; return false;
+        }
+
+        /// <summary>Default list-vs-plain guess for a foreign string: treat as a list when there are
+        /// >=2 non-empty comma tokens and every token is "compact" (<=32 chars, no '.'). A single-token
+        /// or prose string defaults to plain (but is still togglable). Read-only, so a false positive
+        /// only splits at commas; the per-entry toggle corrects it.</summary>
+        public static bool HeuristicSaysList(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            int nonEmpty = 0;
+            foreach (var raw in value.Split(','))
+            {
+                var tok = raw.Trim();
+                if (tok.Length == 0) continue;
+                if (tok.Length > 32 || tok.IndexOf('.') >= 0) return false;
+                nonEmpty++;
+            }
+            return nonEmpty >= 2;
         }
     }
 }
