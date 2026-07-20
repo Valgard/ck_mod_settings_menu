@@ -151,6 +151,19 @@ namespace ModSettingsMenu.UI
 
                 foreach (var def in OrderedSettings(section))
                 {
+                    if (def.Kind == SettingKind.List && listTemplate != null)
+                    {
+                        var lGo = Object.Instantiate(listTemplate, container);
+                        lGo.SetActive(true);
+                        lGo.name = "List " + def.Key;
+                        var lw = lGo.GetComponent<ListWidget>();
+                        lw.Bind(def, this);
+                        lw.SetParentMenu(this);
+                        var lbox = lGo.GetComponent<ListWidgetBox>();
+                        SetRowHeight(lGo, RowHeightPx(lbox != null ? lbox.label : null));
+                        menuOptions.Add(lw);
+                        continue;
+                    }
                     var wGo = Object.Instantiate(toggleTemplate, container);   // nest INTO the box
                     wGo.SetActive(true);
                     wGo.name = def.Kind + " " + def.Key;
