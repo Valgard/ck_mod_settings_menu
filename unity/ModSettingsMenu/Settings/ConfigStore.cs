@@ -26,5 +26,9 @@ namespace ModSettingsMenu.Settings
             _files[modId] = file;
             return file;
         }
+
+        /// <summary>True if this ConfigFile was created by MSM (a registered consumer's or MSM's own
+        /// file). Foreign discovery skips these so integrated mods never appear twice.</summary>
+        internal static bool IsOwn(ConfigFile file) => _files.ContainsValue(file);
     }
 }

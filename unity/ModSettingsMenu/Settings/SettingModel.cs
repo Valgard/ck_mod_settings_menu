@@ -4,7 +4,7 @@ using CoreLib.Data.Configuration;
 namespace ModSettingsMenu.Settings
 {
     /// <summary>Widget type a setting renders as (consumed by the menu UI).</summary>
-    public enum SettingKind { Toggle, Slider, Stepper, Choice }
+    public enum SettingKind { Toggle, Slider, Stepper, Choice, Info }
 
     /// <summary>How a Slider renders its value.</summary>
     public enum SliderDisplay { Steps, Number, Percent }
@@ -32,6 +32,8 @@ namespace ModSettingsMenu.Settings
         public string[] Tokens;        // Choice only: ordered value.ToString() list (cycle order)
         public ConfigEntryBase Entry;  // live handle; widget reads/writes via BoxedValue
         public bool RequiresRestart;   // true → changing this in the menu raises CK's restart prompt on leave
+        public bool Foreign;           // true → discovered (not API-registered): raw label, serialized Choice, marker
+        public bool Unbounded;         // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
     }
 
     /// <summary>
@@ -45,6 +47,7 @@ namespace ModSettingsMenu.Settings
         public string HintTerm;        // "<ModId>-Config/_hint" (loc term, resolved in Phase 3)
         public string HintText;        // optional literal hint shown under the heading (pre-loc)
         public OptionSort OptionSort = OptionSort.AsDeclared;  // order of options within this box
+        public bool Foreign;           // true → auto-detected mod: heading gets the "(detected)" marker
         public readonly List<SettingDef> Settings = new List<SettingDef>();
     }
 }
