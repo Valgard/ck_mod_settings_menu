@@ -4,7 +4,7 @@ using CoreLib.Data.Configuration;
 namespace ModSettingsMenu.Settings
 {
     /// <summary>Widget type a setting renders as (consumed by the menu UI).</summary>
-    public enum SettingKind { Toggle, Slider, Stepper, Choice, Info }
+    public enum SettingKind { Toggle, Slider, Stepper, Choice, Info, List }
 
     /// <summary>How a Slider renders its value.</summary>
     public enum SliderDisplay { Steps, Number, Percent }
@@ -34,6 +34,7 @@ namespace ModSettingsMenu.Settings
         public bool RequiresRestart;   // true → changing this in the menu raises CK's restart prompt on leave
         public bool Foreign;           // true → discovered (not API-registered): raw label, serialized Choice, marker
         public bool Unbounded;         // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
+        public string OverrideKey;     // List only: ListOverrideStore key (path|section|key); null otherwise
     }
 
     /// <summary>
