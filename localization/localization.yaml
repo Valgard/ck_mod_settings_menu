@@ -13,3 +13,12 @@ ModSettingsMenu-UI:
     hint: "Toggle value when disabled."
     en: "off"
     de: "aus"
+  AutoDetected:
+    hint: "Marker appended to the heading of an auto-detected (non-integrated) mod's config box."
+    en: "(detected)"
+    de: "(erkannt)"
+ModSettingsMenu-Config:
+  showForeignConfigs:
+    hint: "Master toggle label: show config from other mods that use CoreLib config but did not integrate MSM."
+    en: "Show settings from other mods"
+    de: "Einstellungen anderer Mods anzeigen"
