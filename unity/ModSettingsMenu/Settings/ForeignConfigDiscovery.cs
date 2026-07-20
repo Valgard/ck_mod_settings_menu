@@ -70,7 +70,8 @@ namespace ModSettingsMenu.Settings
                 RequiresRestart = e.Scope != null && e.Scope.requireReload,
             };
 
-            // 1. View-only, or a server/admin setting this player can't change -> read-only.
+            // 1. View-only, or a server/admin setting this player can't change (incl. at the title,
+            //    where there is no player) -> read-only Info. Client stays editable-typed everywhere.
             if (IsReadOnly(e.Scope)) { d.Kind = SettingKind.Info; return d; }
 
             var t = e.SettingType;
