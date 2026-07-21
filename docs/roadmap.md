@@ -99,3 +99,11 @@ separator can sit between option 3 and 4).
   only the loc term is user-facing — the "Mod Settings" mentions in code comments,
   `README.md` and `CHANGELOG.md` are the feature *name* in prose and need no change.
   Requested 2026-07-12.
+- **Controller/keyboard activation of the list-widget toggle icon.** The
+  foreign-config list widget's list↔plain switch is currently **mouse-only** (a
+  `ListToggleButton` on the icon GO, clicked via CK's `UIMouse` 3D raycast); the
+  row itself deliberately no longer toggles, so a controller/keyboard player has
+  no way to flip the view. Add a focus-driven path — e.g. route the list row's
+  skim/activate to `ListWidget.ToggleView` while the row is selected, or make the
+  icon a focusable element — so the toggle is reachable without a mouse. Deferred
+  from the foreign-config list-widget feature. Requested 2026-07-21.
