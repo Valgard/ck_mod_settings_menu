@@ -5,9 +5,10 @@ namespace ModSettingsMenu.UI
 {
     /// <summary>
     /// Renders a discovered foreign string as either a comma-split read-only list (one line per item
-    /// in the item container) or the plain truncated string, toggled by activating the row. The choice
-    /// persists via ListOverrideStore; the initial state is override ?? heuristic. Read-only in this
-    /// version (no value mutation); the item container is the home for the later edit UI.
+    /// in the item container) or the plain truncated string, toggled by the far-right icon (a
+    /// ListToggleButton — the row itself does not toggle). The choice persists via ListOverrideStore;
+    /// the initial state is override ?? heuristic. Read-only in this version (no value mutation); the
+    /// item container is the home for the later edit UI.
     /// </summary>
     public sealed class ListWidget : RadicalMenuOption
     {
@@ -34,20 +35,22 @@ namespace ModSettingsMenu.UI
             Render();
         }
 
-        // Activation is the toggle: flip list/plain, persist, re-render, and re-measure the layout
-        // (the item container's height changes, so the whole content layout must re-render).
-        public override void OnActivated()
+        // The row itself no longer toggles — only the far-right toggle icon (a ListToggleButton on
+        // the icon GO) flips the view (user decision: icon-only; keyboard/controller support for the
+        // icon comes later). So OnActivated / OnSkim are intentionally NOT overridden — the row stays
+        // a plain, navigable menu option.
+
+        // Flip list <-> plain, persist the override, re-render, and re-measure the layout (the item
+        // container's height changes, so the whole content layout must re-render). Called by the
+        // toggle icon's ListToggleButton.OnLeftClicked.
+        public void ToggleView()
         {
-            base.OnActivated();
             if (_def == null) return;
             _listView = !_listView;
             ListOverrideStore.Set(_def.OverrideKey, _listView);
             Render();
             if (_screen != null) _screen.RefreshLayout();
         }
-
-        public override bool OnSkimLeft()  { OnActivated(); return true; }
-        public override bool OnSkimRight() { OnActivated(); return true; }
 
         // Called by ModSettingsScreen.RenderContent (after activation): render the item container's
         // inner layout so the lines stack, align the row's label + toggle icon to the first item's
