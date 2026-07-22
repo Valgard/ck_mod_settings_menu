@@ -221,6 +221,67 @@ namespace ModSettingsMenu.UI
         // mid-menu, so the boxes and the scroll window resize without a full reopen).
         public void RefreshLayout() => RenderContent();
 
+        // Keyboard / controller navigation moves the selection through menuOptions, but the base
+        // RadicalMenu never scrolls the viewport to follow it — every vanilla scrollable menu wires
+        // that itself (ControlMapper's ActionMappingSelected; the chooseCharacter/selectWorld option
+        // OnSelected overrides). RadicalMenu.SelectOptionIndex calls this hook right after the
+        // freshly-selected option's OnSelected — keep that row on screen.
+        protected override void OnSelectedOptionChanged()
+        {
+            base.OnSelectedOptionChanged();
+            ScrollSelectedIntoView();
+        }
+
+        // Scroll the viewport so the selected row follows keyboard / controller navigation.
+        //
+        // Positions are measured in contentRoot's (the scroll root's) local space: sum localPosition.y
+        // up the parent chain (row -> widgets box -> section -> contentRoot), because MSM's rows are
+        // nested — unlike CK's own 1-level scrollable menus, which pass transform.localPosition.y raw.
+        // The row's WrapperUIComponent pivot decides where that origin sits (MiddleLeft rows = centre,
+        // TopLeft list rows = top edge), so it is normalised to a top edge first, mirroring CK's
+        // UIComponentMonoBehaviour.ScrollIntoView pivot correction.
+        //
+        // Two cases, because CK's MoveScrollToIncludePosition only handles elements that FIT the
+        // window (it keeps a point inside [-windowHeight + padding, -padding]; with padding past
+        // windowHeight/2 that band inverts and the scroll overshoots):
+        //   * Row fits          -> include it fully (centre, half-height padding — CK's convention).
+        //   * Row taller than    -> a big list widget can't be included; pin its TOP (the label) just
+        //     the viewport         under the window top so the label + as many items as fit show,
+        //                          instead of overshooting the label off-screen (the reported bug).
+        private void ScrollSelectedIntoView()
+        {
+            if (_scroll == null || contentRoot == null) return;
+            if (selectedIndex < 0 || selectedIndex >= menuOptions.Count) return;
+            var option = menuOptions[selectedIndex];
+            if (option == null) return;
+
+            // Selecting by mouse hover must not scroll the page — CK gates its own ScrollIntoView the
+            // same way (ScrollIntoViewIfNotUsingMouse). Keyboard / controller nav leaves this false.
+            if (Manager.input.SystemIsUsingMouse()) return;
+
+            float origin = 0f;
+            for (Transform t = option.transform; t != null && t != contentRoot; t = t.parent)
+                origin += t.localPosition.y;
+
+            var wrap = option.GetComponent<WrapperUIComponent>();
+            float height = wrap != null ? wrap.GetUIComponentRenderHeight() : 1f;
+            bool topPivot = wrap != null
+                && wrap.GetUIComponentPivotPosition() == WrapperUIComponent.PivotPosition.TopLeft;
+            float topEdge = topPivot ? origin : origin + height / 2f;
+
+            if (height <= _scroll.windowHeight)
+            {
+                float center = topEdge - height / 2f;
+                _scroll.MoveScrollToIncludePosition(center, height / 2f);
+            }
+            else
+            {
+                const float TopMarginUnits = 0.25f;
+                float delta = -TopMarginUnits - (contentRoot.localPosition.y + topEdge);
+                _scroll.MoveScroll(delta);
+            }
+        }
+
         private static Transform ContainerOf(GameObject sGo)
         {
             var box = sGo.GetComponent<SectionBox>();
