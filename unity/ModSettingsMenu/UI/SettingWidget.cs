@@ -31,7 +31,58 @@ namespace ModSettingsMenu.UI
             if (def.Kind == SettingKind.Slider && def.Display == SliderDisplay.Steps
                 && valueText != null && valueText.style != null)
                 valueText.style.fontFace = TextManager.FontFace.boldLarge;
+            // Info rows are the currently-non-editable settings: foreign discovery routes every
+            // view-only / non-changeable-here (server/admin as guest or at the title) / unrenderable
+            // entry to Info, and Adjust never mutates one. Strip the interactive menu-option effect
+            // from their VALUE so it no longer turns blue / pops in on selection like an editable
+            // value — an editable widget (incl. a server setting a host CAN change) keeps its effect.
+            // The label keeps its own effect, so the row still highlights while navigating.
+            if (def.Kind == SettingKind.Info && valueText != null)
+                MakeValueReadOnly();
             Refresh();
+        }
+
+        // Make the value render as a static read-only string. CK drives its PugTextEffects through
+        // several independent paths; this covers the ones anchored on the value's own components:
+        //   - PugText.ManagedLateUpdate ticks only ENABLED effects → disable both value effects so
+        //     the colour transition and the juicy-appear pop-in never animate.
+        //   - PugText.ResetEffects re-applies effects on every Render regardless of enabled → set
+        //     dontResetEffectsOnRender so a render while the row is selected can't repaint the value.
+        //     Safe because the effects are disabled (their LateUpdate — incl. JuicyAppear's glyph-timer
+        //     read — never runs, so skipping ResetEffect can't leave it null-deref).
+        //   - lock the value to CK's static deselected tone so it reads as a plain read-only value.
+        // The remaining path — RadicalMenuOption.OnSelected/OnDeselected recolouring the value blue —
+        // runs off menuOptionEffects, which base.Awake fills AFTER Bind, so it's handled at the point
+        // of use in SuppressValueSelectionEffect (below).
+        private void MakeValueReadOnly()
+        {
+            foreach (var fx in valueText.GetComponents<PugTextEffect>())
+                fx.enabled = false;
+            valueText.dontResetEffectsOnRender = true;
+            if (valueText.style != null)
+                valueText.style.color = PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR;
+        }
+
+        // RadicalMenuOption.OnSelected/OnDeselected recolour every menuOptionEffect DIRECTLY (they
+        // ignore MonoBehaviour.enabled). base.Awake fills menuOptionEffects AFTER our Bind runs, so it
+        // can't be filtered there — drop the value's effect (isValueText) right before base acts. The
+        // label's effect stays, so the row still highlights for navigation. Idempotent + cheap.
+        private void SuppressValueSelectionEffect()
+        {
+            if (_def == null || _def.Kind != SettingKind.Info || menuOptionEffects == null) return;
+            menuOptionEffects = System.Array.FindAll(menuOptionEffects, fx => fx != null && !fx.isValueText);
+        }
+
+        public override void OnSelected()
+        {
+            SuppressValueSelectionEffect();
+            base.OnSelected();
+        }
+
+        public override void OnDeselected(bool playEffect = true)
+        {
+            SuppressValueSelectionEffect();
+            base.OnDeselected(playEffect);
         }
 
         // Only bound rows activate; the inactive template (never bound → _def null) stays hidden.
