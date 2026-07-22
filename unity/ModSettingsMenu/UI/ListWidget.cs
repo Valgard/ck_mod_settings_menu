@@ -135,6 +135,11 @@ namespace ModSettingsMenu.UI
                 var s = Value();
                 AddLine(s.Length > 40 ? s.Substring(0, 40) + "..." : s);
             }
+
+            // The item lines are (re)cloned on every Render, so the base's Awake-time menuOptionEffects
+            // snapshot never sees them. Rebuild it now so OnSelected/OnDeselected can drive the current
+            // lines (editable) while always keeping the label's own navigation highlight.
+            RebuildMenuOptionEffects();
         }
 
         // Clone the item-line template into the container, render `text`, size the row to the text.
@@ -143,6 +148,13 @@ namespace ModSettingsMenu.UI
             var line = Object.Instantiate(_box.itemTemplate, _box.itemContainer);
             line.SetActive(true);
             var pt = line.GetComponent<PugText>();
+            // Non-editable (v1): render the line as CK's static read-only grey — the per-line analogue of
+            // SettingWidget.MakeValueReadOnly. This kills the animated transition + on-render repaint ONLY;
+            // the blue-on-SELECTION path is blocked separately by keeping the line OUT of menuOptionEffects
+            // in RebuildMenuOptionEffects (RadicalMenuOption.OnSelected recolours that array's entries
+            // directly, ignoring component.enabled). MUST run before SetText so the render's ResetEffects
+            // is already suppressed (dontResetEffectsOnRender).
+            if (_def != null && !_def.Editable && pt != null) LockLineReadOnly(line, pt);
             SetText(pt, text);
             var wrap = line.GetComponent<WrapperUIComponent>();
             // Slot height = EXACTLY the rendered text height (no padding). PugText forces single-line
@@ -151,6 +163,50 @@ namespace ModSettingsMenu.UI
             // tight and top-aligned, and the header (aligned to line 1) lands on the same top edge.
             if (wrap != null && pt != null)
                 wrap.renderHeightPixels = Mathf.RoundToInt(16f * (pt.dimensions.height > 0f ? pt.dimensions.height : 1f));
+        }
+
+        // Render this item line as a static read-only value: CK's deselected grey, no juicy-appear, no
+        // on-render repaint. Mirrors SettingWidget.MakeValueReadOnly but per cloned line — disables EVERY
+        // PugTextEffect (MenuOption + JuicyAppear both copied onto the ItemTemplate), stops Render from
+        // re-applying them, and locks the per-instance style colour (PugText.style is copied per clone,
+        // so this never bleeds into the label or other rows). NOTE: the blue on SELECTION is NOT blocked
+        // here — RadicalMenuOption.OnSelected recolours menuOptionEffects entries directly regardless of
+        // component.enabled; that path is blocked by RebuildMenuOptionEffects keeping this line out.
+        private static void LockLineReadOnly(GameObject line, PugText pt)
+        {
+            foreach (var fx in line.GetComponents<PugTextEffect>())
+                fx.enabled = false;
+            pt.dontResetEffectsOnRender = true;
+            if (pt.style != null)
+                pt.style.color = PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR;
+        }
+
+        // Refresh the base RadicalMenuOption.menuOptionEffects to match the CURRENT children. Always
+        // include the label's effect (isValueText=false → SELECTED_TEXT_COLOR, the normal label
+        // highlight). Include the item lines' effects (isValueText=true → SELECTED_VALUE_COLOR blue)
+        // ONLY when editable; when not, the lines are locked grey in AddLine and stay out of the array
+        // so OnSelected/OnDeselected can't repaint them.
+        private void RebuildMenuOptionEffects()
+        {
+            var effects = new System.Collections.Generic.List<PugTextEffectMenuOption>();
+            // Search the label's own subtree (matches the base Awake's GetComponentsInChildren breadth), so
+            // a prefab that parents the effect on a label child still resolves. Warn instead of dropping it
+            // silently — a missing effect here kills the row's navigation highlight, and CLAUDE.md notes the
+            // Editor can strip prefab components on reserialization; this surfaces that regression.
+            var labelFx = _box != null && _box.label != null
+                ? _box.label.GetComponentInChildren<PugTextEffectMenuOption>(true) : null;
+            if (labelFx != null) effects.Add(labelFx);
+            else if (_box != null && _box.label != null)
+                Debug.LogWarning($"[ModSettingsMenu] '{_box.label.name}' has no PugTextEffectMenuOption (expected in the prefab) — list row won't highlight.");
+            if (_def != null && _def.Editable && _box != null && _box.itemContainer != null)
+                for (int i = 0; i < _box.itemContainer.childCount; i++)
+                {
+                    var c = _box.itemContainer.GetChild(i);
+                    if (!c.gameObject.activeSelf) continue;   // skip the inactive template
+                    var fx = c.GetComponent<PugTextEffectMenuOption>();
+                    if (fx != null) effects.Add(fx);
+                }
+            menuOptionEffects = effects.ToArray();
         }
 
         // Render a raw (non-localized) string into a PugText, like the sibling widgets.

@@ -35,6 +35,8 @@ namespace ModSettingsMenu.Settings
         public bool Foreign;           // true → discovered (not API-registered): raw label, serialized Choice, marker
         public bool Unbounded;         // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
         public string OverrideKey;     // List only: ListOverrideStore key (path|section|key); null otherwise
+        public bool Editable;          // List only: false in v1 (lists render read-only → grey values). Flip
+                                       // true when per-item editing lands so the value highlights blue on select.
     }
 
     /// <summary>
