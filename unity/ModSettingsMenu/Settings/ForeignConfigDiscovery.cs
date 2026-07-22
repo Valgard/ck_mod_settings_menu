@@ -120,6 +120,9 @@ namespace ModSettingsMenu.Settings
             if (t == typeof(string))
             {
                 d.Kind = SettingKind.List;
+                // v1 renders lists read-only, so their values show CK's static grey and never highlight
+                // blue on selection. A later per-item editing feature flips this true to unlock the blue.
+                d.Editable = false;
                 d.OverrideKey = e.ConfigFile.ConfigFilePath + "|" + e.Definition.Section + "|" + e.Definition.Key;
                 return d;
             }
