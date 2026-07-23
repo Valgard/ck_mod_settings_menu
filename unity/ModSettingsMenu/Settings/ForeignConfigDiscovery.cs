@@ -112,18 +112,15 @@ namespace ModSettingsMenu.Settings
                 return d;
             }
 
-            // 7. ANY string -> the dedicated list widget (togglable list/plain view). v1 renders
-            //    strings read-only, so every string is uniformly a list-capable widget — no comma or
-            //    eligibility gate, so single-item / empty / prose strings are all togglable. The prose
-            //    heuristic only picks the DEFAULT view; the ListWidget reads it (override ?? heuristic).
-            //    Here we just route + stamp the override key.
+            // 7. string -> a genuine comma-list routes to the dedicated list widget (drill-in); any
+            //    other string (prose, single value, empty) falls back to the read-only Info row. The
+            //    classification lives HERE now (not a per-render view in ListWidget): the heuristic
+            //    picks the WIDGET KIND. A mis-classification is cosmetic in read-only v1 (spec §5); the
+            //    human override returns with editing (spec §7).
             if (t == typeof(string))
             {
-                d.Kind = SettingKind.List;
-                // v1 renders lists read-only, so their values show CK's static grey and never highlight
-                // blue on selection. A later per-item editing feature flips this true to unlock the blue.
-                d.Editable = false;
-                d.OverrideKey = e.ConfigFile.ConfigFilePath + "|" + e.Definition.Section + "|" + e.Definition.Key;
+                string sval = e.BoxedValue?.ToString() ?? "";
+                d.Kind = HeuristicSaysList(sval) ? SettingKind.List : SettingKind.Info;
                 return d;
             }
 
@@ -150,10 +147,12 @@ namespace ModSettingsMenu.Settings
             min = 0f; max = 0f; return false;
         }
 
-        /// <summary>Default list-vs-plain guess for a foreign string: treat as a list when there are
-        /// >=2 non-empty comma tokens and every token is "compact" (<=32 chars, no '.'). A single-token
-        /// or prose string defaults to plain (but is still togglable). Read-only, so a false positive
-        /// only splits at commas; the per-entry toggle corrects it.</summary>
+        /// <summary>Classifies a foreign string for BuildDef routing: a list iff there are >=2 non-empty
+        /// comma tokens and every token is "compact" (<=32 chars, no '.'); a single-token or prose string
+        /// is not a list. This picks the WIDGET KIND at discovery (list widget vs. read-only Info). There
+        /// is no per-entry toggle in v1, so a misclassification has no user recourse — acceptable because
+        /// the view is read-only (a false positive only splits at commas). Recourse returns with the
+        /// editing version (see docs/specs/2026-07-23-list-widget-drill-in-redesign.md §5, §7).</summary>
         public static bool HeuristicSaysList(string value)
         {
             if (string.IsNullOrEmpty(value)) return false;
