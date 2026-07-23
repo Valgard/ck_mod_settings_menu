@@ -16,6 +16,10 @@ namespace ModSettingsMenu
         // Free id outside the vanilla RadicalMenu.MenuType enum; distinct from GMCM(1493)/HealthBars(19901).
         public const RadicalMenu.MenuType SettingsMenuType = (RadicalMenu.MenuType)29314;
 
+        // Second free id for the list drill-in detail screen (distinct from SettingsMenuType 29314).
+        public const RadicalMenu.MenuType ListDetailMenuType = (RadicalMenu.MenuType)29315;
+        public static GameObject ListDetailPrefab { get; private set; }
+
         // Set in EarlyInit; MenuPatch instantiates MenuPrefab in the Options postfix.
         public static AssetBundle AssetBundle { get; private set; }
         public static GameObject MenuPrefab { get; private set; }
@@ -44,8 +48,11 @@ namespace ModSettingsMenu
 
         public void ModObjectLoaded(Object obj)
         {
-            if (obj is GameObject go && go.GetComponent<ModSettingsScreen>() != null)
-                MenuPrefab = go;
+            if (obj is GameObject go)
+            {
+                if (go.GetComponent<ModSettingsScreen>() != null) MenuPrefab = go;
+                else if (go.GetComponent<ListDetailScreen>() != null) ListDetailPrefab = go;
+            }
         }
 
         public void Shutdown()
