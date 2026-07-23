@@ -84,7 +84,11 @@ namespace ModSettingsMenu.UI
             if (_box.preview != null) SetText(_box.preview, Preview());
         }
 
-        // Phase 2 adds: public override void OnActivated() => push the detail screen seeded with _def.
+        public override void OnActivated()
+        {
+            base.OnActivated();
+            if (_def != null) ListDetailScreen.Open(_def);
+        }
 
         private static void SetText(PugText pt, string s)
         {
