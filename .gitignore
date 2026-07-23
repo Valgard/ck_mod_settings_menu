@@ -41,3 +41,5 @@ unity/ModSettingsMenu/Editor/LocalizationGenerator.cs.meta
 
 # Superpowers plans + brainstorming scratch — never committed (docs/specs + docs/adrs stay tracked)
 docs/superpowers/
+
+.superpowers/
