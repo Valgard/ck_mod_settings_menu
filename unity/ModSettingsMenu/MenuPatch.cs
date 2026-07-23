@@ -16,6 +16,7 @@ namespace ModSettingsMenu
     public static class MenuPatch
     {
         internal static ModSettingsMenu.UI.ModSettingsScreen MenuInstance { get; private set; }
+        internal static ModSettingsMenu.UI.ListDetailScreen ListDetailInstance { get; private set; }
 
         // Set the Options-menu entry label to our localised title. Use SetText (which only sets
         // textString), NOT Render: the vanilla prefab entries are unrendered templates (0 glyphs)
@@ -74,6 +75,15 @@ namespace ModSettingsMenu
                              .GetComponent<ModSettingsMenu.UI.ModSettingsScreen>();
             menu.gameObject.SetActive(false);
             MenuInstance = menu;
+
+            var detailPrefab = ModSettingsMenuMod.ListDetailPrefab;
+            if (detailPrefab != null)
+            {
+                var detail = Object.Instantiate(detailPrefab, Manager.camera.uiCamera.transform)
+                                   .GetComponent<ModSettingsMenu.UI.ListDetailScreen>();
+                detail.gameObject.SetActive(false);
+                ListDetailInstance = detail;
+            }
         }
 
         // Resolve our menu id to the cloned menu.
@@ -85,6 +95,7 @@ namespace ModSettingsMenu
                 __result = MenuInstance;
                 return false;
             }
+            if (type == ModSettingsMenuMod.ListDetailMenuType) { __result = ListDetailInstance; return false; }
             return true;
         }
         // Populate now runs in ModSettingsScreen.Activate() (before ActivateTopMenu),
