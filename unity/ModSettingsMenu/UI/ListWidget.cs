@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Text;
 using ModSettingsMenu.Settings;
 using UnityEngine;
 
@@ -5,8 +7,8 @@ namespace ModSettingsMenu.UI
 {
     /// <summary>
     /// A discovered foreign comma-list, rendered as a COMPACT single-line row: label + a preview
-    /// ("first, second, +N") + a drill affordance. Activation opens the drill-in detail screen
-    /// (Phase 2). Read-only. The list-vs-plain classification now lives in ForeignConfigDiscovery
+    /// ("first, second, +N") + a drill affordance. Activation opens the drill-in detail screen.
+    /// Read-only. The list-vs-plain classification now lives in ForeignConfigDiscovery
     /// (only genuine lists reach this widget), so there is no per-row toggle.
     /// </summary>
     public sealed class ListWidget : RadicalMenuOption
@@ -14,13 +16,11 @@ namespace ModSettingsMenu.UI
         private const int PreviewMaxChars = 22;   // preview budget: fits one narrow value-column line
 
         private SettingDef _def;
-        private ModSettingsScreen _screen;
         private ListWidgetBox _box;
 
-        public void Bind(SettingDef def, ModSettingsScreen screen)
+        public void Bind(SettingDef def)
         {
             _def = def;
-            _screen = screen;
             _box = GetComponent<ListWidgetBox>();
             Render();
         }
@@ -50,14 +50,14 @@ namespace ModSettingsMenu.UI
         // column is narrow) otherwise wrap the PugText to several lines and blow up the row height.
         private string Preview()
         {
-            var tokens = new System.Collections.Generic.List<string>();
+            var tokens = new List<string>();
             foreach (var raw in Value().Split(','))
             {
                 var t = raw.Trim();
                 if (t.Length > 0) tokens.Add(t);
             }
             if (tokens.Count == 0) return "";
-            var sb = new System.Text.StringBuilder();
+            var sb = new StringBuilder();
             int shown = 0;
             foreach (var t in tokens)
             {
@@ -79,7 +79,12 @@ namespace ModSettingsMenu.UI
 
         private void Render()
         {
-            if (_def == null || _box == null) return;
+            if (_def == null) return;
+            if (_box == null)
+            {
+                Debug.LogWarning("[ModSettingsMenu] ListWidget has no ListWidgetBox — row renders blank.");
+                return;
+            }
             SetText(_box.label, Loc.T(_def.Term, _def.Key));
             if (_box.preview != null) SetText(_box.preview, Preview());
             TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);   // start in the unselected grey

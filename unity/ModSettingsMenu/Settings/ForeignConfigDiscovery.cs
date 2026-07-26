@@ -58,7 +58,7 @@ namespace ModSettingsMenu.Settings
             return section;
         }
 
-        // Widget-kind inference cascade (first match wins). See the design spec section 5.
+        // Widget-kind inference cascade (first match wins). See ADR-001 (the discovery base).
         private static SettingDef BuildDef(string key, ConfigEntryBase e)
         {
             var d = new SettingDef

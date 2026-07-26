@@ -20,15 +20,19 @@ namespace ModSettingsMenu.UI
 
         private const int RowPaddingPx = 6;   // matches ModSettingsScreen.RowPaddingPx
 
-        private static SettingDef _pending;   // seeded by Open() before PushMenu resolves this instance
+        private SettingDef _pending;   // seeded by Open() before PushMenu resolves this instance
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
 
         public static void Open(SettingDef def)
         {
             // Broken bundle → no detail instance → TypeToMenu returns null → PushMenu(null) NREs. Guard it.
-            if (MenuPatch.ListDetailInstance == null) return;
-            _pending = def;
+            if (MenuPatch.ListDetailInstance == null)
+            {
+                Debug.LogWarning("[ModSettingsMenu] ListDetail instance missing; cannot open the list drill-in.");
+                return;
+            }
+            MenuPatch.ListDetailInstance._pending = def;
             Manager.menu.PushMenu(ModSettingsMenuMod.ListDetailMenuType);
         }
 
@@ -40,6 +44,7 @@ namespace ModSettingsMenu.UI
             Populate();
             base.Activate();
             RenderContent();
+            _pending = null;   // consumed by Populate (title + Value()) — clear so a stale def can't leak
         }
 
         private string Value() => _pending?.Entry?.BoxedValue?.ToString() ?? "";
@@ -54,6 +59,8 @@ namespace ModSettingsMenu.UI
             }
             box.itemTemplate.SetActive(false);
             _layout = box.itemContainer.GetComponent<LinearLayoutUIComponent>();
+            if (_layout == null)
+                Debug.LogWarning("[ModSettingsMenu] ListDetailScreen itemContainer has no LinearLayoutUIComponent — items won't lay out.");
 
             // Title = the setting's own label (the list's name).
             if (box.title != null && _pending != null)
