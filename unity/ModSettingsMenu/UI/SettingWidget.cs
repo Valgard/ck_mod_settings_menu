@@ -28,8 +28,7 @@ namespace ModSettingsMenu.UI
             // The ♦/♢ step glyphs only render in boldLarge (thinMedium's atlas lacks them — that's
             // the face CK's audio-volume value uses). Switch this row's value font for the Steps
             // display only; every other value keeps the prefab's thinMedium.
-            if (def.Kind == SettingKind.Slider && def.Display == SliderDisplay.Steps
-                && valueText != null && valueText.style != null)
+            if (def.Kind == SettingKind.Slider && def.Display == SliderDisplay.Steps && valueText != null && valueText.style != null)
                 valueText.style.fontFace = TextManager.FontFace.boldLarge;
             // Info rows are the currently-non-editable settings: foreign discovery routes every
             // view-only / non-changeable-here (server/admin as guest or at the title) / unrenderable
@@ -69,7 +68,8 @@ namespace ModSettingsMenu.UI
         // label's effect stays, so the row still highlights for navigation. Idempotent + cheap.
         private void SuppressValueSelectionEffect()
         {
-            if (_def == null || _def.Kind != SettingKind.Info || menuOptionEffects == null) return;
+            if (_def == null || _def.Kind != SettingKind.Info || menuOptionEffects == null)
+                return;
             menuOptionEffects = System.Array.FindAll(menuOptionEffects, fx => fx != null && !fx.isValueText);
         }
 
@@ -86,8 +86,7 @@ namespace ModSettingsMenu.UI
         }
 
         // Only bound rows activate; the inactive template (never bound → _def null) stays hidden.
-        public override OptionActiveState GetActiveStateInCurrentScene()
-            => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
+        public override OptionActiveState GetActiveStateInCurrentScene() => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
         public override void OnParentMenuActivation()
         {
@@ -101,18 +100,29 @@ namespace ModSettingsMenu.UI
             Adjust(+1); // click/Space steps forward, like CK's stepper
         }
 
-        public override bool OnSkimLeft()  { Adjust(-1); return true; }
-        public override bool OnSkimRight() { Adjust(+1); return true; }
+        public override bool OnSkimLeft()
+        {
+            Adjust(-1);
+            return true;
+        }
+
+        public override bool OnSkimRight()
+        {
+            Adjust(+1);
+            return true;
+        }
 
         // Change the value one step in `dir` (Toggle flips regardless of sign). Numeric writes go
         // through ConfigEntryBase.BoxedValue with type-exact casts; foreign Choice round-trips via
         // the serialized value (BoxedValue of a foreign enum is not a string).
         private void Adjust(int dir)
         {
-            if (_def?.Entry == null) return;
-            if (_def.Kind == SettingKind.Info) return;   // read-only row: never changes
+            if (_def?.Entry == null)
+                return;
+            if (_def.Kind == SettingKind.Info)
+                return; // read-only row: never changes
             var e = _def.Entry;
-            var before = e.BoxedValue;   // for the RequiresRestart change-detection below
+            var before = e.BoxedValue; // for the RequiresRestart change-detection below
             switch (_def.Kind)
             {
                 case SettingKind.Toggle:
@@ -132,7 +142,8 @@ namespace ModSettingsMenu.UI
                     else
                     {
                         int nv = (int)e.BoxedValue + dir;
-                        if (!_def.Unbounded) nv = Mathf.Clamp(nv, (int)_def.Min, (int)_def.Max);
+                        if (!_def.Unbounded)
+                            nv = Mathf.Clamp(nv, (int)_def.Min, (int)_def.Max);
                         e.BoxedValue = nv;
                     }
                     break;
@@ -142,17 +153,21 @@ namespace ModSettingsMenu.UI
                 case SettingKind.Choice:
                 {
                     var toks = _def.Tokens;
-                    if (toks == null || toks.Length == 0) break;
+                    if (toks == null || toks.Length == 0)
+                        break;
                     string cur = _def.Foreign ? e.GetSerializedValue() : (string)e.BoxedValue;
                     int idx = System.Array.IndexOf(toks, cur);
                     // A foreign value not among the member names is a [Flags] combination (serialized
                     // "A, B") or an undefined value — single-select cycling can't represent it, so leave
                     // it untouched rather than clobbering the .cfg to one flag. (flags editing = v2.)
-                    if (idx < 0 && _def.Foreign) break;
+                    if (idx < 0 && _def.Foreign)
+                        break;
                     // Unknown/removed token -> snap to the first option; else step and wrap.
                     int next = idx < 0 ? 0 : ((idx + dir) % toks.Length + toks.Length) % toks.Length;
-                    if (_def.Foreign) e.SetSerializedValue(toks[next]);
-                    else e.BoxedValue = toks[next];
+                    if (_def.Foreign)
+                        e.SetSerializedValue(toks[next]);
+                    else
+                        e.BoxedValue = toks[next];
                     break;
                 }
             }
@@ -165,8 +180,9 @@ namespace ModSettingsMenu.UI
 
         private void Refresh()
         {
-            if (_def == null) return;
-            SetText(labelText, Loc.T(_def.Term, _def.Key));   // localized; falls back to the raw key
+            if (_def == null)
+                return;
+            SetText(labelText, Loc.T(_def.Term, _def.Key)); // localized; falls back to the raw key
             SetText(valueText, ValueString());
         }
 
@@ -183,7 +199,8 @@ namespace ModSettingsMenu.UI
                     string s = v == null ? "" : v.ToString();
                     return s.Length > 40 ? s.Substring(0, 40) + "..." : s;
                 }
-                case SettingKind.Toggle:  return (bool)e.BoxedValue ? Loc.T("ModSettingsMenu-UI/On") : Loc.T("ModSettingsMenu-UI/Off");
+                case SettingKind.Toggle:
+                    return (bool)e.BoxedValue ? Loc.T("ModSettingsMenu-UI/On") : Loc.T("ModSettingsMenu-UI/Off");
                 case SettingKind.Stepper:
                     return e.SettingType == typeof(float)
                         ? ((float)e.BoxedValue).ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture)
@@ -191,7 +208,7 @@ namespace ModSettingsMenu.UI
                 case SettingKind.Choice:
                 {
                     string tok = _def.Foreign ? e.GetSerializedValue() : (string)e.BoxedValue;
-                    return Loc.T(_def.Term + "/" + tok, tok);   // localized per-option; foreign -> raw token
+                    return Loc.T(_def.Term + "/" + tok, tok); // localized per-option; foreign -> raw token
                 }
                 case SettingKind.Slider:
                 {
@@ -199,8 +216,10 @@ namespace ModSettingsMenu.UI
                     float frac = (_def.Max - _def.Min) > 0f ? (v - _def.Min) / (_def.Max - _def.Min) : 0f;
                     switch (_def.Display)
                     {
-                        case SliderDisplay.Number:  return v.ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture);
-                        case SliderDisplay.Percent: return Mathf.RoundToInt(frac * 100f) + "%";
+                        case SliderDisplay.Number:
+                            return v.ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture);
+                        case SliderDisplay.Percent:
+                            return Mathf.RoundToInt(frac * 100f) + "%";
                         default: // Steps: diamond chain (boldLarge, set in Bind), segments = (Max-Min)/Step
                         {
                             int seg = Mathf.Max(1, Mathf.RoundToInt((_def.Max - _def.Min) / _def.Step));
@@ -217,7 +236,8 @@ namespace ModSettingsMenu.UI
         // render raw instead. Colour + maskInteraction come from the prefab style.
         private static void SetText(PugText pt, string s)
         {
-            if (pt == null) return;
+            if (pt == null)
+                return;
             pt.localize = false;
             pt.Render(s, rewindEffectAnims: false, force: true);
         }

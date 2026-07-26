@@ -25,14 +25,12 @@ namespace ModSettingsMenu.Settings
         {
             var info = consumer.GetModInfo();
             string modId = info.Metadata.name;
-            string displayName = string.IsNullOrEmpty(info.Metadata.displayName)
-                ? info.Metadata.name
-                : info.Metadata.displayName;
+            string displayName = string.IsNullOrEmpty(info.Metadata.displayName) ? info.Metadata.name : info.Metadata.displayName;
             var section = new ModSection
             {
                 ModId = modId,
                 DisplayName = displayName,
-                HintTerm = $"{modId}-Config/_hint"
+                HintTerm = $"{modId}-Config/_hint",
             };
             var file = ConfigStore.ForMod(consumer, modId);
             return new SectionBuilder(section, file);
