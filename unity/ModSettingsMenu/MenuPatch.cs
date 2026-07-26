@@ -6,11 +6,12 @@ using Object = UnityEngine.Object;
 namespace ModSettingsMenu
 {
     /// <summary>
-    /// Phase 1: mounts an (empty) "Mod Settings" screen into the vanilla Options
-    /// menu, proving the RadicalMenu mount mechanic (GMCM MenuPatch technique +
-    /// HealthBars menu clone). Phase 2 replaces the clone body with an own prefab
-    /// + LinearLayout box layout and populates it from the ModSettings registry.
-    /// Harmony patch classes are auto-discovered by the loader (no PatchAll()).
+    /// Mounts the "Mod Settings" screen into the vanilla Options menu (GMCM
+    /// MenuPatch technique + HealthBars menu clone): a MenuManager.Init prefix
+    /// clones the "Go to UI settings" entry and repoints it at our menu id, the
+    /// postfix instantiates our screen prefab(s) (the settings screen + the list
+    /// drill-in), and a RadicalMenu.TypeToMenu prefix resolves our menu ids to
+    /// those instances. Harmony patch classes are auto-discovered (no PatchAll()).
     /// </summary>
     [HarmonyPatch]
     public static class MenuPatch
