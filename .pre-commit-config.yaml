@@ -1,0 +1,11 @@
+repos:
+    - repo: local
+      hooks:
+          - id: csharpier
+            name: csharpier
+            entry: dotnet csharpier check
+            language: system
+            files: \.cs$
+            stages:
+                - pre-commit
+                - pre-push
