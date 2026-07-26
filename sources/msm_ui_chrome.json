@@ -1,0 +1,27 @@
+{
+  "rename": {
+    "Menu Box": "itemui_border",
+    "Title": "menu_border",
+    "Scrollbar Box": "progress_border",
+    "Scrollbar Selected": "scrollbar_hover",
+    "List": "ToggleListView",
+    "Text": "TogglePlainView"
+  },
+  "pad": {
+    "List": {"w": 16, "h": 16, "anchor": [1, 2]},
+    "Text": {"w": 16, "h": 16, "anchor": [1, 2]},
+    "Arrow": {"w": 8, "h": 8, "anchor": [2, 0]}
+  },
+  "borderOverride": [
+    {"name": "Menu Box", "w": 32, "h": 32, "border": [3, 3, 3, 3]},
+    {"name": "Title", "w": 32, "h": 32, "border": [13, 14, 13, 14]},
+    {"name": "Scrollbar Box", "w": 32, "h": 32, "border": [2, 2, 2, 2]},
+    {"name": "Scrollbar Selected", "w": 4, "h": 8, "border": [0, 3, 0, 3]}
+  ],
+  "internalIds": {
+    "itemui_border": 100001, "menu_border": 100002, "progress_border": 100003,
+    "scrollbar_hover": 100004, "ToggleListView": 100005, "TogglePlainView": 100006,
+    "Arrow": 100007
+  },
+  "guid": "177805356e56055ae8abd25063004bea"
+}
