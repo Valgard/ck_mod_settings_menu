@@ -42,7 +42,7 @@ namespace ModSettingsMenu.UI
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
         private readonly List<GameObject> _sectionRoots = new List<GameObject>();   // rendered inner-to-outer after activation
-        private readonly List<ListWidget> _listWidgets = new List<ListWidget>();    // sized in RenderContent (rows grow to fit their items)
+        private readonly List<ListWidget> _listWidgets = new List<ListWidget>();    // single-line rows; height set in RenderContent from the preview's rendered text height
 
         // Rebuild on every open (Populate) — the vanilla PugTexts free their glyphs on disable
         // (freeResourcesOnDisable), so a once-only build shows empty on reopen. Populate builds the
@@ -157,16 +157,21 @@ namespace ModSettingsMenu.UI
 
                 foreach (var def in OrderedSettings(section))
                 {
+                    if (def.Kind == SettingKind.List && listTemplate == null)
+                    {
+                        Debug.LogWarning($"[ModSettingsMenu] List setting '{def.Key}' but listTemplate is unwired — rendering as an inert row.");
+                    }
                     if (def.Kind == SettingKind.List && listTemplate != null)
                     {
                         var lGo = Object.Instantiate(listTemplate, container);
                         lGo.SetActive(true);
                         lGo.name = "List " + def.Key;
                         var lw = lGo.GetComponent<ListWidget>();
-                        lw.Bind(def, this);
+                        lw.Bind(def);
                         lw.SetParentMenu(this);
                         // Row height is set in RenderContent (SetRowHeight(RowHeightPx(RenderAndMeasure)))
-                        // after activation, like the normal rows — it depends on the rendered item count.
+                        // after activation, like the normal rows — it depends on the preview's rendered
+                        // single-line text height, not the item count.
                         menuOptions.Add(lw);
                         _listWidgets.Add(lw);
                         continue;
@@ -233,17 +238,18 @@ namespace ModSettingsMenu.UI
         // Positions are measured in contentRoot's (the scroll root's) local space: sum localPosition.y
         // up the parent chain (row -> widgets box -> section -> contentRoot), because MSM's rows are
         // nested — unlike CK's own 1-level scrollable menus, which pass transform.localPosition.y raw.
-        // The row's WrapperUIComponent pivot decides where that origin sits (MiddleLeft rows = centre,
-        // TopLeft list rows = top edge), so it is normalised to a top edge first, mirroring CK's
+        // The row's WrapperUIComponent pivot decides where that origin sits (MiddleLeft = centre,
+        // TopLeft = top edge already), so it is normalised to a top edge first, mirroring CK's
         // UIComponentMonoBehaviour.ScrollIntoView pivot correction.
         //
         // Two cases, because CK's MoveScrollToIncludePosition only handles elements that FIT the
         // window (it keeps a point inside [-windowHeight + padding, -padding]; with padding past
         // windowHeight/2 that band inverts and the scroll overshoots):
         //   * Row fits          -> include it fully (centre, half-height padding — CK's convention).
-        //   * Row taller than    -> a big list widget can't be included; pin its TOP (the label) just
-        //     the viewport         under the window top so the label + as many items as fit show,
-        //                          instead of overshooting the label off-screen (the reported bug).
+        //   * Row taller than    -> can't be included fully; pin its TOP just under the window top so
+        //     the viewport         as much of it as fits shows, instead of overshooting off-screen.
+        //                          Defensive: every current row (toggle + compact list) is single-line
+        //                          and fits, but a wrapped multi-line label could still exceed it.
         private void ScrollSelectedIntoView()
         {
             if (_scroll == null || contentRoot == null) return;

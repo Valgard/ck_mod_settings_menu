@@ -84,6 +84,10 @@ namespace ModSettingsMenu
                 detail.gameObject.SetActive(false);
                 ListDetailInstance = detail;
             }
+            else
+            {
+                Debug.LogWarning("[ModSettingsMenu] ListDetailPrefab not loaded; list rows cannot drill in.");
+            }
         }
 
         // Resolve our menu id to the cloned menu.
