@@ -1,0 +1,3 @@
+# Sibling worktrees live inside the repo and carry their own copies of the
+# sources; formatting them from here would fight the worktree's own hook.
+.worktrees/
