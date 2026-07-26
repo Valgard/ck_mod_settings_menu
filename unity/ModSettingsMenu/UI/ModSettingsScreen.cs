@@ -23,6 +23,7 @@ namespace ModSettingsMenu.UI
         public GameObject listTemplate; // inactive list-widget row; has a ListWidget + ListWidgetBox (wired in the Editor)
 
         internal const int RowPaddingPx = 6; // vertical breathing room added to each row's text height
+
         // Inter-item gaps (contentRoot=6, SectionTemplate=12) live on the prefab's LinearLayouts, not here.
         // Content position is owned by UIScrollWindow, not this component (no anchor constant).
 
@@ -232,7 +233,8 @@ namespace ModSettingsMenu.UI
             // rows — SetRowHeight(RowHeightPx(..)) — so the boxes below measure them and nothing
             // overflows. (A list row is single-line now; RenderAndMeasure just re-renders its preview.)
             foreach (var lw in _listWidgets)
-                if (lw != null) SetRowHeight(lw.gameObject, RowHeightPx(lw.RenderAndMeasure()));
+                if (lw != null)
+                    SetRowHeight(lw.gameObject, RowHeightPx(lw.RenderAndMeasure()));
 
             foreach (var sGo in _sectionRoots)
             {
@@ -279,14 +281,18 @@ namespace ModSettingsMenu.UI
         //                          and fits, but a wrapped multi-line label could still exceed it.
         private void ScrollSelectedIntoView()
         {
-            if (_scroll == null || contentRoot == null) return;
-            if (selectedIndex < 0 || selectedIndex >= menuOptions.Count) return;
+            if (_scroll == null || contentRoot == null)
+                return;
+            if (selectedIndex < 0 || selectedIndex >= menuOptions.Count)
+                return;
             var option = menuOptions[selectedIndex];
-            if (option == null) return;
+            if (option == null)
+                return;
 
             // Selecting by mouse hover must not scroll the page — CK gates its own ScrollIntoView the
             // same way (ScrollIntoViewIfNotUsingMouse). Keyboard / controller nav leaves this false.
-            if (Manager.input.SystemIsUsingMouse()) return;
+            if (Manager.input.SystemIsUsingMouse())
+                return;
 
             float origin = 0f;
             for (Transform t = option.transform; t != null && t != contentRoot; t = t.parent)
@@ -294,8 +300,7 @@ namespace ModSettingsMenu.UI
 
             var wrap = option.GetComponent<WrapperUIComponent>();
             float height = wrap != null ? wrap.GetUIComponentRenderHeight() : 1f;
-            bool topPivot = wrap != null
-                && wrap.GetUIComponentPivotPosition() == WrapperUIComponent.PivotPosition.TopLeft;
+            bool topPivot = wrap != null && wrap.GetUIComponentPivotPosition() == WrapperUIComponent.PivotPosition.TopLeft;
             float topEdge = topPivot ? origin : origin + height / 2f;
 
             if (height <= _scroll.windowHeight)
@@ -353,9 +358,7 @@ namespace ModSettingsMenu.UI
             {
                 // Auto-detected mods get a marker so their raw keys / inferred widgets read as
                 // "discovered", not author-curated.
-                string heading = section.Foreign
-                    ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected")
-                    : section.DisplayName;
+                string heading = section.Foreign ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected") : section.DisplayName;
                 box.header.RenderPlain(heading);
                 SetRowHeight(box.header.gameObject, RowHeightPx(box.header));
             }

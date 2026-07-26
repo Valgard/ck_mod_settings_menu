@@ -41,23 +41,21 @@ namespace ModSettingsMenu
         public void Init()
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
-            ModSettings.Section(this)
-                .Toggle(out ShowForeignConfigs, "showForeignConfigs", true)
-                .Build();
+            ModSettings.Section(this).Toggle(out ShowForeignConfigs, "showForeignConfigs", true).Build();
         }
 
         public void ModObjectLoaded(Object obj)
         {
             if (obj is GameObject go)
             {
-                if (go.GetComponent<ModSettingsScreen>() != null) MenuPrefab = go;
-                else if (go.GetComponent<ListDetailScreen>() != null) ListDetailPrefab = go;
+                if (go.GetComponent<ModSettingsScreen>() != null)
+                    MenuPrefab = go;
+                else if (go.GetComponent<ListDetailScreen>() != null)
+                    ListDetailPrefab = go;
             }
         }
 
-        public void Shutdown()
-        {
-        }
+        public void Shutdown() { }
 
         // One-shot guard: pre-warm the menu on the first frame the instance exists (MenuManager.Init
         // postfix has run). All IMod.Init — including consumers — run before the first Update, so the
@@ -70,6 +68,7 @@ namespace ModSettingsMenu
         // persist across every later menu). Update fires it a few frames later, off that call stack,
         // once the stack has settled — mirroring CK's own Invoke("RestartToApplyModChanges", 0.1f).
         private static int _restartPromptCountdown = -1;
+
         internal static void RequestRestartPrompt() => _restartPromptCountdown = 3;
 
         public void Update()
@@ -77,11 +76,13 @@ namespace ModSettingsMenu
             if (_restartPromptCountdown >= 0 && _restartPromptCountdown-- == 0)
                 ModSettingsScreen.ShowRestartPrompt();
 
-            if (_warmed) return;
+            if (_warmed)
+                return;
             var menu = MenuPatch.MenuInstance;
-            if (menu == null) return;                 // instance not created yet → retry next frame
+            if (menu == null)
+                return; // instance not created yet → retry next frame
             _warmed = true;
-            if (ModSettings.Sections.Count > 0)       // no consumer → don't spend 1 s at startup for nothing
+            if (ModSettings.Sections.Count > 0) // no consumer → don't spend 1 s at startup for nothing
                 menu.PreWarm();
         }
     }

@@ -13,7 +13,7 @@ namespace ModSettingsMenu.UI
     /// </summary>
     public sealed class ListWidget : RadicalMenuOption
     {
-        private const int PreviewMaxChars = 22;   // preview budget: fits one narrow value-column line
+        private const int PreviewMaxChars = 22; // preview budget: fits one narrow value-column line
 
         private SettingDef _def;
         private ListWidgetBox _box;
@@ -25,8 +25,7 @@ namespace ModSettingsMenu.UI
             Render();
         }
 
-        public override OptionActiveState GetActiveStateInCurrentScene()
-            => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
+        public override OptionActiveState GetActiveStateInCurrentScene() => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
         public override void OnParentMenuActivation()
         {
@@ -39,8 +38,7 @@ namespace ModSettingsMenu.UI
         public float RenderAndMeasure()
         {
             Render();
-            return _box != null && _box.preview != null && _box.preview.dimensions.height > 0f
-                ? _box.preview.dimensions.height : 1f;
+            return _box != null && _box.preview != null && _box.preview.dimensions.height > 0f ? _box.preview.dimensions.height : 1f;
         }
 
         private string Value() => _def?.Entry?.BoxedValue?.ToString() ?? "";
@@ -54,32 +52,37 @@ namespace ModSettingsMenu.UI
             foreach (var raw in Value().Split(','))
             {
                 var t = raw.Trim();
-                if (t.Length > 0) tokens.Add(t);
+                if (t.Length > 0)
+                    tokens.Add(t);
             }
-            if (tokens.Count == 0) return "";
+            if (tokens.Count == 0)
+                return "";
             var sb = new StringBuilder();
             int shown = 0;
             foreach (var t in tokens)
             {
                 string sep = shown == 0 ? "" : ", ";
-                if (sb.Length + sep.Length + t.Length > PreviewMaxChars) break;
+                if (sb.Length + sep.Length + t.Length > PreviewMaxChars)
+                    break;
                 sb.Append(sep).Append(t);
                 shown++;
             }
-            if (shown == 0)   // even the first token overflows the budget → truncate it
+            if (shown == 0) // even the first token overflows the budget → truncate it
             {
                 var first = tokens[0];
                 sb.Append(first.Length > PreviewMaxChars ? first.Substring(0, PreviewMaxChars - 3) + "..." : first);
                 shown = 1;
             }
             int rest = tokens.Count - shown;
-            if (rest > 0) sb.Append(", +").Append(rest);
+            if (rest > 0)
+                sb.Append(", +").Append(rest);
             return sb.ToString();
         }
 
         private void Render()
         {
-            if (_def == null) return;
+            if (_def == null)
+                return;
             if (_box == null)
             {
                 Debug.LogWarning("[ModSettingsMenu] ListWidget has no ListWidgetBox — row renders blank.");
@@ -87,13 +90,14 @@ namespace ModSettingsMenu.UI
             }
             _box.label.RenderPlain(Loc.T(_def.Term, _def.Key));
             _box.preview.RenderPlain(Preview());
-            TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);   // start in the unselected grey
+            TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR); // start in the unselected grey
         }
 
         public override void OnActivated()
         {
             base.OnActivated();
-            if (_def != null) ListDetailScreen.Open(_def);
+            if (_def != null)
+                ListDetailScreen.Open(_def);
         }
 
         // Tint the drill affordance sprite to match the row's text on selection — CK's unselected grey
@@ -113,7 +117,8 @@ namespace ModSettingsMenu.UI
 
         private void TintDrill(Color c)
         {
-            if (_box != null && _box.drillIcon != null) _box.drillIcon.color = c;
+            if (_box != null && _box.drillIcon != null)
+                _box.drillIcon.color = c;
         }
     }
 }

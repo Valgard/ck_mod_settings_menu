@@ -14,7 +14,6 @@ namespace ModSettingsMenu.UI
         // ACTIVE only for a live (cloned, SetActive(true)) row. The inactive prefab template must
         // report INACTIVE, else RadicalMenu's includeInactive option scan navigates to it too — a
         // phantom empty row at the end of the list (the template is the list's last prefab sibling).
-        public override OptionActiveState GetActiveStateInCurrentScene()
-            => gameObject.activeSelf ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
+        public override OptionActiveState GetActiveStateInCurrentScene() => gameObject.activeSelf ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
     }
 }
