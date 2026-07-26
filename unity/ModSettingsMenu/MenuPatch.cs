@@ -77,17 +77,15 @@ namespace ModSettingsMenu
             MenuInstance = menu;
 
             var detailPrefab = ModSettingsMenuMod.ListDetailPrefab;
-            if (detailPrefab != null)
-            {
-                var detail = Object.Instantiate(detailPrefab, Manager.camera.uiCamera.transform)
-                                   .GetComponent<ModSettingsMenu.UI.ListDetailScreen>();
-                detail.gameObject.SetActive(false);
-                ListDetailInstance = detail;
-            }
-            else
+            if (detailPrefab == null)
             {
                 Debug.LogWarning("[ModSettingsMenu] ListDetailPrefab not loaded; list rows cannot drill in.");
+                return;
             }
+            var detail = Object.Instantiate(detailPrefab, Manager.camera.uiCamera.transform)
+                               .GetComponent<ModSettingsMenu.UI.ListDetailScreen>();
+            detail.gameObject.SetActive(false);
+            ListDetailInstance = detail;
         }
 
         // Resolve our menu id to the cloned menu.
@@ -99,7 +97,11 @@ namespace ModSettingsMenu
                 __result = MenuInstance;
                 return false;
             }
-            if (type == ModSettingsMenuMod.ListDetailMenuType) { __result = ListDetailInstance; return false; }
+            if (type == ModSettingsMenuMod.ListDetailMenuType)
+            {
+                __result = ListDetailInstance;
+                return false;
+            }
             return true;
         }
         // Populate now runs in ModSettingsScreen.Activate() (before ActivateTopMenu),
