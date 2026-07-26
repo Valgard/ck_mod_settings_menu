@@ -197,9 +197,9 @@ namespace ModSettingsMenu.UI
         // stacks the sections.
         internal void RenderContent()
         {
-            // List rows first: render each item container and size the row via the SAME path as the
-            // normal rows — SetRowHeight(RowHeightPx(..)) — so the boxes below measure the grown rows
-            // and nothing overflows. RenderAndMeasure also aligns the row's label to the first item.
+            // List rows first: render each row's preview and size it via the SAME path as the normal
+            // rows — SetRowHeight(RowHeightPx(..)) — so the boxes below measure them and nothing
+            // overflows. (A list row is single-line now; RenderAndMeasure just re-renders its preview.)
             foreach (var lw in _listWidgets)
                 if (lw != null) SetRowHeight(lw.gameObject, RowHeightPx(lw.RenderAndMeasure()));
 
@@ -216,10 +216,6 @@ namespace ModSettingsMenu.UI
             // contentRoot's position is owned by UIScrollWindow (LateUpdate → SetScrollablePosition),
             // so no manual anchoring here — an anchor set now is overwritten the same frame.
         }
-
-        // Re-render all section layouts now (used when a ListWidget toggle changes a row's height
-        // mid-menu, so the boxes and the scroll window resize without a full reopen).
-        public void RefreshLayout() => RenderContent();
 
         // Keyboard / controller navigation moves the selection through menuOptions, but the base
         // RadicalMenu never scrolls the viewport to follow it — every vanilla scrollable menu wires
