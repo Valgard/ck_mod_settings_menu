@@ -1545,7 +1545,7 @@ MonoBehaviour:
   m_Script: {fileID: 1139742956, guid: 3519ac58e5ff54941a4a69512016923c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _text: {fileID: 0}
+  _text: {fileID: 663582646598868455}
   useCustomUnselectedTextColor: 0
   customUnselectedTextColor: {r: 0, g: 0, b: 0, a: 0}
   optionComponent: {fileID: 0}
@@ -1564,7 +1564,7 @@ MonoBehaviour:
   m_Script: {fileID: 1793966478, guid: 3519ac58e5ff54941a4a69512016923c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _text: {fileID: 0}
+  _text: {fileID: 663582646598868455}
   centerPoint: {fileID: 0}
   curve:
     serializedVersion: 2

@@ -26,6 +26,8 @@ namespace ModSettingsMenu.UI
 
         public static void Open(SettingDef def)
         {
+            // Broken bundle → no detail instance → TypeToMenu returns null → PushMenu(null) NREs. Guard it.
+            if (MenuPatch.ListDetailInstance == null) return;
             _pending = def;
             Manager.menu.PushMenu(ModSettingsMenuMod.ListDetailMenuType);
         }
