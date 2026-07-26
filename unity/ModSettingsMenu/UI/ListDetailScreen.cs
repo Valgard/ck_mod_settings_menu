@@ -18,7 +18,7 @@ namespace ModSettingsMenu.UI
     {
         public ListDetailBox box;
 
-        private SettingDef _pending;   // seeded by Open() before PushMenu resolves this instance
+        private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
 
@@ -42,7 +42,7 @@ namespace ModSettingsMenu.UI
             Populate();
             base.Activate();
             RenderContent();
-            _pending = null;   // consumed by Populate (title + Value()) — clear so a stale def can't leak
+            _pending = null; // consumed by Populate (title + Value()) — clear so a stale def can't leak
         }
 
         private string Value() => _pending?.Entry?.BoxedValue?.ToString() ?? "";
@@ -66,9 +66,9 @@ namespace ModSettingsMenu.UI
                 string label = Loc.T(_pending.Term, _pending.Key);
                 box.title.RenderPlain(label);
                 // Keep the drop-shadow twin in sync (a sibling of the title), else it shows stale text.
-                var shadow = box.title.transform.parent != null
-                    ? box.title.transform.parent.Find("Title bigtext shadow") : null;
-                if (shadow != null) shadow.GetComponent<PugText>().RenderPlain(label);
+                var shadow = box.title.transform.parent != null ? box.title.transform.parent.Find("Title bigtext shadow") : null;
+                if (shadow != null)
+                    shadow.GetComponent<PugText>().RenderPlain(label);
             }
 
             // Clear the previous open's cloned rows. Detach BEFORE Destroy (deferred to end-of-frame),
@@ -86,7 +86,8 @@ namespace ModSettingsMenu.UI
             foreach (var raw in Value().Split(','))
             {
                 var token = raw.Trim();
-                if (token.Length > 0) AddItem(token);
+                if (token.Length > 0)
+                    AddItem(token);
             }
 
             if (_scroll != null)
@@ -106,7 +107,11 @@ namespace ModSettingsMenu.UI
             row.SetActive(true);
             row.GetComponent<PugText>().RenderPlain(token);
             var item = row.GetComponent<ListDetailItem>();
-            if (item != null) { item.SetParentMenu(this); menuOptions.Add(item); }
+            if (item != null)
+            {
+                item.SetParentMenu(this);
+                menuOptions.Add(item);
+            }
         }
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -114,18 +119,20 @@ namespace ModSettingsMenu.UI
         // lay out. contentRoot position is owned by UIScrollWindow, so no manual anchoring here.
         internal void RenderContent()
         {
-            if (_layout == null || box == null || box.itemContainer == null) return;
-            _layout.RenderUIComponent(force: true);   // rows render → PugText.dimensions available
+            if (_layout == null || box == null || box.itemContainer == null)
+                return;
+            _layout.RenderUIComponent(force: true); // rows render → PugText.dimensions available
             for (int i = 0; i < box.itemContainer.childCount; i++)
             {
                 var go = box.itemContainer.GetChild(i).gameObject;
-                if (!go.activeSelf) continue;
+                if (!go.activeSelf)
+                    continue;
                 var pt = go.GetComponent<PugText>();
                 var wrap = go.GetComponent<WrapperUIComponent>();
                 if (pt != null && wrap != null)
                     wrap.renderHeightPixels = ModSettingsScreen.RowHeightPx(pt);
             }
-            _layout.RenderUIComponent(force: true);   // re-lay out with the measured heights
+            _layout.RenderUIComponent(force: true); // re-lay out with the measured heights
         }
 
         // Scroll the viewport so the selected row follows keyboard / controller navigation (the base
@@ -134,18 +141,21 @@ namespace ModSettingsMenu.UI
         protected override void OnSelectedOptionChanged()
         {
             base.OnSelectedOptionChanged();
-            if (_scroll == null || box == null || box.itemContainer == null) return;
-            if (selectedIndex < 0 || selectedIndex >= menuOptions.Count) return;
+            if (_scroll == null || box == null || box.itemContainer == null)
+                return;
+            if (selectedIndex < 0 || selectedIndex >= menuOptions.Count)
+                return;
             var option = menuOptions[selectedIndex];
-            if (option == null) return;
+            if (option == null)
+                return;
             // Mouse hover must not scroll the page — CK gates its own ScrollIntoView the same way.
-            if (Manager.input.SystemIsUsingMouse()) return;
+            if (Manager.input.SystemIsUsingMouse())
+                return;
 
             float origin = option.transform.localPosition.y;
             var wrap = option.GetComponent<WrapperUIComponent>();
             float height = wrap != null ? wrap.GetUIComponentRenderHeight() : 1f;
-            bool topPivot = wrap != null
-                && wrap.GetUIComponentPivotPosition() == WrapperUIComponent.PivotPosition.TopLeft;
+            bool topPivot = wrap != null && wrap.GetUIComponentPivotPosition() == WrapperUIComponent.PivotPosition.TopLeft;
             float topEdge = topPivot ? origin : origin + height / 2f;
 
             if (height <= _scroll.windowHeight)
@@ -163,8 +173,11 @@ namespace ModSettingsMenu.UI
 
         // IScrollable — window height from the item container's layout (feeds scroll clipping).
         public void UpdateContainingElements(float scroll) { }
+
         public bool IsBottomElementSelected() => false;
+
         public bool IsTopElementSelected() => false;
+
         public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
     }
 }

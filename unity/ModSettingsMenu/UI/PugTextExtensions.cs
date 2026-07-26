@@ -12,7 +12,8 @@ namespace ModSettingsMenu.UI
     {
         public static void RenderPlain(this PugText pt, string s)
         {
-            if (pt == null) return;
+            if (pt == null)
+                return;
             pt.localize = false;
             pt.Render(s, rewindEffectAnims: false, force: true);
         }

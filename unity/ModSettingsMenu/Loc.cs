@@ -10,6 +10,7 @@ namespace ModSettingsMenu
     internal static class Loc
     {
         public static string T(string term) => API.Localization.GetLocalizedTerm(term) ?? term;
+
         public static string T(string term, string fallback) => API.Localization.GetLocalizedTerm(term) ?? fallback;
     }
 }

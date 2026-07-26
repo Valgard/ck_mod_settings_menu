@@ -28,7 +28,8 @@ namespace ModSettingsMenu
         // inherited), and its PugTextEffectMenuOption drives the colour — exactly like every sibling.
         private static void SetEntryLabel(PugText text)
         {
-            if (text == null) return;
+            if (text == null)
+                return;
             text.SetText("ModSettingsMenu-UI/Title");
         }
 
@@ -72,8 +73,7 @@ namespace ModSettingsMenu
                 MenuInstance = null;
                 return;
             }
-            var menu = Object.Instantiate(prefab, Manager.camera.uiCamera.transform)
-                             .GetComponent<ModSettingsMenu.UI.ModSettingsScreen>();
+            var menu = Object.Instantiate(prefab, Manager.camera.uiCamera.transform).GetComponent<ModSettingsMenu.UI.ModSettingsScreen>();
             menu.gameObject.SetActive(false);
             MenuInstance = menu;
 
@@ -83,8 +83,7 @@ namespace ModSettingsMenu
                 Debug.LogWarning("[ModSettingsMenu] ListDetailPrefab not loaded; list rows cannot drill in.");
                 return;
             }
-            var detail = Object.Instantiate(detailPrefab, Manager.camera.uiCamera.transform)
-                               .GetComponent<ModSettingsMenu.UI.ListDetailScreen>();
+            var detail = Object.Instantiate(detailPrefab, Manager.camera.uiCamera.transform).GetComponent<ModSettingsMenu.UI.ListDetailScreen>();
             detail.gameObject.SetActive(false);
             ListDetailInstance = detail;
         }

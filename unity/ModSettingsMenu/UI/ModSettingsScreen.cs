@@ -17,12 +17,13 @@ namespace ModSettingsMenu.UI
     [RequireComponent(typeof(UIScrollWindow))]
     public sealed class ModSettingsScreen : RadicalMenu, IScrollable
     {
-        public Transform contentRoot;      // Options/Scroll — hosts the top LinearLayout
+        public Transform contentRoot; // Options/Scroll — hosts the top LinearLayout
         public GameObject sectionTemplate; // inactive; SectionBox (Header + Hint + Widgets-box)
-        public GameObject toggleTemplate;  // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
-        public GameObject listTemplate;    // inactive list-widget row; has a ListWidget + ListWidgetBox (wired in the Editor)
+        public GameObject toggleTemplate; // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
+        public GameObject listTemplate; // inactive list-widget row; has a ListWidget + ListWidgetBox (wired in the Editor)
 
-        internal const int RowPaddingPx = 6;     // vertical breathing room added to each row's text height
+        internal const int RowPaddingPx = 6; // vertical breathing room added to each row's text height
+
         // Inter-item gaps (contentRoot=6, SectionTemplate=12) live on the prefab's LinearLayouts, not here.
         // Content position is owned by UIScrollWindow, not this component (no anchor constant).
 
@@ -42,8 +43,8 @@ namespace ModSettingsMenu.UI
 
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
-        private readonly List<GameObject> _sectionRoots = new List<GameObject>();   // rendered inner-to-outer after activation
-        private readonly List<ListWidget> _listWidgets = new List<ListWidget>();    // single-line rows; height set in RenderContent from the preview's rendered text height
+        private readonly List<GameObject> _sectionRoots = new List<GameObject>(); // rendered inner-to-outer after activation
+        private readonly List<ListWidget> _listWidgets = new List<ListWidget>(); // single-line rows; height set in RenderContent from the preview's rendered text height
 
         // Rebuild on every open (Populate) — the vanilla PugTexts free their glyphs on disable
         // (freeResourcesOnDisable), so a once-only build shows empty on reopen. Populate builds the
@@ -58,7 +59,7 @@ namespace ModSettingsMenu.UI
 
         public override void Activate()
         {
-            RestartPending = false;   // fresh visit — only changes made from now on count
+            RestartPending = false; // fresh visit — only changes made from now on count
             Populate();
             base.Activate();
             RenderContent();
@@ -89,13 +90,27 @@ namespace ModSettingsMenu.UI
         internal static void ShowRestartPrompt()
         {
             Manager.menu.centerPopUpText.StartNewDisplaySequence(
-                "Menu/RestartToApplyModChanges", null, menuInputCooldown: true, 0f, 1.5f,
-                useUnscaledTime: true, 0f, 1f, localize: true, TextManager.FontFace.boldMedium,
-                delegate (PopupResponse response)
+                "Menu/RestartToApplyModChanges",
+                null,
+                menuInputCooldown: true,
+                0f,
+                1.5f,
+                useUnscaledTime: true,
+                0f,
+                1f,
+                localize: true,
+                TextManager.FontFace.boldMedium,
+                delegate(PopupResponse response)
                 {
-                    if (response.IsConfirm) Manager.platform.Restart();
+                    if (response.IsConfirm)
+                        Manager.platform.Restart();
                 },
-                new List<string> { "cancelDialogue", "yes" }, 10f, 0.8f, 0, 20f);
+                new List<string> { "cancelDialogue", "yes" },
+                10f,
+                0.8f,
+                0,
+                20f
+            );
         }
 
         // Pay the one-time first-enable cost (bundle asset load / shader-variant compile, ~1 s
@@ -180,11 +195,11 @@ namespace ModSettingsMenu.UI
                             continue;
                         }
                     }
-                    var wGo = Object.Instantiate(toggleTemplate, container);   // nest INTO the box
+                    var wGo = Object.Instantiate(toggleTemplate, container); // nest INTO the box
                     wGo.SetActive(true);
                     wGo.name = def.Kind + " " + def.Key;
                     var widget = wGo.GetComponent<SettingWidget>();
-                    widget.Bind(def);            // renders label/value → dimensions available
+                    widget.Bind(def); // renders label/value → dimensions available
                     widget.SetParentMenu(this);
                     // The template's WrapperUIComponent lets the box layout measure this row;
                     // only its (content-adaptive) height is set here.
@@ -210,11 +225,13 @@ namespace ModSettingsMenu.UI
             // rows — SetRowHeight(RowHeightPx(..)) — so the boxes below measure them and nothing
             // overflows. (A list row is single-line now; RenderAndMeasure just re-renders its preview.)
             foreach (var lw in _listWidgets)
-                if (lw != null) SetRowHeight(lw.gameObject, RowHeightPx(lw.RenderAndMeasure()));
+                if (lw != null)
+                    SetRowHeight(lw.gameObject, RowHeightPx(lw.RenderAndMeasure()));
 
             foreach (var sGo in _sectionRoots)
             {
-                if (sGo == null) continue;
+                if (sGo == null)
+                    continue;
                 // Inner layouts first (box, and the heading sub-group if the prefab has one), so the
                 // section-root layout measures their real heights; then the section root, then the top.
                 ContainerOf(sGo).GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
@@ -256,14 +273,18 @@ namespace ModSettingsMenu.UI
         //                          and fits, but a wrapped multi-line label could still exceed it.
         private void ScrollSelectedIntoView()
         {
-            if (_scroll == null || contentRoot == null) return;
-            if (selectedIndex < 0 || selectedIndex >= menuOptions.Count) return;
+            if (_scroll == null || contentRoot == null)
+                return;
+            if (selectedIndex < 0 || selectedIndex >= menuOptions.Count)
+                return;
             var option = menuOptions[selectedIndex];
-            if (option == null) return;
+            if (option == null)
+                return;
 
             // Selecting by mouse hover must not scroll the page — CK gates its own ScrollIntoView the
             // same way (ScrollIntoViewIfNotUsingMouse). Keyboard / controller nav leaves this false.
-            if (Manager.input.SystemIsUsingMouse()) return;
+            if (Manager.input.SystemIsUsingMouse())
+                return;
 
             float origin = 0f;
             for (Transform t = option.transform; t != null && t != contentRoot; t = t.parent)
@@ -271,8 +292,7 @@ namespace ModSettingsMenu.UI
 
             var wrap = option.GetComponent<WrapperUIComponent>();
             float height = wrap != null ? wrap.GetUIComponentRenderHeight() : 1f;
-            bool topPivot = wrap != null
-                && wrap.GetUIComponentPivotPosition() == WrapperUIComponent.PivotPosition.TopLeft;
+            bool topPivot = wrap != null && wrap.GetUIComponentPivotPosition() == WrapperUIComponent.PivotPosition.TopLeft;
             float topEdge = topPivot ? origin : origin + height / 2f;
 
             if (height <= _scroll.windowHeight)
@@ -323,16 +343,14 @@ namespace ModSettingsMenu.UI
             var sGo = Object.Instantiate(sectionTemplate, contentRoot);
             sGo.SetActive(true);
             sGo.name = "Section " + section.ModId;
-            FindLayout(sGo);   // prefab-authored vertical layout: stacks heading + hint + box
+            FindLayout(sGo); // prefab-authored vertical layout: stacks heading + hint + box
 
             var box = sGo.GetComponent<SectionBox>();
             if (box != null && box.header != null)
             {
                 // Auto-detected mods get a marker so their raw keys / inferred widgets read as
                 // "discovered", not author-curated.
-                string heading = section.Foreign
-                    ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected")
-                    : section.DisplayName;
+                string heading = section.Foreign ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected") : section.DisplayName;
                 box.header.RenderPlain(heading);
                 SetRowHeight(box.header.gameObject, RowHeightPx(box.header));
             }
@@ -380,7 +398,8 @@ namespace ModSettingsMenu.UI
             foreach (var path in new[] { "Title/Title bigtext", "Title/Title bigtext shadow" })
             {
                 var t = transform.Find(path);
-                if (t != null) t.GetComponent<PugText>().RenderPlain(Loc.T("ModSettingsMenu-UI/Title"));
+                if (t != null)
+                    t.GetComponent<PugText>().RenderPlain(Loc.T("ModSettingsMenu-UI/Title"));
             }
         }
 
@@ -391,15 +410,19 @@ namespace ModSettingsMenu.UI
         private void DeactivateTemplates()
         {
             var templates = transform.Find("WidgetTemplates");
-            if (templates == null) return;
+            if (templates == null)
+                return;
             for (int i = 0; i < templates.childCount; i++)
                 templates.GetChild(i).gameObject.SetActive(false);
         }
 
         // IScrollable — window height comes from the layout (basis for scroll clipping, #3).
         public void UpdateContainingElements(float scroll) { }
+
         public bool IsBottomElementSelected() => false;
+
         public bool IsTopElementSelected() => false;
+
         public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
     }
 }

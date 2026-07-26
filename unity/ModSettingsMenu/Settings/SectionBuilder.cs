@@ -38,24 +38,43 @@ namespace ModSettingsMenu.Settings
         {
             var entry = _file.Bind("Settings", key, def, new ConfigDescription(key));
             handle = new SettingHandle<bool>(entry);
-            _section.Settings.Add(new SettingDef
-            {
-                Key = key, Kind = SettingKind.Toggle, Term = Term(key), Entry = entry
-            });
+            _section.Settings.Add(
+                new SettingDef
+                {
+                    Key = key,
+                    Kind = SettingKind.Toggle,
+                    Term = Term(key),
+                    Entry = entry,
+                }
+            );
             return this;
         }
 
-        public SectionBuilder Slider(out SettingHandle<float> handle, string key,
-            float min, float max, float def, float step, SliderDisplay display = SliderDisplay.Steps)
+        public SectionBuilder Slider(
+            out SettingHandle<float> handle,
+            string key,
+            float min,
+            float max,
+            float def,
+            float step,
+            SliderDisplay display = SliderDisplay.Steps
+        )
         {
-            var entry = _file.Bind("Settings", key, def,
-                new ConfigDescription(key, new AcceptableValueRange<float>(min, max)));
+            var entry = _file.Bind("Settings", key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)));
             handle = new SettingHandle<float>(entry);
-            _section.Settings.Add(new SettingDef
-            {
-                Key = key, Kind = SettingKind.Slider, Term = Term(key),
-                Min = min, Max = max, Step = step > 0f ? step : (max - min), Display = display, Entry = entry
-            });
+            _section.Settings.Add(
+                new SettingDef
+                {
+                    Key = key,
+                    Kind = SettingKind.Slider,
+                    Term = Term(key),
+                    Min = min,
+                    Max = max,
+                    Step = step > 0f ? step : (max - min),
+                    Display = display,
+                    Entry = entry,
+                }
+            );
             return this;
         }
 
@@ -75,33 +94,46 @@ namespace ModSettingsMenu.Settings
                 values = new[] { def };
             }
             var tokens = new string[values.Length];
-            for (int i = 0; i < values.Length; i++) tokens[i] = values[i].ToString();
+            for (int i = 0; i < values.Length; i++)
+                tokens[i] = values[i].ToString();
             // Store a string token (arbitrary T needs no CoreLib converter); validate it stays valid.
-            var entry = _file.Bind("Settings", key, def.ToString(),
-                new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
+            var entry = _file.Bind("Settings", key, def.ToString(), new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
             T FromToken(string t)
             {
                 for (int i = 0; i < values.Length; i++)
-                    if (tokens[i] == t) return values[i];
+                    if (tokens[i] == t)
+                        return values[i];
                 return def; // unknown/removed token → default
             }
             handle = new SettingHandle<T>(entry, FromToken, v => v.ToString());
-            _section.Settings.Add(new SettingDef
-            {
-                Key = key, Kind = SettingKind.Choice, Term = Term(key), Tokens = tokens, Entry = entry
-            });
+            _section.Settings.Add(
+                new SettingDef
+                {
+                    Key = key,
+                    Kind = SettingKind.Choice,
+                    Term = Term(key),
+                    Tokens = tokens,
+                    Entry = entry,
+                }
+            );
             return this;
         }
 
         public SectionBuilder Stepper(out SettingHandle<int> handle, string key, int min, int max, int def)
         {
-            var entry = _file.Bind("Settings", key, def,
-                new ConfigDescription(key, new AcceptableValueRange<int>(min, max)));
+            var entry = _file.Bind("Settings", key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)));
             handle = new SettingHandle<int>(entry);
-            _section.Settings.Add(new SettingDef
-            {
-                Key = key, Kind = SettingKind.Stepper, Term = Term(key), Min = min, Max = max, Entry = entry
-            });
+            _section.Settings.Add(
+                new SettingDef
+                {
+                    Key = key,
+                    Kind = SettingKind.Stepper,
+                    Term = Term(key),
+                    Min = min,
+                    Max = max,
+                    Entry = entry,
+                }
+            );
             return this;
         }
 
@@ -113,7 +145,8 @@ namespace ModSettingsMenu.Settings
         public SectionBuilder RequiresRestart()
         {
             int n = _section.Settings.Count;
-            if (n > 0) _section.Settings[n - 1].RequiresRestart = true;
+            if (n > 0)
+                _section.Settings[n - 1].RequiresRestart = true;
             return this;
         }
 
