@@ -29,7 +29,8 @@ namespace ModSettingsMenu.UI
         // Row height follows the rendered text (PugText.dimensions.height, in units) + padding,
         // like CK's ControlMapper (renderHeightPixels = 16 * height). Single-line rows stay
         // compact; multi-line labels/hints grow automatically. Fallback to one line if unmeasured.
-        private static int RowHeightPx(PugText pt)
+        // Internal (not private): ListDetailScreen's item rows share this same formula.
+        internal static int RowHeightPx(PugText pt)
         {
             float unitsHigh = (pt != null && pt.dimensions.height > 0f) ? pt.dimensions.height : 1f;
             return RowHeightPx(unitsHigh);
@@ -157,24 +158,27 @@ namespace ModSettingsMenu.UI
 
                 foreach (var def in OrderedSettings(section))
                 {
-                    if (def.Kind == SettingKind.List && listTemplate == null)
+                    if (def.Kind == SettingKind.List)
                     {
-                        Debug.LogWarning($"[ModSettingsMenu] List setting '{def.Key}' but listTemplate is unwired — rendering as an inert row.");
-                    }
-                    if (def.Kind == SettingKind.List && listTemplate != null)
-                    {
-                        var lGo = Object.Instantiate(listTemplate, container);
-                        lGo.SetActive(true);
-                        lGo.name = "List " + def.Key;
-                        var lw = lGo.GetComponent<ListWidget>();
-                        lw.Bind(def);
-                        lw.SetParentMenu(this);
-                        // Row height is set in RenderContent (SetRowHeight(RowHeightPx(RenderAndMeasure)))
-                        // after activation, like the normal rows — it depends on the preview's rendered
-                        // single-line text height, not the item count.
-                        menuOptions.Add(lw);
-                        _listWidgets.Add(lw);
-                        continue;
+                        if (listTemplate == null)
+                        {
+                            Debug.LogWarning($"[ModSettingsMenu] List setting '{def.Key}' but listTemplate is unwired — rendering as an inert row.");
+                        }
+                        else
+                        {
+                            var lGo = Object.Instantiate(listTemplate, container);
+                            lGo.SetActive(true);
+                            lGo.name = "List " + def.Key;
+                            var lw = lGo.GetComponent<ListWidget>();
+                            lw.Bind(def);
+                            lw.SetParentMenu(this);
+                            // Row height is set in RenderContent (SetRowHeight(RowHeightPx(RenderAndMeasure)))
+                            // after activation, like the normal rows — it depends on the preview's rendered
+                            // single-line text height, not the item count.
+                            menuOptions.Add(lw);
+                            _listWidgets.Add(lw);
+                            continue;
+                        }
                     }
                     var wGo = Object.Instantiate(toggleTemplate, container);   // nest INTO the box
                     wGo.SetActive(true);
@@ -329,7 +333,7 @@ namespace ModSettingsMenu.UI
                 string heading = section.Foreign
                     ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected")
                     : section.DisplayName;
-                RenderStatic(box.header, heading);
+                box.header.RenderPlain(heading);
                 SetRowHeight(box.header.gameObject, RowHeightPx(box.header));
             }
             if (box != null && box.hint != null)
@@ -340,7 +344,7 @@ namespace ModSettingsMenu.UI
                 box.hint.gameObject.SetActive(hasHint);
                 if (hasHint)
                 {
-                    RenderStatic(box.hint, Loc.T(section.HintTerm, section.HintText));
+                    box.hint.RenderPlain(Loc.T(section.HintTerm, section.HintText));
                     SetRowHeight(box.hint.gameObject, RowHeightPx(box.hint));
                 }
             }
@@ -370,25 +374,13 @@ namespace ModSettingsMenu.UI
             wrap.renderHeightPixels = px;
         }
 
-        // Render a static (non-localized) string into a PugText. Colour + maskInteraction are NOT
-        // set here: PugFont.Render paints every glyph from the (prefab-authored) style — its color
-        // (bright header, dimmed hint) AND its maskInteraction (VisibleInsideMask, so glyphs clip to
-        // the scroll viewport). localize=false renders the raw string instead of a loc term.
-        private static void RenderStatic(PugText pt, string text)
-        {
-            if (pt == null) return;
-            pt.localize = false;
-            pt.Render(text, rewindEffectAnims: false, force: true);
-        }
-
         // Vanilla RadicalOptionsMenu rendered the title; we removed it in the swap.
         private void RenderTitle()
         {
             foreach (var path in new[] { "Title/Title bigtext", "Title/Title bigtext shadow" })
             {
                 var t = transform.Find(path);
-                var pt = t != null ? t.GetComponent<PugText>() : null;
-                if (pt != null) RenderStatic(pt, Loc.T("ModSettingsMenu-UI/Title"));
+                if (t != null) t.GetComponent<PugText>().RenderPlain(Loc.T("ModSettingsMenu-UI/Title"));
             }
         }
 
