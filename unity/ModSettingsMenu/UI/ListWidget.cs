@@ -85,8 +85,8 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning("[ModSettingsMenu] ListWidget has no ListWidgetBox — row renders blank.");
                 return;
             }
-            SetText(_box.label, Loc.T(_def.Term, _def.Key));
-            if (_box.preview != null) SetText(_box.preview, Preview());
+            _box.label.RenderPlain(Loc.T(_def.Term, _def.Key));
+            _box.preview.RenderPlain(Preview());
             TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);   // start in the unselected grey
         }
 
@@ -114,13 +114,6 @@ namespace ModSettingsMenu.UI
         private void TintDrill(Color c)
         {
             if (_box != null && _box.drillIcon != null) _box.drillIcon.color = c;
-        }
-
-        private static void SetText(PugText pt, string s)
-        {
-            if (pt == null) return;
-            pt.localize = false;
-            pt.Render(s, rewindEffectAnims: false, force: true);
         }
     }
 }

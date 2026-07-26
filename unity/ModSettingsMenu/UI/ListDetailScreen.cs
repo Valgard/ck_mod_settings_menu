@@ -18,8 +18,6 @@ namespace ModSettingsMenu.UI
     {
         public ListDetailBox box;
 
-        private const int RowPaddingPx = 6;   // matches ModSettingsScreen.RowPaddingPx
-
         private SettingDef _pending;   // seeded by Open() before PushMenu resolves this instance
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
@@ -66,11 +64,11 @@ namespace ModSettingsMenu.UI
             if (box.title != null && _pending != null)
             {
                 string label = Loc.T(_pending.Term, _pending.Key);
-                RenderText(box.title, label);
+                box.title.RenderPlain(label);
                 // Keep the drop-shadow twin in sync (a sibling of the title), else it shows stale text.
                 var shadow = box.title.transform.parent != null
                     ? box.title.transform.parent.Find("Title bigtext shadow") : null;
-                if (shadow != null) RenderText(shadow.GetComponent<PugText>(), label);
+                if (shadow != null) shadow.GetComponent<PugText>().RenderPlain(label);
             }
 
             // Clear the previous open's cloned rows. Detach BEFORE Destroy (deferred to end-of-frame),
@@ -106,7 +104,7 @@ namespace ModSettingsMenu.UI
         {
             var row = Object.Instantiate(box.itemTemplate, box.itemContainer);
             row.SetActive(true);
-            RenderText(row.GetComponent<PugText>(), token);
+            row.GetComponent<PugText>().RenderPlain(token);
             var item = row.GetComponent<ListDetailItem>();
             if (item != null) { item.SetParentMenu(this); menuOptions.Add(item); }
         }
@@ -125,7 +123,7 @@ namespace ModSettingsMenu.UI
                 var pt = go.GetComponent<PugText>();
                 var wrap = go.GetComponent<WrapperUIComponent>();
                 if (pt != null && wrap != null)
-                    wrap.renderHeightPixels = Mathf.RoundToInt(16f * (pt.dimensions.height > 0f ? pt.dimensions.height : 1f)) + RowPaddingPx;
+                    wrap.renderHeightPixels = ModSettingsScreen.RowHeightPx(pt);
             }
             _layout.RenderUIComponent(force: true);   // re-lay out with the measured heights
         }
@@ -161,13 +159,6 @@ namespace ModSettingsMenu.UI
                 float delta = -TopMarginUnits - (box.itemContainer.localPosition.y + topEdge);
                 _scroll.MoveScroll(delta);
             }
-        }
-
-        private static void RenderText(PugText pt, string s)
-        {
-            if (pt == null) return;
-            pt.localize = false;
-            pt.Render(s, rewindEffectAnims: false, force: true);
         }
 
         // IScrollable — window height from the item container's layout (feeds scroll clipping).
