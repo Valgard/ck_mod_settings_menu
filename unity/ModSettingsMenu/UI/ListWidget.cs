@@ -82,12 +82,33 @@ namespace ModSettingsMenu.UI
             if (_def == null || _box == null) return;
             SetText(_box.label, Loc.T(_def.Term, _def.Key));
             if (_box.preview != null) SetText(_box.preview, Preview());
+            TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);   // start in the unselected grey
         }
 
         public override void OnActivated()
         {
             base.OnActivated();
             if (_def != null) ListDetailScreen.Open(_def);
+        }
+
+        // Tint the drill affordance sprite to match the row's text on selection — CK's unselected grey
+        // vs. the selected value-blue — driven from the same OnSelected/OnDeselected hooks the base uses
+        // to recolour the label/preview PugTexts, so the arrow follows the row.
+        public override void OnSelected()
+        {
+            base.OnSelected();
+            TintDrill(PugTextEffectMenuOption.SELECTED_VALUE_COLOR);
+        }
+
+        public override void OnDeselected(bool playEffect = true)
+        {
+            base.OnDeselected(playEffect);
+            TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+        }
+
+        private void TintDrill(Color c)
+        {
+            if (_box != null && _box.drillIcon != null) _box.drillIcon.color = c;
         }
 
         private static void SetText(PugText pt, string s)
