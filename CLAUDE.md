@@ -68,21 +68,26 @@ from `../utils/`.
 
 - **`ModSettingsMenuMod` (`IMod`)** — bootstrap. `EarlyInit` grabs the mod's own
   `AssetBundle` (`GetModInfo().AssetBundles[0]`); `ModObjectLoaded` keeps the
-  `GameObject` carrying a `ModSettingsScreen` as `MenuPrefab`; `Update` runs two
-  one-shot/deferred jobs — **PreWarm** the menu once on the first frame the instance
-  exists and there is ≥1 consumer section, and a frame-countdown that fires the deferred
-  restart prompt. Owns the free menu id `SettingsMenuType = (RadicalMenu.MenuType)29314`
-  (outside the vanilla `RadicalMenu.MenuType` enum; distinct from GMCM's 1493 /
-  HealthBars' 19901).
+  `GameObject` carrying a `ModSettingsScreen` as `MenuPrefab` and the one carrying a
+  `ListDetailScreen` as `ListDetailPrefab`; `Update` runs two one-shot/deferred jobs —
+  **PreWarm** the menu once on the first frame the instance exists and there is ≥1
+  consumer section, and a frame-countdown that fires the deferred restart prompt. Owns
+  two free menu ids outside the vanilla `RadicalMenu.MenuType` enum (distinct from
+  GMCM's 1493 / HealthBars' 19901): `SettingsMenuType = (RadicalMenu.MenuType)29314` for
+  the settings screen and `ListDetailMenuType = (RadicalMenu.MenuType)29315` for the
+  list drill-in.
 - **`MenuPatch`** (`[HarmonyPatch]`) — mounts the screen into the vanilla Options menu:
   - `MenuManager.Init` **prefix** — finds the "Go to UI settings" push-menu entry
     (`menuToPush == UI_OPTIONS`), clones it, repoints the clone at `SettingsMenuType`,
     inserts it right after the original, and sets its label with
     `SetText("ModSettingsMenu-UI/Title")` (NOT `Render` — see gotchas).
   - `MenuManager.Init` **postfix** — instantiates `MenuPrefab` under
-    `Manager.camera.uiCamera.transform`, kept inactive; stores it as `MenuInstance`.
-  - `RadicalMenu.TypeToMenu` **prefix** — resolves `SettingsMenuType` to `MenuInstance`
-    (returns `false` to short-circuit vanilla); everything else falls through.
+    `Manager.camera.uiCamera.transform`, kept inactive; stores it as `MenuInstance`. If
+    a `ListDetailPrefab` was loaded, instantiates it the same way as
+    `ListDetailInstance` (the pushed drill-in screen).
+  - `RadicalMenu.TypeToMenu` **prefix** — resolves `SettingsMenuType` → `MenuInstance`
+    and `ListDetailMenuType` → `ListDetailInstance` (each returns `false` to
+    short-circuit vanilla); everything else falls through.
 - **`Loc`** — resolves a loc term for the active language via
   `API.Localization.GetLocalizedTerm`; `T(term)` for framework-own strings (yaml
   guarantees a value) and `T(term, fallback)` for consumer strings (falls back to the
@@ -106,9 +111,20 @@ from `../utils/`.
   `Value` reads live / writes-persist; `OnChanged` fires on any change.
 - **`SettingModel.cs`** — the non-generic descriptors the UI reads: `ModSection`
   (per-consumer box) and `SettingDef` (one setting: `Kind`, numeric bounds, derived loc
-  `Term`, `RequiresRestart`, and the live `ConfigEntryBase Entry`), plus the enums
-  `SettingKind {Toggle,Slider,Stepper,Choice}`, `SliderDisplay {Steps,Number,Percent}`,
-  `OptionSort {AsDeclared,ByKey,ByLabel}`.
+  `Term`, `RequiresRestart`, `Foreign`/`Unbounded` markers, and the live
+  `ConfigEntryBase Entry`), plus the enums `SettingKind
+  {Toggle,Slider,Stepper,Choice,Info,List}`, `SliderDisplay {Steps,Number,Percent}`,
+  `OptionSort {AsDeclared,ByKey,ByLabel}`. The last two kinds — `Info` (read-only value)
+  and `List` (comma-list with a drill-in) — are produced only by
+  `ForeignConfigDiscovery` (see below), never by the explicit consumer API.
+- **`ForeignConfigDiscovery`** — mounts the settings of mods that use CoreLib config but
+  never called `ModSettings.Section` (ADR-001). It reads each foreign `ConfigFile`'s
+  entries and maps every one to a `SettingDef` marked `Foreign = true` via a first-match
+  cascade: a read-only/server-locked entry→Info, bool→Toggle, enum→Choice, ranged
+  int/float→Stepper/Slider, an `AcceptableValueList`→Info, a bare numeric→unbounded
+  Stepper, and a raw string→`List` when a heuristic judges it a genuine comma-list (≥2
+  compact tokens), else `Info`. The routing decision lives here so the widgets stay dumb
+  — only genuine lists reach `ListWidget`.
 - **`ConfigStore`** — a `Dictionary<modId, ConfigFile>` cache. Creates one CoreLib
   `ConfigFile($"{modId}/config.cfg", saveOnInit: true, info)` per consumer. CoreLib does
   all `System.IO` in its own trusted assembly via `API.ConfigFilesystem`, so the
@@ -135,14 +151,40 @@ from `../utils/`.
   by reference, not by fragile `Find()` paths). The `widgetContainer` is a
   `LinearLayout` with a 9-slice border background that auto-sizes to its rows — the
   visible box.
-- **`SettingWidget : RadicalMenuOption`** — one class renders **all four** kinds. Drives
-  the value through the non-generic `ConfigEntryBase.BoxedValue` (never sees `T`),
-  casting per `Kind`; CoreLib clamps, `ConfigStore.Persist` saves. `←/→` → `OnSkimLeft/Right`;
-  click/Space → `OnActivated` → `Adjust(+1)`. Per-kind `ValueString`: Toggle on/off
-  term, Stepper int, Choice localized-token, Slider Steps/`Number`/`Percent`. The
-  `Steps` `♦/♢` chain uses `♦`/`♢` escapes (pure-ASCII source; a literal diamond is
-  encoding-unsafe in the Roslyn sandbox) and only renders in the `boldLarge` font atlas,
-  so `Bind` switches a Steps-slider's value font accordingly.
+- **`SettingWidget : RadicalMenuOption`** — one class renders the five **non-list**
+  kinds. Drives the value through the non-generic `ConfigEntryBase.BoxedValue` (never
+  sees `T`), casting per `Kind`; CoreLib clamps + auto-saves. `←/→` →
+  `OnSkimLeft/Right`; click/Space → `OnActivated` → `Adjust(+1)`. Per-kind
+  `ValueString`: Toggle on/off term, Stepper int, Choice localized-token, Slider
+  Steps/`Number`/`Percent`; **Info** is an inert read-only row (its value shows but
+  `Adjust` is a no-op and it takes no selection effect). The `Steps` `♦/♢` chain uses
+  `♦`/`♢` escapes (pure-ASCII source; a literal diamond is encoding-unsafe in the Roslyn
+  sandbox) and only renders in the `boldLarge` font atlas, so `Bind` switches a
+  Steps-slider's value font accordingly.
+
+The `List` kind is the one that does NOT render through `SettingWidget` — it has its own
+compact row plus a pushed detail screen:
+
+- **`ListWidget : RadicalMenuOption`** (+ its serialized-ref holder **`ListWidgetBox`**
+  — `label`, `preview`, `drillIcon`) — the compact single-line row for a foreign
+  comma-list: label + a width-budgeted preview (`"InventoryChest, +15"`) + a right-arrow
+  drill affordance. `OnActivated` pushes the detail screen (`ListDetailScreen.Open`);
+  `OnSelected/OnDeselected` tint the `drillIcon` sprite grey/blue to follow the row's
+  text colour. Read-only — the classification already happened in
+  `ForeignConfigDiscovery`, so there is no per-row toggle.
+- **`ListDetailScreen : RadicalMenu, IScrollable`** (+ **`ListDetailBox`** — `title`,
+  `itemContainer`, `itemTemplate`; and **`ListDetailItem : RadicalMenuOption`** for each
+  row) — the drill-in itself, a pushed sub-menu (`ListDetailMenuType`) showing one
+  comma-list in full: a title plus one navigable read-only row per token, scrollable,
+  with controller/keyboard scroll-follow that reaches the bottom (the overflow fix that
+  motivated the redesign). Same three-step open as `ModSettingsScreen` (Populate →
+  `base.Activate` → RenderContent) for the LinearLayout-height reason. `_pending` (the
+  setting to show) is seeded on the singleton instance by `Open` before `PushMenu`
+  resolves it, and cleared after consume. `ListDetailItem.GetActiveStateInCurrentScene`
+  gates on `activeSelf` so the inactive row template isn't itself navigable.
+- **`PugTextExtensions`** — one shared `PugText.RenderPlain(string)` extension
+  (localize=false + forced render, null-tolerant) used by every screen instead of the
+  render helper that used to be copied into each.
 
 ### Shared editor helpers
 
