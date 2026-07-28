@@ -245,6 +245,8 @@ namespace ModSettingsMenu.UI
             int previousIndex = selectedIndex;
             bool wasAddRow = _lastCommitWasAddRow;
             RebuildRows();
+            selectedIndex = -1; // stale index from before the rebuild — reset so SelectOptionIndex's
+            // no-op guard and range check don't see a wrong/out-of-range value
             // After adding a token (the add-row had content), keep focus on the fresh blank add-row
             // that follows it — supports typing several new tokens in a row without renavigating down
             // each time. Any other edit/removal just keeps the same numeric slot (clamped).
