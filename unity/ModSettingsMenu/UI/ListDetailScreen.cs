@@ -179,5 +179,8 @@ namespace ModSettingsMenu.UI
         public bool IsTopElementSelected() => false;
 
         public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
+
+        // Stub for Task 4 — will be fully implemented in the commit-and-rebuild pipeline task.
+        public void OnRowTextCommitted(ListDetailItem row) { }
     }
 }
