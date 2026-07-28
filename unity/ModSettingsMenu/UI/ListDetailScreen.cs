@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using ModSettingsMenu.Settings;
 using UnityEngine;
 
@@ -18,7 +19,13 @@ namespace ModSettingsMenu.UI
     {
         public ListDetailBox box;
 
-        private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance
+        private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance — UNCHANGED
+        private SettingDef _activeDef; // the setting this open session is showing/editing — set once
+
+        // in Populate() from _pending (which Activate() nulls right after)
+        private ListDetailItem _addRow; // the permanent trailing blank row, tracked by RebuildRows
+        private bool _rebuildPending; // set by OnRowTextCommitted, consumed by Update — see design note
+        private bool _lastCommitWasAddRow; // which row triggered the pending rebuild (focus-follow target)
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
 
@@ -45,10 +52,12 @@ namespace ModSettingsMenu.UI
             _pending = null; // consumed by Populate (title + Value()) — clear so a stale def can't leak
         }
 
-        private string Value() => _pending?.Entry?.BoxedValue?.ToString() ?? "";
+        private string Value() => _activeDef?.Entry?.BoxedValue?.ToString() ?? "";
 
         private void Populate()
         {
+            _activeDef = _pending;
+            _rebuildPending = false; // a stale deferred rebuild from a prior open can't apply here
             _scroll = GetComponent<UIScrollWindow>();
             if (box == null || box.itemContainer == null || box.itemTemplate == null)
             {
@@ -61,9 +70,9 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning("[ModSettingsMenu] ListDetailScreen itemContainer has no LinearLayoutUIComponent — items won't lay out.");
 
             // Title = the setting's own label (the list's name).
-            if (box.title != null && _pending != null)
+            if (box.title != null && _activeDef != null)
             {
-                string label = Loc.T(_pending.Term, _pending.Key);
+                string label = Loc.T(_activeDef.Term, _activeDef.Key);
                 box.title.RenderPlain(label);
                 // Keep the drop-shadow twin in sync (a sibling of the title), else it shows stale text.
                 var shadow = box.title.transform.parent != null ? box.title.transform.parent.Find("Title bigtext shadow") : null;
@@ -71,24 +80,7 @@ namespace ModSettingsMenu.UI
                     shadow.GetComponent<PugText>().RenderPlain(label);
             }
 
-            // Clear the previous open's cloned rows. Detach BEFORE Destroy (deferred to end-of-frame),
-            // else a reopen counts the stale rows this frame and mis-sizes the layout. The template is
-            // NOT in the container (it lives at the prefab root), so nothing to skip here.
-            for (int i = box.itemContainer.childCount - 1; i >= 0; i--)
-            {
-                var child = box.itemContainer.GetChild(i).gameObject;
-                child.transform.SetParent(null, worldPositionStays: false);
-                Object.Destroy(child);
-            }
-            menuOptions.Clear();
-
-            // One navigable read-only row per non-empty token.
-            foreach (var raw in Value().Split(','))
-            {
-                var token = raw.Trim();
-                if (token.Length > 0)
-                    AddItem(token);
-            }
+            RebuildRows();
 
             if (_scroll != null)
             {
@@ -97,21 +89,60 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Clone the (inactive) item template into the container, render the token, register the row as
-        // a navigable menu option. The template being inactive makes Instantiate(_, parent) produce an
-        // inactive clone (no mid-clone OnEnable/NRE); SetActive(true) then activates it cleanly and its
-        // base RadicalMenuOption.Awake snapshots its own PugTextEffectMenuOption for the focus highlight.
-        private void AddItem(string token)
+        // Destroys every current row (real tokens + the trailing add-row) and rebuilds them fresh from
+        // _activeDef's live value. The SAME rebuild-from-canonical-value path serves the initial open
+        // (Populate) and every post-edit refresh (OnRowTextCommitted, via the deferred Update path) —
+        // there is no separate incremental add/remove/edit logic, just "re-derive everything from the
+        // value that was just persisted."
+        private void RebuildRows()
+        {
+            // Clear the previous rows. Detach BEFORE Destroy (deferred to end-of-frame), else a rebuild
+            // this same frame would count the stale rows and mis-size the layout.
+            for (int i = box.itemContainer.childCount - 1; i >= 0; i--)
+            {
+                var child = box.itemContainer.GetChild(i).gameObject;
+                child.transform.SetParent(null, worldPositionStays: false);
+                Object.Destroy(child);
+            }
+            menuOptions.Clear();
+            _addRow = null;
+
+            // One editable row per non-empty token...
+            foreach (var raw in Value().Split(','))
+            {
+                var token = raw.Trim();
+                if (token.Length > 0)
+                    AddItem(token, isAddRow: false);
+            }
+            // ...plus one permanent trailing blank row for adding a new token.
+            AddItem("", isAddRow: true);
+        }
+
+        // Clone the (inactive) item template into the container, seed its text, register it as a
+        // navigable menu option. The template being inactive makes Instantiate(_, parent) produce an
+        // inactive clone (no mid-clone OnEnable/NRE); SetActive(true) then activates it cleanly.
+        private void AddItem(string token, bool isAddRow)
         {
             var row = Object.Instantiate(box.itemTemplate, box.itemContainer);
             row.SetActive(true);
-            row.GetComponent<PugText>().RenderPlain(token);
             var item = row.GetComponent<ListDetailItem>();
-            if (item != null)
+            if (item == null)
+                return;
+            item.owner = this;
+            item.isAddRow = isAddRow;
+            item.SetInputText(token);
+            if (isAddRow)
             {
-                item.SetParentMenu(this);
-                menuOptions.Add(item);
+                item.hintString = Loc.T("ModSettingsMenu-UI/ListAddHint", "+ Add");
+                // Cloned PugText inherits localize=true (see SettingWidget.SetText's own comment on the
+                // same trap) — the base class's Update() renders hintString via a plain PugText.Render,
+                // so force it raw or the hint would be looked up as a loc term instead of shown literally.
+                if (item.hintText != null)
+                    item.hintText.localize = false;
+                _addRow = item;
             }
+            item.SetParentMenu(this);
+            menuOptions.Add(item);
         }
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -180,7 +211,45 @@ namespace ModSettingsMenu.UI
 
         public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
 
-        // Stub for Task 4 — will be fully implemented in the commit-and-rebuild pipeline task.
-        public void OnRowTextCommitted(ListDetailItem row) { }
+        // Called from a row's OnDeselected (ListDetailItem). Reads every row's live text (trimmed,
+        // commas stripped so a typed comma can't desync the stored split/join), and re-persists the
+        // whole list ONLY if it actually changed — skips a no-op write (and the rebuild it would
+        // otherwise trigger on every plain navigate-through, not just real edits). The rebuild itself
+        // is deferred to Update — see the design note above this task for why.
+        public void OnRowTextCommitted(ListDetailItem row)
+        {
+            if (_activeDef?.Entry == null)
+                return;
+            var tokens = new List<string>();
+            foreach (var opt in menuOptions)
+            {
+                if (!(opt is ListDetailItem item))
+                    continue;
+                var text = item.GetInputText().Trim().Replace(",", "");
+                if (text.Length > 0)
+                    tokens.Add(text);
+            }
+            string joined = string.Join(",", tokens);
+            if (joined == Value())
+                return;
+            _activeDef.Entry.BoxedValue = joined;
+            _rebuildPending = true;
+            _lastCommitWasAddRow = row.isAddRow;
+        }
+
+        private void Update()
+        {
+            if (!_rebuildPending)
+                return;
+            _rebuildPending = false;
+            int previousIndex = selectedIndex;
+            bool wasAddRow = _lastCommitWasAddRow;
+            RebuildRows();
+            // After adding a token (the add-row had content), keep focus on the fresh blank add-row
+            // that follows it — supports typing several new tokens in a row without renavigating down
+            // each time. Any other edit/removal just keeps the same numeric slot (clamped).
+            int target = wasAddRow ? menuOptions.Count - 1 : Mathf.Clamp(previousIndex, 0, menuOptions.Count - 1);
+            SelectOptionIndex(target);
+        }
     }
 }
