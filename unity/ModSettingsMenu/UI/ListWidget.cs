@@ -56,7 +56,7 @@ namespace ModSettingsMenu.UI
                     tokens.Add(t);
             }
             if (tokens.Count == 0)
-                return "";
+                return Loc.T("ModSettingsMenu-UI/ListEmpty", "(empty)");
             var sb = new StringBuilder();
             int shown = 0;
             foreach (var t in tokens)

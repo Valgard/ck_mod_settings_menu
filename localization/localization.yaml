@@ -17,6 +17,14 @@ ModSettingsMenu-UI:
     hint: "Marker appended to the heading of an auto-detected (non-integrated) mod's config box."
     en: "(detected)"
     de: "(erkannt)"
+  ListEmpty:
+    hint: "Compact-row preview shown when a foreign list setting has zero tokens."
+    en: "(empty)"
+    de: "(leer)"
+  ListAddHint:
+    hint: "Hint text on the list drill-in's permanent trailing blank row."
+    en: "+ Add"
+    de: "+ Hinzufuegen"
 ModSettingsMenu-Config:
   showForeignConfigs:
     hint: "Master toggle label: show config from other mods that use CoreLib config but did not integrate MSM."
