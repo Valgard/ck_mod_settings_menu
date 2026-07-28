@@ -224,7 +224,12 @@ namespace ModSettingsMenu.UI
             var tokens = new List<string>();
             foreach (var opt in menuOptions)
             {
-                if (!(opt is ListDetailItem item))
+                // RadicalMenu's own includeInactive option scan also registers the itemTemplate
+                // itself (see ListDetailItem.GetActiveStateInCurrentScene's comment) — its pugText
+                // still carries the prefab-authored "List Entry" placeholder forever, since only
+                // clones ever get SetInputText. Skip it exactly like navigation already does, via
+                // the same active check, or its placeholder text gets committed as a phantom token.
+                if (!(opt is ListDetailItem item) || !item.gameObject.activeSelf)
                     continue;
                 var text = item.GetInputText().Trim().Replace(",", "");
                 if (text.Length > 0)
