@@ -130,13 +130,14 @@ namespace ModSettingsMenu.UI
                 return;
             item.owner = this;
             item.isAddRow = isAddRow;
+            if (item.pugText != null)
+                item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
+            // SettingWidget.SetText and the hintText line below; must be
+            // set before SetInputText's internal Render() call, not after
             item.SetInputText(token);
             if (isAddRow)
             {
                 item.hintString = Loc.T("ModSettingsMenu-UI/ListAddHint", "+ Add");
-                // Cloned PugText inherits localize=true (see SettingWidget.SetText's own comment on the
-                // same trap) — the base class's Update() renders hintString via a plain PugText.Render,
-                // so force it raw or the hint would be looked up as a loc term instead of shown literally.
                 if (item.hintText != null)
                     item.hintText.localize = false;
                 _addRow = item;
