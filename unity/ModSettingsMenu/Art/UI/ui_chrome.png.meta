@@ -145,10 +145,32 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: ToggleListView
+      name: Caret
       rect:
         serializedVersion: 2
         x: 12
+        y: 60
+        width: 2
+        height: 8
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: cf0aa280383530e27035f2d533841703
+      internalID: 100008
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ToggleListView
+      rect:
+        serializedVersion: 2
+        x: 16
         y: 52
         width: 16
         height: 16
@@ -170,7 +192,7 @@ TextureImporter:
       name: TogglePlainView
       rect:
         serializedVersion: 2
-        x: 30
+        x: 34
         y: 52
         width: 16
         height: 16
@@ -192,7 +214,7 @@ TextureImporter:
       name: itemui_border
       rect:
         serializedVersion: 2
-        x: 48
+        x: 52
         y: 36
         width: 32
         height: 32
@@ -214,7 +236,7 @@ TextureImporter:
       name: menu_border
       rect:
         serializedVersion: 2
-        x: 82
+        x: 86
         y: 36
         width: 32
         height: 32
@@ -291,6 +313,7 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       Arrow: 100007
+      Caret: 100008
       ToggleListView: 100005
       TogglePlainView: 100006
       itemui_border: 100001

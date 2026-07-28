@@ -21,7 +21,7 @@
   "internalIds": {
     "itemui_border": 100001, "menu_border": 100002, "progress_border": 100003,
     "scrollbar_hover": 100004, "ToggleListView": 100005, "TogglePlainView": 100006,
-    "Arrow": 100007
+    "Arrow": 100007, "Caret": 100008
   },
   "guid": "177805356e56055ae8abd25063004bea"
 }
