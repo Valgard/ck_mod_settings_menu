@@ -120,10 +120,10 @@ would silently split into two tokens on the next read.
 `RadicalMenuOptionTextInput.characterWhiteList` is an **inclusion** filter
 (only listed characters survive) — unsuited to blocking a single character
 while allowing everything else, since that would mean enumerating every other
-permitted character. Instead, the row subclass strips a literal `,` from
-inserted text itself (overriding the insertion path rather than relying on
-`characterWhiteList`), so a comma can never make it into a token's stored
-text.
+permitted character. Instead, a comma is stripped at commit time: whenever a
+row's text is read to recompute the persisted list (§4's commit path), each
+row's text is stripped of literal `,` before being rejoined — so a comma can
+never make it into the stored value, regardless of what was typed on screen.
 
 ### Empty list stays a List
 
@@ -157,9 +157,14 @@ preview shows a placeholder (e.g. "(empty)") instead of the usual
 - **Reopening the drill-in after an edit:** the screen re-splits from the
   live `ConfigEntryBase` value on every open (unchanged from ADR-002) — the
   freshly written value is what renders.
-- **A row cancelled (Back/ESC) mid-edit, not confirmed:** `Deactivate(commit:
-  false)` — no write, the row's prior text stands (mirrors
-  `RadicalMenuOptionTextInput`'s existing `commit` parameter).
+- **A row cancelled (Back/ESC) mid-edit, not confirmed:** the commit trigger is
+  a row's `OnDeselected` (see §4), not the `TextInputInterface.Deactivate(bool
+  commit)` parameter — `RadicalMenuOptionTextInput`'s own `Deactivate` does not
+  actually revert text on cancel (verified against the decompile: its body only
+  releases input capture). Practical effect: leaving the whole drill-in screen
+  before ever navigating to another row abandons an in-progress edit (no
+  `OnDeselected` fires for that row, so it's never read/persisted); pressing
+  ESC and then navigating to another row still commits, same as confirming.
 
 ## 7 · Verification (manual, in-game)
 
