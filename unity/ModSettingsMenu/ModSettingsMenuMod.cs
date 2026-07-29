@@ -1,3 +1,4 @@
+using CoreLib.Data.Configuration;
 using CoreLib.Util.Extension;
 using ModSettingsMenu.Settings;
 using ModSettingsMenu.UI;
@@ -36,6 +37,27 @@ namespace ModSettingsMenu
                 AssetBundle = info.AssetBundles[0];
             else
                 Debug.LogWarning("[ModSettingsMenu] no AssetBundle — menu prefab will be unavailable.");
+
+            // TEMPORARY dev-only test fixture for the list-widget-editing feature branch — a raw
+            // CoreLib ConfigFile created OUTSIDE ConfigStore.ForMod, so ConfigStore.IsOwn doesn't
+            // recognize it and ForeignConfigDiscovery treats it exactly like a real 3rd-party mod's
+            // list setting. Gives two disposable List rows to edit/add/remove against without
+            // touching PlacementPlus's real ExcludeItems. REMOVE before this branch ships.
+            // Client scope (not CoreLib's Server default) so these stay editable at the title
+            // screen too, where Manager.main.player is null — ForeignConfigDiscovery.IsReadOnly
+            // conservatively treats a non-Client scope as read-only there (real foreign mods, incl.
+            // PlacementPlus's own ExcludeItems, are typically Server-scoped and share that limit).
+            var clientScope = new ConfigScope(ConfigAccessLevel.Client);
+            var testFile = new ConfigFile("TestListFixtures/config.cfg", saveOnInit: true, info);
+            testFile.Bind("Settings", "Short", "Alpha, Beta, Gamma", new ConfigDescription("A short test list."), clientScope);
+            testFile.Bind(
+                "Settings",
+                "Long",
+                "Item01, Item02, Item03, Item04, Item05, Item06, Item07, Item08, Item09, Item10, "
+                    + "Item11, Item12, Item13, Item14, Item15, Item16, Item17, Item18, Item19, Item20",
+                new ConfigDescription("A long test list (scroll-follow check)."),
+                clientScope
+            );
         }
 
         public void Init()
