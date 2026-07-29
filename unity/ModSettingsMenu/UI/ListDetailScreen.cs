@@ -101,6 +101,15 @@ namespace ModSettingsMenu.UI
             for (int i = box.itemContainer.childCount - 1; i >= 0; i--)
             {
                 var child = box.itemContainer.GetChild(i).gameObject;
+                // PugText pools its glyph SpriteRenderers (usePooledResources); destroying a row
+                // without releasing them first leaks pooled glyphs every rebuild (this screen
+                // rebuilds on every edit, unlike a static list built once per open) until the
+                // pool runs dry and an unrelated screen's PugText renders blank next (reproduced:
+                // ModSettingsScreen's own rows went text-less after editing a list). Release every
+                // PugText in the row (pugText + hintText) before destroying, mirroring the identical
+                // item-checklist fix and ModSettingsScreen's own section-teardown fix.
+                foreach (var text in child.GetComponentsInChildren<PugText>(includeInactive: true))
+                    text.Clear();
                 child.transform.SetParent(null, worldPositionStays: false);
                 Object.Destroy(child);
             }
