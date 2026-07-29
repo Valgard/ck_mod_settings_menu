@@ -146,6 +146,14 @@ namespace ModSettingsMenu.UI
             for (int i = contentRoot.childCount - 1; i >= 0; i--)
             {
                 var old = contentRoot.GetChild(i).gameObject;
+                // Each section root nests several PugTexts (header, hint, every widget's label/value
+                // text) that all pool their glyph SpriteRenderers (usePooledResources). Destroying the
+                // root without releasing them first leaks pooled glyphs on every reopen of this screen
+                // (reproduced: after several open/edit/reopen cycles, ALL rows across every section
+                // rendered text-less). GetComponentsInChildren covers every widget kind uniformly
+                // instead of naming each type's text fields.
+                foreach (var text in old.GetComponentsInChildren<PugText>(includeInactive: true))
+                    text.Clear();
                 old.transform.SetParent(null, worldPositionStays: false);
                 Object.Destroy(old);
             }
