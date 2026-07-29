@@ -139,7 +139,14 @@ namespace ModSettingsMenu.UI
             {
                 item.hintString = Loc.T("ModSettingsMenu-UI/ListAddHint", "+ Add");
                 if (item.hintText != null)
+                {
                     item.hintText.localize = false;
+                    // UpdateHintText only renders hintString once BOTH pugText and hintText read as
+                    // empty — hintText's clone still carries its prefab-authored placeholder text
+                    // ("Hint Text"), so that check never passes and the hint never appears. Clear it
+                    // explicitly so the very first frame's check succeeds.
+                    item.hintText.SetText("");
+                }
                 _addRow = item;
             }
             item.SetParentMenu(this);
@@ -251,6 +258,10 @@ namespace ModSettingsMenu.UI
             int previousIndex = selectedIndex;
             bool wasAddRow = _lastCommitWasAddRow;
             RebuildRows();
+            // The initial open (Activate) renders AFTER RebuildRows for the same reason: a LinearLayout
+            // only measures active children, so each row's height must be (re)computed here too, or the
+            // freshly-rebuilt rows collapse to their default (near-zero) height and overlap.
+            RenderContent();
             selectedIndex = -1; // stale index from before the rebuild — reset so SelectOptionIndex's
             // no-op guard and range check don't see a wrong/out-of-range value
             // After adding a token (the add-row had content), keep focus on the fresh blank add-row
