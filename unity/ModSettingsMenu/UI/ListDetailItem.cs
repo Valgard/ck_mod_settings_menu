@@ -36,5 +36,18 @@ namespace ModSettingsMenu.UI
                 Manager.input.SetActiveInputField(null);
             owner?.OnRowTextCommitted(this);
         }
+
+        // RadicalMenuOptionTextInput.Update() overrides RadicalMenuOption.Update() WITHOUT calling
+        // base.Update() — so UpdateClickCollider() (which lives in RadicalMenuOption.Update() and
+        // resizes the click collider to the row's actual rendered text bounds) never runs, leaving
+        // every row stuck at Unity's default freshly-added BoxCollider size (1x1x1, centered at
+        // origin) regardless of content. Restore it explicitly. (Root-caused via Debug.Log
+        // instrumentation showing clickCollider.size/center never changing across 20+ rows of
+        // varying text length, while pugText.dimensions correctly reflected each row's real width.)
+        protected override void Update()
+        {
+            base.Update();
+            UpdateClickCollider();
+        }
     }
 }
