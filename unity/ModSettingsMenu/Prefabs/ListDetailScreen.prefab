@@ -1467,7 +1467,7 @@ Transform:
   m_GameObject: {fileID: 261176405981085068}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0.1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1516,7 +1516,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 9999
   m_Sprite: {fileID: 100008, guid: 177805356e56055ae8abd25063004bea, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -1748,10 +1748,10 @@ MonoBehaviour:
   selectionListenerSourceTag: 
   pugText: {fileID: 663582646598868455}
   hintText: {fileID: 2332193356996134571}
-  hintString: 
+  hintString:
   selectedMarker: {fileID: 675010273461154613}
   characterMarkBlinker: {fileID: 1224832880473767755}
-  maxWidth: 0
+  maxWidth: 25
   resetTextOnActivate: 0
   dontAllowNewLines: 0
   trim: 1
