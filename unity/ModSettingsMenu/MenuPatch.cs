@@ -104,7 +104,65 @@ namespace ModSettingsMenu
             }
             return true;
         }
+
         // Populate now runs in ModSettingsScreen.Activate() (before ActivateTopMenu),
         // so no PushMenu postfix is needed here.
+
+        // Suppress CK's own hover-driven reselection while a list-detail row is being actively
+        // edited. UIMouse re-derives menu selection from a hover raycast every frame and calls this
+        // method regardless of text-input state; letting it through moves RadicalMenu.selectedIndex
+        // to whatever the mouse passes over, which (a) plays the menu-select SFX and (b) drives
+        // PugTextEffectMenuOption.PugTextEffectLateUpdate — a per-frame, selectedIndex-only check
+        // that tints the hovered row's text blue and the row being edited back to grey, entirely
+        // independent of RadicalMenuOption's OnSelected/OnDeselected (which ListDetailItem already
+        // suppresses during an edit — insufficient here, since this effect never goes through them).
+        // Skipping SelectOptionIndex here leaves it exactly where it was before the hover, so the
+        // edited row keeps looking selected and nothing else reacts to a change that didn't happen.
+        // Does NOT stop a click on a different row from switching (that's UIMouse_TrySelectNewElement
+        // below, a separate mechanism this patch alone cannot reach) — see that patch's note.
+        [HarmonyPatch(typeof(MenuManager), nameof(MenuManager.SelectOption)), HarmonyPrefix]
+        public static bool MenuManager_SelectOption(UIelement option)
+        {
+            if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem active && (object)option != active)
+                return false;
+            return true;
+        }
+
+        // The actual "click on a different row while editing switches focus there" bug lives here,
+        // NOT in RadicalMenuOption's OnLeftClicked/OnActivated chain (ListDetailItem's own guards on
+        // those are insufficient — see below). UIMouse.TrySelectNewElement, called every frame from
+        // the hover raycast for BOTH plain hover and the click itself, contains its own hardcoded
+        // deactivation:
+        //
+        //   if ((UIelement)Manager.input.activeInputField != selectedUIElement
+        //       && Manager.input.textInputIsActive && interactDownThisFrame)
+        //   {
+        //       Manager.input.activeInputField.Deactivate(commit: false);
+        //   }
+        //
+        // This runs BEFORE the click is ever delivered to the clicked row's OnLeftClicked — by the
+        // time OnLeftClicked's own activeInputField-is-null-or-mismatched guard runs, CK has already
+        // cleared activeInputField to null itself, so that guard always sees "nothing is active" and
+        // lets the click through (root-caused via Debug.Log instrumentation on OnLeftClicked/
+        // OnActivated: activeInputField was reliably already null on every click, before our code
+        // ever ran). Blocking downstream (OnLeftClicked) is structurally too late; this must be
+        // blocked at the source. Skip the WHOLE method (not just the Deactivate line) so
+        // RadicalMenu.selectedIndex and Manager.ui.currentSelectedUIElement are also left untouched —
+        // letting DeselectAnySelectedUIElement or Select() run partially would set selectedIndex to
+        // -1, which desyncs from activeInputField and would make PugTextEffectMenuOption.
+        // IsSelected() (keyed off selectedIndex, not activeInputField) wrongly grey out the row still
+        // being edited. Scoped tightly to "both sides are ListDetailItem, and they differ" so
+        // anything else on this or any other menu (scrollbar, other widget types) is unaffected.
+        [HarmonyPatch(typeof(UIMouse), "TrySelectNewElement"), HarmonyPrefix]
+        public static bool UIMouse_TrySelectNewElement(UIelement selectedUIElement)
+        {
+            if (
+                Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem active
+                && selectedUIElement is ModSettingsMenu.UI.ListDetailItem
+                && (object)selectedUIElement != active
+            )
+                return false;
+            return true;
+        }
     }
 }
