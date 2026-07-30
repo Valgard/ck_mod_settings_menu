@@ -52,6 +52,20 @@ namespace ModSettingsMenu.UI
             _pending = null; // consumed by Populate (title + Value()) — clear so a stale def can't leak
         }
 
+        // Safety net for OnRowTextCommitted's new activeInputField-transition trigger (see
+        // ListDetailItem.Update): that trigger fires when the active row loses activeInputField —
+        // which happens on Enter/Escape or on clicking a DIFFERENT text-input row, but NOT on
+        // clicking something else entirely (a non-text widget, the scrollbar, outside the screen).
+        // In those cases the row would stay "active" with nothing left to clear it, silently
+        // dropping the pending edit. Force the commit here, once, whenever this screen closes —
+        // regardless of how the player left it.
+        public override void Deactivate(bool pop)
+        {
+            if (Manager.input.activeInputField is ListDetailItem activeItem && activeItem.owner == this)
+                OnRowTextCommitted(activeItem);
+            base.Deactivate(pop);
+        }
+
         private string Value() => _activeDef?.Entry?.BoxedValue?.ToString() ?? "";
 
         private void Populate()
@@ -144,18 +158,16 @@ namespace ModSettingsMenu.UI
             // SettingWidget.SetText and the hintText line below; must be
             // set before SetInputText's internal Render() call, not after
             item.SetInputText(token);
+            if (item.hintText != null)
+            {
+                item.hintText.localize = false; // same cloned-PugText trap as pugText above — every
+                // row's hintText clone otherwise inherits localize=true and renders its prefab-authored
+                // literal placeholder ("Hint Text") as a failed loc-term lookup ("missing: Hint Text")
+                item.hintText.SetText("");
+            }
             if (isAddRow)
             {
                 item.hintString = Loc.T("ModSettingsMenu-UI/ListAddHint", "+ Add");
-                if (item.hintText != null)
-                {
-                    item.hintText.localize = false;
-                    // UpdateHintText only renders hintString once BOTH pugText and hintText read as
-                    // empty — hintText's clone still carries its prefab-authored placeholder text
-                    // ("Hint Text"), so that check never passes and the hint never appears. Clear it
-                    // explicitly so the very first frame's check succeeds.
-                    item.hintText.SetText("");
-                }
                 _addRow = item;
             }
             item.SetParentMenu(this);
@@ -278,6 +290,22 @@ namespace ModSettingsMenu.UI
             // each time. Any other edit/removal just keeps the same numeric slot (clamped).
             int target = wasAddRow ? menuOptions.Count - 1 : Mathf.Clamp(previousIndex, 0, menuOptions.Count - 1);
             SelectOptionIndex(target);
+            if (wasAddRow)
+            {
+                // Keep typing continuity for "add several tokens in a row": after adding one, the
+                // add-row's own text cleared and a fresh blank add-row took its place one slot
+                // over. SelectOptionIndex only re-selects (navigation highlight) — it never calls
+                // OnActivated — so without this the fresh row would need an extra click before it
+                // accepts keystrokes.
+                //
+                // Every OTHER commit (a plain edit or a removal) must NOT re-activate here: the row
+                // that triggered this rebuild already left activeInputField on its own — Enter/
+                // Escape's Deactivate, or a different row's OnActivated stealing focus (see
+                // ListDetailItem.Update's commit-trigger note) — so re-activating unconditionally
+                // immediately re-entered edit mode on the very row Enter had just closed, making a
+                // plain Enter look like it needed pressing twice.
+                menuOptions[target].OnActivated();
+            }
         }
     }
 }
