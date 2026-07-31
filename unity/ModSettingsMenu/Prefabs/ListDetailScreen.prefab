@@ -1653,7 +1653,7 @@ MonoBehaviour:
   useCustomUnselectedTextColor: 0
   customUnselectedTextColor: {r: 0, g: 0, b: 0, a: 0}
   optionComponent: {fileID: 0}
-  isValueText: 1
+  isValueText: 0
   isDanceWhenSelected: 0
   spriteRenderers: []
 --- !u!114 &5899102086658088527
