@@ -238,6 +238,8 @@ namespace ModSettingsMenu.UI
 
         public bool IsTopElementSelected() => false;
 
+        // Matches ModSettingsScreen's own GetCurrentWindowHeight — the top layout's self-reported
+        // render height feeds UIScrollWindow's scroll clipping.
         public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
 
         // Called from a row's OnDeselected (ListDetailItem). Reads every row's live text (trimmed,
