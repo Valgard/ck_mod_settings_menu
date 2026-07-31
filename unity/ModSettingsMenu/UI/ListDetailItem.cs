@@ -57,6 +57,37 @@ namespace ModSettingsMenu.UI
             base.OnSelected();
         }
 
+        // Distinguishes "actively editing" (SELECTED_VALUE_COLOR, vivid) from merely "selected/
+        // navigated" (SELECTED_TEXT_COLOR, pale — the prefab's own isValueText = false default),
+        // since our patches above now pin selectedIndex on this row throughout an edit, so a user
+        // could no longer tell the two states apart just by looking.
+        //
+        // Flipping isValueText alone does not immediately recolor an already-selected row: the
+        // color is only (re)applied at specific transitions (OnSelected/OnDeselected/the
+        // unselected<->selected cooldown blend in PugTextEffectLateUpdate) — while IsSelected()
+        // stays true every frame, which it now always does mid-edit, that method just runs the
+        // glyph "dance" animation and returns without touching color at all. But EVERY keystroke
+        // DOES pass back through one such transition: AppendString/RemoveCharBehindMarker/etc. all
+        // call pugText.Render(), which (unless dontResetEffectsOnRender) calls
+        // PugTextEffectMenuOption.ResetEffect -> OnSelected() again, re-reading isValueText fresh
+        // each time. A first attempt that only called pugText.SetTempColor(...) once here got
+        // silently overwritten back to the prefab default on the very next keystroke for exactly
+        // this reason. So the field flip IS the right mechanism here (not a redundant one) — it's
+        // just insufficient by itself for the very first frame, which OnSelected() below covers
+        // explicitly. No revert on end-of-edit is needed: every path that ends an edit already
+        // triggers ListDetailScreen.RebuildRows(), which destroys this (flipped) instance and
+        // creates a fresh one starting back at the prefab's own isValueText = false.
+        public override void OnActivated()
+        {
+            base.OnActivated();
+            var effect = GetComponent<PugTextEffectMenuOption>();
+            if (effect != null)
+            {
+                effect.isValueText = true;
+                effect.OnSelected();
+            }
+        }
+
         // Defense in depth: the actual click-away-during-edit fix lives in MenuPatch's Harmony
         // prefix on UIMouse.TrySelectNewElement (see there for why — the real mechanism is CK's
         // own code deactivating the old field BEFORE this ever runs, not this method itself). This
