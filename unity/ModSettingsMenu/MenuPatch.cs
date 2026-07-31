@@ -151,16 +151,23 @@ namespace ModSettingsMenu
         // letting DeselectAnySelectedUIElement or Select() run partially would set selectedIndex to
         // -1, which desyncs from activeInputField and would make PugTextEffectMenuOption.
         // IsSelected() (keyed off selectedIndex, not activeInputField) wrongly grey out the row still
-        // being edited. Scoped tightly to "both sides are ListDetailItem, and they differ" so
-        // anything else on this or any other menu (scrollbar, other widget types) is unaffected.
+        // being edited.
+        //
+        // Deliberately NOT scoped to "selectedUIElement is also a ListDetailItem": moving the mouse
+        // to EMPTY space (selectedUIElement == null) or onto a non-option element (e.g. the
+        // scrollbar) hits this same method with selectedUIElement != currentSelectedUIElement, which
+        // unconditionally runs Manager.ui.DeselectAnySelectedUIElement() -> RadicalMenu.
+        // DeselectAnyCurrentOption(), setting selectedIndex = -1 regardless of what ListDetailItem.
+        // OnDeselected does — reproduced: the edited row's text stayed blue only while the mouse
+        // stayed over ITS row, and turned grey (PugTextEffectMenuOption's UNSELECTED_TEXT_COLOR) the
+        // instant the mouse moved anywhere else, precisely because selectedIndex fell to -1 there and
+        // was never restored except by re-hovering the same row. Blocking on "target != the row being
+        // edited" (any target, including null) keeps selectedIndex pinned on the edited row regardless
+        // of where the mouse wanders while typing.
         [HarmonyPatch(typeof(UIMouse), "TrySelectNewElement"), HarmonyPrefix]
         public static bool UIMouse_TrySelectNewElement(UIelement selectedUIElement)
         {
-            if (
-                Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem active
-                && selectedUIElement is ModSettingsMenu.UI.ListDetailItem
-                && (object)selectedUIElement != active
-            )
+            if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem active && (object)selectedUIElement != active)
                 return false;
             return true;
         }
