@@ -56,7 +56,7 @@ namespace ModSettingsMenu.Settings
             };
             foreach (var kv in cf.Entries)
             {
-                var def = BuildDef(kv.Key.Key, kv.Value);
+                var def = BuildDef(cf.ConfigFilePath, kv.Key, kv.Value);
                 if (def != null)
                     section.Settings.Add(def);
             }
@@ -64,8 +64,9 @@ namespace ModSettingsMenu.Settings
         }
 
         // Widget-kind inference cascade (first match wins). See ADR-001 (the discovery base).
-        private static SettingDef BuildDef(string key, ConfigEntryBase e)
+        private static SettingDef BuildDef(string configFilePath, ConfigDefinition definition, ConfigEntryBase e)
         {
+            string key = definition.Key;
             var d = new SettingDef
             {
                 Key = key,
@@ -149,13 +150,20 @@ namespace ModSettingsMenu.Settings
 
             // 7. string -> a genuine comma-list routes to the dedicated list widget (drill-in); any
             //    other string (prose, single value, empty) falls back to the read-only Info row. The
-            //    classification lives HERE now (not a per-render view in ListWidget): the heuristic
-            //    picks the WIDGET KIND. A mis-classification is cosmetic in read-only v1 (spec §5); the
-            //    human override returns with editing (spec §7).
+            //    classification lives HERE (not a per-render view in ListWidget): the heuristic picks
+            //    the WIDGET KIND, on every Discover() call (i.e. every menu open) — so an entry edited
+            //    down below the heuristic's own >=2-token threshold would otherwise flip back to Info
+            //    on the very next open. ListKindStore remembers every entry BuildDef ever classified
+            //    as a genuine list, so that classification sticks even after later edits shrink it to 1
+            //    or 0 tokens (see ListKindStore's own doc comment for the full history).
             if (t == typeof(string))
             {
                 string sval = e.BoxedValue?.ToString() ?? "";
-                d.Kind = HeuristicSaysList(sval) ? SettingKind.List : SettingKind.Info;
+                string id = configFilePath + "|" + definition.Section + "|" + key;
+                bool isList = HeuristicSaysList(sval) || ListKindStore.WasEverList(id);
+                if (isList)
+                    ListKindStore.MarkAsList(id);
+                d.Kind = isList ? SettingKind.List : SettingKind.Info;
                 return d;
             }
 
@@ -200,10 +208,13 @@ namespace ModSettingsMenu.Settings
 
         /// <summary>Classifies a foreign string for BuildDef routing: a list iff there are >=2 non-empty
         /// comma tokens and every token is "compact" (<=32 chars, no '.'); a single-token or prose string
-        /// is not a list. This picks the WIDGET KIND at discovery (list widget vs. read-only Info). There
-        /// is no per-entry toggle in v1, so a misclassification has no user recourse — acceptable because
-        /// the view is read-only (a false positive only splits at commas). Recourse returns with the
-        /// editing version (see docs/specs/2026-07-23-list-widget-drill-in-redesign.md §5, §7).</summary>
+        /// is not a list. This picks the WIDGET KIND at discovery (list widget vs. read-only Info). A
+        /// genuine misclassification of a foreign mod's own string (prose that happens to look
+        /// list-shaped, or vice versa) still has no user recourse — the format-override toggle that
+        /// would let a player correct it is explicitly out of scope for this slice (see
+        /// docs/specs/2026-07-28-list-widget-editing-design.md §5). ListKindStore (see BuildDef) covers
+        /// a narrower, different case: an entry ALREADY confirmed as a list staying one after our own
+        /// editing shrinks it below this heuristic's own threshold.</summary>
         public static bool HeuristicSaysList(string value)
         {
             if (string.IsNullOrEmpty(value))
