@@ -287,27 +287,12 @@ namespace ModSettingsMenu.UI
             RenderContent();
             selectedIndex = -1; // stale index from before the rebuild — reset so SelectOptionIndex's
             // no-op guard and range check don't see a wrong/out-of-range value
-            // After adding a token (the add-row had content), keep focus on the fresh blank add-row
-            // that follows it — supports typing several new tokens in a row without renavigating down
-            // each time. Any other edit/removal just keeps the same numeric slot (clamped).
+            // After adding a token (the add-row had content), navigate onto the fresh blank add-row
+            // that follows it — one Enter fully exits edit mode either way; adding another token still
+            // needs an explicit activate on this now-selected row. Any other edit/removal just keeps
+            // the same numeric slot (clamped).
             int target = wasAddRow ? menuOptions.Count - 1 : Mathf.Clamp(previousIndex, 0, menuOptions.Count - 1);
             SelectOptionIndex(target);
-            if (wasAddRow)
-            {
-                // Keep typing continuity for "add several tokens in a row": after adding one, the
-                // add-row's own text cleared and a fresh blank add-row took its place one slot
-                // over. SelectOptionIndex only re-selects (navigation highlight) — it never calls
-                // OnActivated — so without this the fresh row would need an extra click before it
-                // accepts keystrokes.
-                //
-                // Every OTHER commit (a plain edit or a removal) must NOT re-activate here: the row
-                // that triggered this rebuild already left activeInputField on its own — Enter/
-                // Escape's Deactivate, or a different row's OnActivated stealing focus (see
-                // ListDetailItem.Update's commit-trigger note) — so re-activating unconditionally
-                // immediately re-entered edit mode on the very row Enter had just closed, making a
-                // plain Enter look like it needed pressing twice.
-                menuOptions[target].OnActivated();
-            }
         }
     }
 }
