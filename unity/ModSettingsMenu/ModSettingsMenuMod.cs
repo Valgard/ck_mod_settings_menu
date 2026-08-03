@@ -50,13 +50,21 @@ namespace ModSettingsMenu
             var clientScope = new ConfigScope(ConfigAccessLevel.Client);
             var testFile = new ConfigFile("TestListFixtures/config.cfg", saveOnInit: true, info);
             testFile.Bind("Settings", "Short", "Alpha, Beta, Gamma", new ConfigDescription("A short test list."), clientScope);
+            const string longValue =
+                "Item01, Item02, Item03, Item04, Item05, Item06, Item07, Item08, Item09, Item10, "
+                + "Item11, Item12, Item13, Item14, Item15, Item16, Item17, Item18, Item19, Item20";
+            testFile.Bind("Settings", "Long", longValue, new ConfigDescription("A long test list (scroll-follow check)."), clientScope);
+            // ViewOnly (not Server) is read-only unconditionally, regardless of Manager.main.player —
+            // ForeignConfigDiscovery.IsReadOnly only treats Server/Admin as read-only AT THE TITLE
+            // SCREEN specifically (no player yet); a real world session would make a Server-scoped
+            // entry editable again. ViewOnly is the one access level IsReadOnly returns true for
+            // unconditionally, so this stays a genuine read-only List regression check in any session.
             testFile.Bind(
                 "Settings",
-                "Long",
-                "Item01, Item02, Item03, Item04, Item05, Item06, Item07, Item08, Item09, Item10, "
-                    + "Item11, Item12, Item13, Item14, Item15, Item16, Item17, Item18, Item19, Item20",
-                new ConfigDescription("A long test list (scroll-follow check)."),
-                clientScope
+                "LongReadOnly",
+                longValue,
+                new ConfigDescription("A read-only copy of Long, to check the read-only List path."),
+                new ConfigScope(ConfigAccessLevel.ViewOnly)
             );
         }
 
