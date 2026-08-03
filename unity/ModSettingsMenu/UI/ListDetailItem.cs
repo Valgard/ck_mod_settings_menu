@@ -24,6 +24,11 @@ namespace ModSettingsMenu.UI
         // True only for the permanent trailing blank row ("+ Add"). Every other row is a real token.
         public bool isAddRow;
 
+        // True for a genuine read-only list (SettingDef.ReadOnly) — view/scroll/navigate like any
+        // other row, but OnActivated below never enters edit mode. Wired by ListDetailScreen.AddItem
+        // alongside owner/isAddRow.
+        public bool readOnly;
+
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
         // report INACTIVE, else RadicalMenu's includeInactive option scan navigates to it too (the
         // template is the list's last prefab sibling). Unchanged from the read-only version.
@@ -79,6 +84,14 @@ namespace ModSettingsMenu.UI
         // creates a fresh one starting back at the prefab's own isValueText = false.
         public override void OnActivated()
         {
+            // A read-only list's rows are still navigable (GetActiveStateInCurrentScene stays
+            // ACTIVE) so the player can view/scroll every token, but activating one must not enter
+            // edit mode — base.OnActivated() is what calls Manager.input.SetActiveInputField(this);
+            // skipping it here means activeInputField can never become a read-only row, so every
+            // other guard in this class and MenuPatch's two Harmony prefixes (all keyed off
+            // activeInputField) stay correctly inert without needing their own readOnly check.
+            if (readOnly)
+                return;
             base.OnActivated();
             var effect = GetComponent<PugTextEffectMenuOption>();
             if (effect != null)

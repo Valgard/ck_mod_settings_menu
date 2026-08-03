@@ -63,7 +63,11 @@ namespace ModSettingsMenu.Settings
             return section;
         }
 
-        // Widget-kind inference cascade (first match wins). See ADR-001 (the discovery base).
+        // Widget-kind inference cascade (first match wins). See ADR-001 (the discovery base). Every
+        // kind gets its own native widget regardless of read-only-ness — SettingDef.ReadOnly (view-
+        // only, or a server/admin setting this player can't change, incl. at the title where there
+        // is no player) rides alongside Kind rather than collapsing it to Info; SettingWidget /
+        // ListDetailItem check ReadOnly to decide whether the row responds to input, not Kind.
         private static SettingDef BuildDef(string configFilePath, ConfigDefinition definition, ConfigEntryBase e)
         {
             string key = definition.Key;
@@ -74,26 +78,19 @@ namespace ModSettingsMenu.Settings
                 Entry = e,
                 Foreign = true,
                 RequiresRestart = e.Scope != null && e.Scope.requireReload,
+                ReadOnly = IsReadOnly(e.Scope),
             };
-
-            // 1. View-only, or a server/admin setting this player can't change (incl. at the title,
-            //    where there is no player) -> read-only Info. Client stays editable-typed everywhere.
-            if (IsReadOnly(e.Scope))
-            {
-                d.Kind = SettingKind.Info;
-                return d;
-            }
 
             var t = e.SettingType;
 
-            // 2. bool -> Toggle.
+            // 1. bool -> Toggle.
             if (t == typeof(bool))
             {
                 d.Kind = SettingKind.Toggle;
                 return d;
             }
 
-            // 3. enum -> Choice over the enum names (Toml serializes an enum as its name, so
+            // 2. enum -> Choice over the enum names (Toml serializes an enum as its name, so
             //    Get/SetSerializedValue round-trip these tokens exactly).
             if (t.IsEnum)
             {
@@ -104,7 +101,7 @@ namespace ModSettingsMenu.Settings
 
             var av = e.Description != null ? e.Description.AcceptableValues : null;
 
-            // 4a. int with a handled range -> bounded Stepper (clean integer display; MSM's own path).
+            // 3a. int with a handled range -> bounded Stepper (clean integer display; MSM's own path).
             if (t == typeof(int) && TryRange(av, out float imin, out float imax))
             {
                 d.Kind = SettingKind.Stepper;
@@ -113,7 +110,7 @@ namespace ModSettingsMenu.Settings
                 return d;
             }
 
-            // 4b. float with a handled range -> Slider (Number display).
+            // 3b. float with a handled range -> Slider (Number display).
             if (t == typeof(float) && TryRange(av, out float fmin, out float fmax))
             {
                 d.Kind = SettingKind.Slider;
@@ -124,15 +121,17 @@ namespace ModSettingsMenu.Settings
                 return d;
             }
 
-            // 5. Any other AcceptableValues constraint we don't render editable in v1
-            //    (AcceptableValueList, or a range of an unhandled numeric type) -> read-only.
+            // 4. Any other AcceptableValues constraint we don't render editable in v1 (AcceptableValueList,
+            //    or a range of an unhandled numeric type) -> read-only Info regardless of scope — there is
+            //    no editable widget for this shape at all, not just "not allowed to touch it right now".
             if (av != null)
             {
                 d.Kind = SettingKind.Info;
+                d.ReadOnly = true;
                 return d;
             }
 
-            // 6. Bare numeric, no constraint -> unbounded Stepper.
+            // 5. Bare numeric, no constraint -> unbounded Stepper.
             if (t == typeof(int))
             {
                 d.Kind = SettingKind.Stepper;
@@ -148,14 +147,17 @@ namespace ModSettingsMenu.Settings
                 return d;
             }
 
-            // 7. string -> a genuine comma-list routes to the dedicated list widget (drill-in); any
-            //    other string (prose, single value, empty) falls back to the read-only Info row. The
-            //    classification lives HERE (not a per-render view in ListWidget): the heuristic picks
-            //    the WIDGET KIND, on every Discover() call (i.e. every menu open) — so an entry edited
-            //    down below the heuristic's own >=2-token threshold would otherwise flip back to Info
-            //    on the very next open. ListKindStore remembers every entry BuildDef ever classified
-            //    as a genuine list, so that classification sticks even after later edits shrink it to 1
-            //    or 0 tokens (see ListKindStore's own doc comment for the full history).
+            // 6. string -> a genuine comma-list routes to the dedicated list widget (drill-in), read-only
+            //    or not (ListDetailItem/ListDetailScreen render every row inert when ReadOnly is set); any
+            //    other string (prose, single value, empty) falls back to a read-only Info row regardless
+            //    of scope — there's no editable widget for free-text prose in this slice (the
+            //    format-override toggle that would add one is still out of scope, spec §5). The
+            //    classification lives HERE (not a per-render view in ListWidget): the heuristic picks the
+            //    WIDGET KIND, on every Discover() call (i.e. every menu open) — so an entry edited down
+            //    below the heuristic's own >=2-token threshold would otherwise flip back to Info on the
+            //    very next open. ListKindStore remembers every entry BuildDef ever classified as a
+            //    genuine list, so that classification sticks even after later edits shrink it to 1 or 0
+            //    tokens (see ListKindStore's own doc comment for the full history).
             if (t == typeof(string))
             {
                 string sval = e.BoxedValue?.ToString() ?? "";
@@ -164,11 +166,14 @@ namespace ModSettingsMenu.Settings
                 if (isList)
                     ListKindStore.MarkAsList(id);
                 d.Kind = isList ? SettingKind.List : SettingKind.Info;
+                if (!isList)
+                    d.ReadOnly = true;
                 return d;
             }
 
-            // 8. everything else (unhandled type) -> read-only.
+            // 7. everything else (unhandled type) -> read-only Info regardless of scope.
             d.Kind = SettingKind.Info;
+            d.ReadOnly = true;
             return d;
         }
 

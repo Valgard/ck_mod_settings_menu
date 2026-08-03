@@ -21,6 +21,7 @@ namespace ModSettingsMenu.UI
 
         private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance — UNCHANGED
         private SettingDef _activeDef; // the setting this open session is showing/editing — set once
+        private bool _readOnly; // this open session's own copy of _activeDef.ReadOnly — set in Populate
 
         // in Populate() from _pending (which Activate() nulls right after)
         private ListDetailItem _addRow; // the permanent trailing blank row, tracked by RebuildRows
@@ -71,6 +72,7 @@ namespace ModSettingsMenu.UI
         private void Populate()
         {
             _activeDef = _pending;
+            _readOnly = _activeDef != null && _activeDef.ReadOnly;
             _rebuildPending = false; // a stale deferred rebuild from a prior open can't apply here
             _scroll = GetComponent<UIScrollWindow>();
             if (box == null || box.itemContainer == null || box.itemTemplate == null)
@@ -130,15 +132,17 @@ namespace ModSettingsMenu.UI
             menuOptions.Clear();
             _addRow = null;
 
-            // One editable row per non-empty token...
+            // One row per non-empty token...
             foreach (var raw in Value().Split(','))
             {
                 var token = raw.Trim();
                 if (token.Length > 0)
                     AddItem(token, isAddRow: false);
             }
-            // ...plus one permanent trailing blank row for adding a new token.
-            AddItem("", isAddRow: true);
+            // ...plus one permanent trailing blank row for adding a new token — a read-only list has
+            // nothing to add, so it gets no add-row at all, not just an inert one.
+            if (!_readOnly)
+                AddItem("", isAddRow: true);
         }
 
         // Clone the (inactive) item template into the container, seed its text, register it as a
@@ -153,6 +157,7 @@ namespace ModSettingsMenu.UI
                 return;
             item.owner = this;
             item.isAddRow = isAddRow;
+            item.readOnly = _readOnly;
             if (item.pugText != null)
                 item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
             // SettingWidget.SetText and the hintText line below; must be
