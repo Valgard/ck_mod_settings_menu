@@ -19,7 +19,7 @@ namespace ModSettingsMenu.UI
     {
         public Transform contentRoot; // Options/Scroll — hosts the top LinearLayout
         public GameObject sectionTemplate; // inactive; SectionBox (Header + Hint + Widgets-box)
-        public GameObject toggleTemplate; // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
+        public GameObject settingTemplate; // inactive widget row; has a SettingWidget + Label/Value
         public GameObject listTemplate; // inactive list-widget row; has a ListWidget + ListWidgetBox (wired in the Editor)
 
         internal const int RowPaddingPx = 6; // vertical breathing room added to each row's text height
@@ -128,9 +128,9 @@ namespace ModSettingsMenu.UI
         public void Populate()
         {
             _scroll = GetComponent<UIScrollWindow>();
-            if (contentRoot == null || toggleTemplate == null || sectionTemplate == null)
+            if (contentRoot == null || settingTemplate == null || sectionTemplate == null)
             {
-                Debug.LogWarning("[ModSettingsMenu] menu prefab not wired (contentRoot/toggleTemplate/sectionTemplate) — menu stays empty.");
+                Debug.LogWarning("[ModSettingsMenu] menu prefab not wired (contentRoot/settingTemplate/sectionTemplate) — menu stays empty.");
                 return;
             }
             RenderTitle();
@@ -203,7 +203,7 @@ namespace ModSettingsMenu.UI
                             continue;
                         }
                     }
-                    var wGo = Object.Instantiate(toggleTemplate, container); // nest INTO the box
+                    var wGo = Object.Instantiate(settingTemplate, container); // nest INTO the box
                     wGo.SetActive(true);
                     wGo.name = def.Kind + " " + def.Key;
                     var widget = wGo.GetComponent<SettingWidget>();
@@ -411,10 +411,10 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Templates under WidgetTemplates (SectionTemplate, ToggleTemplate, and future
-        // Slider/Stepper ones) are instantiation sources only — never rendered. Force them
-        // inactive at setup so a stray Editor activation can't leak a phantom row/section into
-        // the menu. Instantiate works fine on inactive templates; the clones are SetActive(true).
+        // Templates under WidgetTemplates (SectionTemplate, SettingTemplate, ListTemplate) are
+        // instantiation sources only — never rendered. Force them inactive at setup so a stray
+        // Editor activation can't leak a phantom row/section into the menu. Instantiate works
+        // fine on inactive templates; the clones are SetActive(true).
         private void DeactivateTemplates()
         {
             var templates = transform.Find("WidgetTemplates");
