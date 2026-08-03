@@ -52,6 +52,10 @@ namespace ModSettingsMenu.Settings
         public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
         public bool Foreign; // true → discovered (not API-registered): raw label, serialized Choice, marker
         public bool Unbounded; // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
+        public bool ReadOnly; // true → this row's own Kind still renders natively, but the widget (or,
+        // for List, the drill-in) must not respond to input: either a genuine permission lock
+        // (view-only/server-locked and not this session's host) or, hard-coded true regardless of
+        // scope, a Kind == Info fallback where no editable widget exists for the value's shape at all
     }
 
     /// <summary>
