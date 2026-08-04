@@ -93,7 +93,11 @@ namespace ModSettingsMenu.UI
             if (readOnly)
                 return;
             base.OnActivated();
-            var effect = GetComponent<PugTextEffectMenuOption>();
+            // PugTextEffectMenuOption now lives on the "Text" child alongside the PugText it tints
+            // (the ICL/SettingTemplate "Display" pattern) — GetComponentInChildren is safe here (unlike
+            // for PugText itself) because this component type is unique in the row's hierarchy, so
+            // there's no sibling-order ambiguity to worry about.
+            var effect = GetComponentInChildren<PugTextEffectMenuOption>();
             if (effect != null)
             {
                 effect.isValueText = true;
