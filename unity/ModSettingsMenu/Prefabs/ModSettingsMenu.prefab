@@ -891,7 +891,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4771092198100777}
-  - component: {fileID: 5923109470523751430}
   - component: {fileID: 5255929089100777}
   m_Layer: 5
   m_Name: Hint
@@ -915,24 +914,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3054085269736549703}
   m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
---- !u!114 &5923109470523751430
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1642988549100777}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: -601971722, guid: 3519ac58e5ff54941a4a69512016923c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  centerInParent: 0
-  activeInPlatforms: -1
-  activeInStoreFronts: -1
-  pivot: 0
-  renderWidthPixels: 0
-  renderHeightPixels: 0
 --- !u!114 &5255929089100777
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2800,7 +2781,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8719119960680466008}
-  - component: {fileID: 5396801283466417968}
   - component: {fileID: 5255929089774228046}
   m_Layer: 5
   m_Name: Header
@@ -2824,24 +2804,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3054085269736549703}
   m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
---- !u!114 &5396801283466417968
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9189518856439252558}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: -601971722, guid: 3519ac58e5ff54941a4a69512016923c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  centerInParent: 0
-  activeInPlatforms: -1
-  activeInStoreFronts: -1
-  pivot: 0
-  renderWidthPixels: 0
-  renderHeightPixels: 0
 --- !u!114 &5255929089774228046
 MonoBehaviour:
   m_ObjectHideFlags: 0
