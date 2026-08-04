@@ -98,6 +98,18 @@ namespace ModSettingsMenu.UI
 
             RebuildRows();
 
+            // ListDetailScreen is a singleton reused for every list — selectedIndex survives across
+            // opens of DIFFERENT lists (RadicalMenu's own field, never reset by this screen otherwise).
+            // A stale index from a longer previous list is out of range for a shorter one, and
+            // RadicalMenu.Activate() indexes menuOptions[selectedIndex] UNGUARDED via
+            // DeselectAnyCurrentOption() whenever SystemIsUsingMouse() — throwing before base.Activate()
+            // ever reaches RenderContent() below, so every row keeps its prefab-default
+            // renderHeightPixels (0) and collapses onto the same position. -1 is RadicalMenu's own
+            // "nothing selected" sentinel (its declared default, and what every one of its own range
+            // checks treats as safe) — the same reset the post-edit rebuild path in Update() already
+            // does for the identical reason.
+            selectedIndex = -1;
+
             if (_scroll != null)
             {
                 _scroll.scrollingContent = box.itemContainer;
