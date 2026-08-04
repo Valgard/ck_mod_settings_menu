@@ -10,9 +10,15 @@ namespace ModSettingsMenu.UI
     /// nested LinearLayoutUIComponents. contentRoot stacks one instance per registered
     /// section; each section instance stacks [Header, Hint, Widgets-box] vertically, and the
     /// Widgets box (a LinearLayout with a 9-slice background) stacks that section's toggles —
-    /// so a bordered frame wraps just the options, with the heading + hint above it. Each row
-    /// gets a WrapperUIComponent so its layout measures it; toggles stay in menuOptions for
-    /// keyboard navigation. GetCurrentWindowHeight returns the top layout's render height (feeds scroll).
+    /// so a bordered frame wraps just the options, with the heading + hint above it. Each WIDGET
+    /// ROW gets a WrapperUIComponent so its (composite Label+Value) layout measures it; Header and
+    /// Hint are each a single, standalone PugText and deliberately do NOT — their own natural
+    /// rendered height is already correct, and a same-GameObject WrapperUIComponent would only
+    /// silently compete with it for LinearLayoutUIComponent's own
+    /// GetComponent&lt;UIComponentMonoBehaviour&gt;() lookup, whichever wins depending on component
+    /// order (a regression once found and fixed the hard way — don't reintroduce it). Toggles stay
+    /// in menuOptions for keyboard navigation. GetCurrentWindowHeight returns the top layout's
+    /// render height (feeds scroll).
     /// </summary>
     [RequireComponent(typeof(UIScrollWindow))]
     public sealed class ModSettingsScreen : RadicalMenu, IScrollable
@@ -360,7 +366,6 @@ namespace ModSettingsMenu.UI
                 // "discovered", not author-curated.
                 string heading = section.Foreign ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected") : section.DisplayName;
                 box.header.RenderPlain(heading);
-                SetRowHeight(box.header.gameObject, RowHeightPx(box.header));
             }
             if (box != null && box.hint != null)
             {
@@ -369,10 +374,7 @@ namespace ModSettingsMenu.UI
                 bool hasHint = !string.IsNullOrEmpty(section.HintText);
                 box.hint.gameObject.SetActive(hasHint);
                 if (hasHint)
-                {
                     box.hint.RenderPlain(Loc.T(section.HintTerm, section.HintText));
-                    SetRowHeight(box.hint.gameObject, RowHeightPx(box.hint));
-                }
             }
             return sGo;
         }
