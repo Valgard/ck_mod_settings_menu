@@ -192,7 +192,12 @@ namespace ModSettingsMenu.UI
                 var go = box.itemContainer.GetChild(i).gameObject;
                 if (!go.activeSelf)
                     continue;
-                var pt = go.GetComponent<PugText>();
+                // ItemTemplate's own label PugText now lives on a child GO (the ICL/SettingTemplate
+                // "Display" pattern), so it is read via ListDetailItem.pugText — the same serialized
+                // reference ModSettingsScreen reads via SettingWidget.labelText — not GetComponent<PugText>()
+                // on the row root, which would return null now that WrapperUIComponent is the row's only
+                // UIComponentMonoBehaviour.
+                var pt = go.GetComponent<ListDetailItem>()?.pugText;
                 var wrap = go.GetComponent<WrapperUIComponent>();
                 if (pt != null && wrap != null)
                     wrap.renderHeightPixels = ModSettingsScreen.RowHeightPx(pt);
