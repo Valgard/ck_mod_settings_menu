@@ -37,6 +37,13 @@ export MOD_INSTALL_PATH="$MOD_INSTALL_BASE_PATH/$MOD_NAME_ID-build"
 # Repo root, read by the shared CLIPublishHelper to locate CHANGELOG.md.
 export MOD_REPO_ROOT="$PWD"
 
+# mod.io "Type" tags for the listing — PIPE-separated, because the values
+# contain spaces. Synchronised (not just added) by the shared
+# CLIPublishHelper, so a value dropped here is removed on mod.io. Valid:
+# Visual, Audio, Item, NPC, Quality of Life, Overhaul, Language, World,
+# Library, Other.
+export CK_MODIO_TYPE="Visual|Library|Quality of Life"
+
 # --- Localisation (read by utils/CLIBuildHelper.cs -> LocalizationGenerator.GenerateFromEnv) ---
 # LOC_YAML lives OUTSIDE unity/ so the ModBuilder doesn't pack the source yaml.
 # LOC_TABLE is the shared CK language-address table, inherited from the parent.
