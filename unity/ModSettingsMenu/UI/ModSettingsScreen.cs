@@ -57,15 +57,23 @@ namespace ModSettingsMenu.UI
         // structure + fills menuOptions; the layouts are rendered in RenderContent AFTER
         // base.Activate, because LinearLayout skips children while the hierarchy is inactive (their
         // heights would compute as 0).
-        // Set true (in SettingWidget.Adjust) when a RequiresRestart-flagged setting actually changes
-        // during this menu visit; reset on open (Activate); consumed on leave (Deactivate) to raise
-        // CK's restart prompt. Static: MenuInstance is a singleton (MenuPatch), so no per-instance
-        // plumbing from the widgets is needed.
+        // Set true (in SettingWidget.Adjust, or ListDetailScreen.OnRowTextCommitted for a
+        // RequiresRestart-flagged list) when a restart-required setting actually changes during this
+        // menu visit; consumed on leave (Deactivate, pop=true only — see below) to raise CK's restart
+        // prompt. Static: MenuInstance is a singleton (MenuPatch), so no per-instance plumbing from
+        // the widgets is needed.
+        //
+        // Deliberately NOT reset in Activate(): opening the list drill-in pushes it on top via
+        // MenuManager.PushMenu, which — since both screens have popsOtherActiveMenus=true (the
+        // prefab default) — calls THIS screen's Deactivate(pop: FALSE) (merely covered, not left) and,
+        // on the drill-in's own PopMenu() close, calls Activate() again to resume THIS screen. A flag
+        // set while covered (a restart-required list edit made inside the drill-in) must survive that
+        // round-trip; resetting here on every Activate() treated "resuming after a covered visit" the
+        // same as "a genuinely fresh visit" and discarded it before the player ever actually left.
         internal static bool RestartPending;
 
         public override void Activate()
         {
-            RestartPending = false; // fresh visit — only changes made from now on count
             Populate();
             base.Activate();
             RenderContent();
@@ -73,10 +81,13 @@ namespace ModSettingsMenu.UI
 
         // Leaving the Mod Settings screen (RadicalMenu's deactivate/back hook). If a restart-required
         // setting changed this visit, mirror CK's own mods-changed flow: raise the vanilla restart popup.
+        // pop=false means we are merely being covered by a child menu (the list drill-in) and will
+        // resume — not actually leaving — so RestartPending must be left untouched for that case (see
+        // the field's own comment above for why).
         public override void Deactivate(bool pop)
         {
             base.Deactivate(pop);
-            if (RestartPending)
+            if (pop && RestartPending)
             {
                 RestartPending = false;
                 // Defer the prompt OFF this Deactivate call stack. StartNewDisplaySequence pushes a

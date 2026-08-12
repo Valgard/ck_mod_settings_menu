@@ -288,9 +288,27 @@ namespace ModSettingsMenu.UI
                     tokens.Add(text);
             }
             string joined = string.Join(",", tokens);
-            if (joined == Value())
+            // Compare against the STORED value tokenized the same way (Split/Trim/drop-empty, exactly
+            // RebuildRows's own rule) rather than the raw string — Value() may carry authoring
+            // formatting (e.g. "Alpha, Beta, Gamma" with a space after each comma) that joined never
+            // reproduces, so a raw comparison never matched and every mere open+close (no real edit at
+            // all) wrote and rebuilt regardless, defeating the whole point of this no-op guard.
+            var existingTokens = new List<string>();
+            foreach (var raw in Value().Split(','))
+            {
+                var token = raw.Trim();
+                if (token.Length > 0)
+                    existingTokens.Add(token);
+            }
+            if (joined == string.Join(",", existingTokens))
                 return;
             _activeDef.Entry.BoxedValue = joined;
+            // Mirrors SettingWidget.Adjust's identical line: a restart-required setting that actually
+            // changed marks the menu dirty; leaving ModSettingsScreen (not this drill-in — the flag is
+            // static and consumed by ModSettingsScreen.Deactivate, since the drill-in is only ever
+            // pushed on top of it) then raises CK's restart prompt.
+            if (_activeDef.RequiresRestart)
+                ModSettingsScreen.RestartPending = true;
             _rebuildPending = true;
             _lastCommitWasAddRow = row.isAddRow;
         }
