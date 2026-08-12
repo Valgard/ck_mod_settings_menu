@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text;
 using ModSettingsMenu.Settings;
 using UnityEngine;
@@ -48,13 +47,7 @@ namespace ModSettingsMenu.UI
         // column is narrow) otherwise wrap the PugText to several lines and blow up the row height.
         private string Preview()
         {
-            var tokens = new List<string>();
-            foreach (var raw in Value().Split(','))
-            {
-                var t = raw.Trim();
-                if (t.Length > 0)
-                    tokens.Add(t);
-            }
+            var tokens = ListTokenizer.Tokenize(Value());
             if (tokens.Count == 0)
                 return Loc.T("ModSettingsMenu-UI/ListEmpty", "(empty)");
             var sb = new StringBuilder();
