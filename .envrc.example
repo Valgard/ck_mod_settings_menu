@@ -49,3 +49,14 @@ export CK_MODIO_TYPE="Visual|Library|Quality of Life"
 # LOC_TABLE is the shared CK language-address table, inherited from the parent.
 export LOC_YAML="$PWD/localization/localization.yaml"
 export LOC_OUT="$PWD/unity/$MOD_NAME/Localization/Generated"
+
+# --- Dev-only build flags (read by utils/CLIBuildHelper.cs -> DevFlags.generated.cs) ---
+# Comma-separated flag names, checked at runtime via DevFlags.Is("<name>"). Regenerated on
+# EVERY build, so leaving this unset (the default — do NOT export it here) always restores the
+# safe "everything off" state, even if a previous build was run with a flag on. Uncomment only
+# for a single local build session while iterating, e.g.:
+#   MOD_DEV_FLAGS=TestFixtures ../utils/build.sh
+# "TestFixtures" enables ModSettingsMenuMod.EarlyInit's four disposable foreign-config list rows
+# (Short/Long/LongReadOnly/ShortRestart) for exercising the list-widget drill-in without a real
+# foreign mod installed.
+# export MOD_DEV_FLAGS="TestFixtures"
