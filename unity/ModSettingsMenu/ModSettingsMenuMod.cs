@@ -66,6 +66,16 @@ namespace ModSettingsMenu
                 new ConfigDescription("A read-only copy of Long, to check the read-only List path."),
                 new ConfigScope(ConfigAccessLevel.ViewOnly)
             );
+            // TEMPORARY — exercises OnRowTextCommitted's RequiresRestart wiring (no existing fixture
+            // above sets requireReload, so there was previously no way to trigger the restart prompt
+            // from a list edit at all). REMOVE alongside the other test fixtures.
+            testFile.Bind(
+                "Settings",
+                "ShortRestart",
+                "Alpha, Beta, Gamma",
+                new ConfigDescription("A restart-required copy of Short, to check the list RequiresRestart path."),
+                new ConfigScope(ConfigAccessLevel.Client, requireReload: true)
+            );
         }
 
         public void Init()
