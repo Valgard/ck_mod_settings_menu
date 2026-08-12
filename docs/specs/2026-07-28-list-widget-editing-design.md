@@ -148,6 +148,27 @@ preview shows a placeholder (e.g. "(empty)") instead of the usual
   per-token length/charset rules beyond what `RadicalMenuOptionTextInput`
   already offers generically.
 
+### Known risk, accepted for this slice: heuristic misclassification now has a write-side consequence
+
+ADR-002's "Bad" column judged a `HeuristicSaysList` misclassification
+harmless in the read-only v1: "a mis-classified string has no user recourse
+... a read-only miss only splits at commas, it never traps the user." That
+reasoning assumed a read-only drill-in. This slice makes the drill-in
+editable, so the same misclassification now has a materially different
+consequence: `ListDetailScreen.OnRowTextCommitted` persists a lossy,
+comma-rejoined `BoxedValue` straight into whatever `ConfigEntry` the
+heuristic pointed at — a third-party mod's config, not MSM's own — with no
+confirmation step and no path back to the original formatting. Flagged
+during this branch's `pr-review-toolkit:review-pr` gate (2026-08-12) as a
+Critical finding; deliberately **not** fixed in this slice. `HeuristicSaysList`
+itself is out of scope to tighten (it is pre-existing, shared with the
+`Info` routing path, and tightening it risks misrouting genuine lists the
+other way); the two real mitigations — a confirmation step before the first
+write to an unconfirmed entry, or the format-override toggle that lets a
+user correct a misclassification directly — are both new UX surface that
+belongs with the deferred format-override work above, not bolted onto this
+slice. Accepted as a known, tracked risk until that follow-up lands.
+
 ## 6 · Edge cases
 
 - **Clearing every row at once:** each row's own `Deactivate` commits
