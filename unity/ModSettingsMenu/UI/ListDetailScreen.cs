@@ -64,10 +64,24 @@ namespace ModSettingsMenu.UI
         // In those cases the row would stay "active" with nothing left to clear it, silently
         // dropping the pending edit. Force the commit here, once, whenever this screen closes —
         // regardless of how the player left it.
+        //
+        // Then explicitly clear Manager.input.activeInputField itself: committing above does NOT do
+        // this (OnRowTextCommitted only reads/persists text), so without the explicit
+        // RadicalMenuOptionTextInput.Deactivate(commit: false) call below, a screen closed mid-edit
+        // left activeInputField pointing at this now-inactive (and, on the next open's RebuildRows,
+        // destroyed) row — the same class of stale-reference bug MenuPatch's two Harmony prefixes
+        // already guard against for OTHER transitions, just reached here by a different path. Calling
+        // it BEFORE base.Deactivate(pop) does not double-commit: the only thing that reacts to this
+        // transition is ListDetailItem.Update()'s own check, which needs the row's GameObject to still
+        // be receiving Update() calls — base.Deactivate(pop) (right after) deactivates the whole
+        // hierarchy, so that check never runs again for this now-inert row.
         public override void Deactivate(bool pop)
         {
             if (Manager.input.activeInputField is ListDetailItem activeItem && activeItem.owner == this)
+            {
                 OnRowTextCommitted(activeItem);
+                activeItem.Deactivate(commit: false);
+            }
             base.Deactivate(pop);
         }
 
