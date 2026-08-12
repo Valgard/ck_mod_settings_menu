@@ -88,6 +88,15 @@ from `../utils/`.
   - `RadicalMenu.TypeToMenu` **prefix** — resolves `SettingsMenuType` → `MenuInstance`
     and `ListDetailMenuType` → `ListDetailInstance` (each returns `false` to
     short-circuit vanilla); everything else falls through.
+  - `MenuManager.SelectOption` **prefix** and `UIMouse.TrySelectNewElement` **prefix** —
+    both block CK's own mouse-hover-driven reselection while a `ListDetailItem` row is
+    actively being edited (`Manager.input.activeInputField` is that row). Two separate
+    mechanisms need two separate patches: `SelectOption` stops the hover recolour/SFX
+    every frame the mouse passes over another row; `TrySelectNewElement` stops CK's own
+    hardcoded `activeInputField.Deactivate(commit: false)` call that would otherwise end
+    the edit the instant the mouse (not even a click) passes over anything else.
+    Blocking only the second would still let selection visually drift; blocking only the
+    first would still lose the edit on stray mouse movement.
 - **`Loc`** — resolves a loc term for the active language via
   `API.Localization.GetLocalizedTerm`; `T(term)` for framework-own strings (yaml
   guarantees a value) and `T(term, fallback)` for consumer strings (falls back to the
@@ -173,18 +182,41 @@ compact row plus a pushed detail screen:
   text colour. Read-only — the classification already happened in
   `ForeignConfigDiscovery`, so there is no per-row toggle.
 - **`ListDetailScreen : RadicalMenu, IScrollable`** (+ **`ListDetailBox`** — `title`,
-  `itemContainer`, `itemTemplate`; and **`ListDetailItem : RadicalMenuOption`** for each
-  row) — the drill-in itself, a pushed sub-menu (`ListDetailMenuType`) showing one
-  comma-list in full: a title plus one navigable read-only row per token, scrollable,
-  with controller/keyboard scroll-follow that reaches the bottom (the overflow fix that
-  motivated the redesign). Same three-step open as `ModSettingsScreen` (Populate →
-  `base.Activate` → RenderContent) for the LinearLayout-height reason. `_pending` (the
+  `itemContainer`, `itemTemplate`; and **`ListDetailItem : RadicalMenuOptionTextInput`**
+  for each row) — the drill-in itself, a pushed sub-menu (`ListDetailMenuType`) showing
+  one comma-list in full: a title plus one navigable, **editable** row per token
+  (add/edit/remove — CK's own text-input base class, the same one the character-name
+  field uses, so on-screen-keyboard/controller input comes for free), scrollable, with
+  controller/keyboard scroll-follow that reaches the bottom (the overflow fix that
+  motivated the redesign). A genuinely read-only `SettingDef` (`SettingDef.ReadOnly`)
+  still shows every row navigable for viewing, just without the trailing "+ Add" row and
+  without ever entering edit mode. Same three-step open as `ModSettingsScreen` (Populate
+  → `base.Activate` → RenderContent) for the LinearLayout-height reason. `_pending` (the
   setting to show) is seeded on the singleton instance by `Open` before `PushMenu`
   resolves it, and cleared after consume. `ListDetailItem.GetActiveStateInCurrentScene`
-  gates on `activeSelf` so the inactive row template isn't itself navigable.
+  gates on `activeSelf` so the inactive row template isn't itself navigable. A row's
+  edit commits when it stops being `Manager.input.activeInputField` (Enter/Escape/click
+  a different row) or when the screen itself closes (`Deactivate`'s own safety net) —
+  never on mere mouse hover, which CK's own `OnDeselected` also fires on.
+- **`ListKindStore`** (`Settings`, persisted via `API.ConfigFilesystem` like
+  `ConfigStore`) — sticky "this foreign string was once a genuine list" memory.
+  `ForeignConfigDiscovery.HeuristicSaysList` needs ≥2 tokens, and discovery re-runs on
+  every menu open; editing a list down to 0-1 tokens through the drill-in would
+  otherwise silently reclassify it back to a read-only `Info` row on the next open. Once
+  `BuildDef` sees a genuine list for an entry, marking it here keeps it a `List` even
+  after an edit drops it below the heuristic's threshold.
 - **`PugTextExtensions`** — one shared `PugText.RenderPlain(string)` extension
   (localize=false + forced render, null-tolerant) used by every screen instead of the
   render helper that used to be copied into each.
+- **`PugTextEffectPatch`** (`[HarmonyPatch]` on `PugTextEffectMenuOption.ResetEffect`) —
+  suppresses harmless log-noise: every row's `Populate` sets its text before
+  `base.Activate()` runs (see "Build ≠ render" below), so `PugText`'s own self-init
+  guard renders it fine, but the sibling `PugTextEffectMenuOption` has no such guard and
+  reaches `ResetEffect` with a still-null text reference, logging a warning every row on
+  every open. The prefix skips the original body only when the instance is not yet
+  active-in-hierarchy AND sits under one of this mod's own two screens — narrow enough
+  that a genuinely null text reference anywhere else in the game (a real fault) still
+  surfaces its warning unchanged.
 
 ### Shared editor helpers
 
