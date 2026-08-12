@@ -222,19 +222,15 @@ namespace ModSettingsMenu.Settings
         /// editing shrinks it below this heuristic's own threshold.</summary>
         public static bool HeuristicSaysList(string value)
         {
-            if (string.IsNullOrEmpty(value))
+            var tokens = ListTokenizer.Tokenize(value);
+            if (tokens.Count < 2)
                 return false;
-            int nonEmpty = 0;
-            foreach (var raw in value.Split(','))
+            foreach (var tok in tokens)
             {
-                var tok = raw.Trim();
-                if (tok.Length == 0)
-                    continue;
                 if (tok.Length > 32 || tok.IndexOf('.') >= 0)
                     return false;
-                nonEmpty++;
             }
-            return nonEmpty >= 2;
+            return true;
         }
     }
 }
