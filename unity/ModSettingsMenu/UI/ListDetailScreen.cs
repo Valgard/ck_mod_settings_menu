@@ -6,9 +6,12 @@ namespace ModSettingsMenu.UI
 {
     /// <summary>
     /// The list drill-in detail screen: a pushed RadicalMenu showing one comma-list in full — a
-    /// title plus one navigable read-only row per item, scrollable. Controller/keyboard navigation
-    /// walks the rows and scroll-follow reaches the bottom (the overflow fix). Read-only in v1; the
-    /// rows are the future home of per-token editing.
+    /// title plus one navigable row per token, scrollable, each row a live text-input field
+    /// (add/edit/remove a token, committed on Enter/Escape/click-away — see ListDetailItem).
+    /// A genuinely read-only SettingDef (SettingDef.ReadOnly) still shows every row navigable for
+    /// viewing, just without the trailing add-row and without ever entering edit mode. Controller/
+    /// keyboard navigation walks the rows and scroll-follow reaches the bottom (the overflow fix
+    /// that motivated this screen over a single truncated Info preview).
     ///
     /// Unlike ModSettingsScreen (rows nested row->box->section->contentRoot), the item rows here are
     /// DIRECT children of box.itemContainer (the scroll content), so the scroll-follow is the simple
@@ -21,10 +24,11 @@ namespace ModSettingsMenu.UI
 
         private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance — UNCHANGED
         private SettingDef _activeDef; // the setting this open session is showing/editing — set once
-        private bool _readOnly; // this open session's own copy of _activeDef.ReadOnly — set in Populate
 
-        // in Populate() from _pending (which Activate() nulls right after)
-        private ListDetailItem _addRow; // the permanent trailing blank row, tracked by RebuildRows
+        // this open session's own copy of _activeDef.ReadOnly — set in Populate from _pending (which
+        // Activate() nulls right after)
+        private bool _readOnly;
+
         private bool _rebuildPending; // set by OnRowTextCommitted, consumed by Update — see design note
         private bool _lastCommitWasAddRow; // which row triggered the pending rebuild (focus-follow target)
         private UIScrollWindow _scroll;
@@ -142,7 +146,6 @@ namespace ModSettingsMenu.UI
                 Object.Destroy(child);
             }
             menuOptions.Clear();
-            _addRow = null;
 
             // One row per non-empty token...
             foreach (var raw in Value().Split(','))
@@ -183,10 +186,7 @@ namespace ModSettingsMenu.UI
                 item.hintText.SetText("");
             }
             if (isAddRow)
-            {
                 item.hintString = Loc.T("ModSettingsMenu-UI/ListAddHint", "+ Add");
-                _addRow = item;
-            }
             item.SetParentMenu(this);
             menuOptions.Add(item);
         }
