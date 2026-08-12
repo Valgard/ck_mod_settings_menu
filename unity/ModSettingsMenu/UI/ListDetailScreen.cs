@@ -65,22 +65,34 @@ namespace ModSettingsMenu.UI
         // dropping the pending edit. Force the commit here, once, whenever this screen closes —
         // regardless of how the player left it.
         //
-        // Then explicitly clear Manager.input.activeInputField itself: committing above does NOT do
-        // this (OnRowTextCommitted only reads/persists text), so without the explicit
-        // RadicalMenuOptionTextInput.Deactivate(commit: false) call below, a screen closed mid-edit
-        // left activeInputField pointing at this now-inactive (and, on the next open's RebuildRows,
-        // destroyed) row — the same class of stale-reference bug MenuPatch's two Harmony prefixes
-        // already guard against for OTHER transitions, just reached here by a different path. Calling
-        // it BEFORE base.Deactivate(pop) does not double-commit: the only thing that reacts to this
-        // transition is ListDetailItem.Update()'s own check, which needs the row's GameObject to still
-        // be receiving Update() calls — base.Deactivate(pop) (right after) deactivates the whole
-        // hierarchy, so that check never runs again for this now-inert row.
+        // Clear Manager.input.activeInputField FIRST, THEN persist — not the other way around.
+        // OnRowTextCommitted writes into a (possibly third-party mod's) live ConfigEntry, whose
+        // whole CoreLib save chain (OnSettingChanged -> ConfigFile.Save -> API.ConfigFilesystem.Write)
+        // has no exception handling anywhere along it; a fault there (a foreign mod's own
+        // SettingChanged handler throwing, or a Wine filesystem fault — six IL patches exist in this
+        // project specifically because those happen) would previously have skipped BOTH the
+        // Deactivate(commit: false) call below AND base.Deactivate(pop) right after, since an
+        // uncaught exception unwinds the rest of THIS method too. Manager.input.activeInputField is a
+        // plain interface reference (InputManager.TextInputInterface), not a UnityEngine.Object — it
+        // has none of Unity's "destroyed-but-not-null" comparison semantics, so a row left referenced
+        // there stays referenced forever, not just until GC. Both of MenuPatch's Harmony prefixes key
+        // off exactly this field via an `is ListDetailItem` check, so a stuck reference would disable
+        // ALL menu selection game-wide (mouse and keyboard) until restart — clearing it first means
+        // that guard is already lifted even if the persist step below throws.
+        //
+        // Reordering does not lose the commit-before-teardown intent: OnRowTextCommitted reads the
+        // row's own live text (GetInputText()), which Deactivate(commit: false) does not touch — only
+        // Manager.input.activeInputField and the caret blinker's visibility change. And it cannot
+        // double-commit: the only thing that reacts to the activeInputField-cleared transition is
+        // ListDetailItem.Update()'s own check, which needs the row's GameObject to still be receiving
+        // Update() calls — base.Deactivate(pop), which deactivates the whole hierarchy, runs
+        // immediately after this method returns, so that check never fires again for this row.
         public override void Deactivate(bool pop)
         {
             if (Manager.input.activeInputField is ListDetailItem activeItem && activeItem.owner == this)
             {
-                OnRowTextCommitted(activeItem);
                 activeItem.Deactivate(commit: false);
+                OnRowTextCommitted(activeItem);
             }
             base.Deactivate(pop);
         }
@@ -278,11 +290,17 @@ namespace ModSettingsMenu.UI
         // render height feeds UIScrollWindow's scroll clipping.
         public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
 
-        // Called from a row's OnDeselected (ListDetailItem). Reads every row's live text (trimmed,
-        // commas stripped so a typed comma can't desync the stored split/join), and re-persists the
-        // whole list ONLY if it actually changed — skips a no-op write (and the rebuild it would
-        // otherwise trigger on every plain navigate-through, not just real edits). The rebuild itself
-        // is deferred to Update — see the design note above this task for why.
+        // Called from two places, neither of them OnDeselected (that fires on mere mouse hover, which
+        // is exactly why the trigger moved away from it — see ListDetailItem.OnDeselected's own
+        // comment): ListDetailItem.Update()'s own activeInputField-transition check, and this screen's
+        // own Deactivate() as a close-time safety net. Reads every row's live text (trimmed, commas
+        // stripped so a typed comma can't desync the stored split/join), and re-persists the whole
+        // list ONLY if it actually changed — skips a no-op write (and the rebuild it would otherwise
+        // trigger) on a plain activate-then-deactivate that never touched the text. The rebuild itself
+        // is deferred to _rebuildPending/Update() rather than run synchronously here — this method is
+        // most often reached from inside `row`'s own Update() (via ListDetailItem.Update() above),
+        // and RebuildRows() destroys every current row, `row` included; deferring one frame keeps this
+        // call from tearing down its own caller's GameObject mid-callback.
         public void OnRowTextCommitted(ListDetailItem row)
         {
             if (_activeDef?.Entry == null)
