@@ -20,8 +20,13 @@ namespace ModSettingsMenu.Settings
     /// returning "with editing"; the format-override toggle that would fully address it is still
     /// out of scope — see docs/specs/2026-07-28-list-widget-editing-design.md §5). Once BuildDef
     /// sees a genuine list for a given entry, marking it here keeps it classified as List even after
-    /// an edit drops it below the heuristic's own threshold. Format: ASCII, one id per line
-    /// (presence = true; nothing else is ever stored).
+    /// an edit drops it below the heuristic's own threshold. Format: UTF-8, one id per line
+    /// (presence = true; nothing else is ever stored). UTF-8 rather than ASCII: an id is normally a
+    /// plain "ModId/Section/Key" string, but it is built from a foreign mod's own section/key names
+    /// (ForeignConfigDiscovery), which this store does not control — ASCII would silently mangle any
+    /// non-ASCII byte to '?' on write, risking two distinct foreign ids colliding onto the same
+    /// stored line. UTF-8 is a strict superset for the ASCII ids every entry has had so far, so this
+    /// is not a format break.
     /// </summary>
     internal static class ListKindStore
     {
@@ -37,7 +42,7 @@ namespace ModSettingsMenu.Settings
             {
                 if (!API.ConfigFilesystem.FileExists(FilePath))
                     return;
-                var text = Encoding.ASCII.GetString(API.ConfigFilesystem.Read(FilePath));
+                var text = Encoding.UTF8.GetString(API.ConfigFilesystem.Read(FilePath));
                 foreach (var raw in text.Split('\n'))
                 {
                     var line = raw.Trim();
@@ -78,7 +83,7 @@ namespace ModSettingsMenu.Settings
                 var sb = new StringBuilder();
                 foreach (var key in _cache)
                     sb.Append(key).Append('\n');
-                API.ConfigFilesystem.Write(FilePath, Encoding.ASCII.GetBytes(sb.ToString()));
+                API.ConfigFilesystem.Write(FilePath, Encoding.UTF8.GetBytes(sb.ToString()));
             }
             catch (Exception ex)
             {
