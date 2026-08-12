@@ -116,6 +116,26 @@ namespace ModSettingsMenu
             if (_restartPromptCountdown >= 0 && _restartPromptCountdown-- == 0)
                 ModSettingsScreen.ShowRestartPrompt();
 
+            // Backstop for RestartPending's normal consumption path (ModSettingsScreen.Deactivate,
+            // pop=true only). MenuManager.PopAllMenus deactivates only the FIRST menu it finds with
+            // popsOtherActiveMenus (both our screens have it set) and then breaks out of its own loop
+            // before clearing the rest of the stack — so closing everything at once while the list
+            // drill-in is open on top skips ModSettingsScreen.Deactivate(pop: true) entirely, and a
+            // RequiresRestart edit made in the drill-in moments before would never get its prompt.
+            // Poll instead of trying to detect which teardown path fired: if the flag is still set and
+            // NEITHER of our own menu instances is currently the top of CK's menu stack, we are
+            // unambiguously not "covered" by either of them anymore (regardless of how we got here),
+            // so it is safe — and necessary — to flush it here.
+            if (ModSettingsScreen.RestartPending)
+            {
+                var top = Manager.menu.GetTopMenu();
+                if (top != MenuPatch.MenuInstance && top != MenuPatch.ListDetailInstance)
+                {
+                    ModSettingsScreen.RestartPending = false;
+                    RequestRestartPrompt();
+                }
+            }
+
             if (_warmed)
                 return;
             var menu = MenuPatch.MenuInstance;
