@@ -18,23 +18,34 @@ namespace ModSettingsMenu.UI
     /// </summary>
     public sealed class ListDetailItem : RadicalMenuOptionTextInput
     {
-        // Owning screen, wired by ListDetailScreen.AddItem right after Instantiate.
-        public ListDetailScreen owner;
+        // Owning screen and row identity — private + Bind(), not raw public fields, matching
+        // SettingWidget.Bind/ListWidget.Bind's established idiom elsewhere in this framework.
+        private ListDetailScreen _owner;
+        public ListDetailScreen Owner => _owner;
 
         // True only for the permanent trailing blank row ("+ Add"). Every other row is a real token.
-        public bool isAddRow;
+        private bool _isAddRow;
+        public bool IsAddRow => _isAddRow;
 
-        // True for a genuine read-only list (SettingDef.ReadOnly) — view/scroll/navigate like any
-        // other row, but OnActivated below never enters edit mode. Wired by ListDetailScreen.AddItem
-        // alongside owner/isAddRow.
+        // Sets this row's identity and behaviour in one call, right after Instantiate
+        // (ListDetailScreen.AddItem) — the same commit-point every other field poke used to happen at
+        // individually.
         //
-        // Deliberately NOT declared here: RadicalMenuOptionTextInput (our base class) already has its
-        // own public bool readOnly — a same-named field this class used to shadow (CS0108, present in
-        // every build log this session and missed until a code review caught it). Shadowing meant any
-        // access through a RadicalMenuOptionTextInput-typed reference (including CK's own internals,
-        // which read this field on the base type) saw a permanently-false copy, independent of what
-        // AddItem set. Reusing the inherited field instead means CK's own read path and ours are
-        // guaranteed to agree.
+        // readOnly is set here too but deliberately NOT declared as a field on this class:
+        // RadicalMenuOptionTextInput (our base class) already has its own public bool readOnly — a
+        // same-named field this class used to shadow (CS0108, present in every build log this session
+        // and missed until a code review caught it). Shadowing meant any access through a
+        // RadicalMenuOptionTextInput-typed reference (including CK's own internals, which read this
+        // field on the base type) saw a permanently-false copy, independent of what this method set.
+        // Writing the inherited field directly means CK's own read path and ours are guaranteed to
+        // agree — true for a genuine read-only list (SettingDef.ReadOnly): view/scroll/navigate like
+        // any other row, but OnActivated below never enters edit mode.
+        public void Bind(ListDetailScreen owner, bool isAddRow, bool readOnly)
+        {
+            _owner = owner;
+            _isAddRow = isAddRow;
+            this.readOnly = readOnly;
+        }
 
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
         // report INACTIVE, else RadicalMenu's includeInactive option scan navigates to it too (the
@@ -170,7 +181,7 @@ namespace ModSettingsMenu.UI
 
             bool isActiveField = Manager.input.activeInputField == (object)this;
             if (_wasActiveField && !isActiveField)
-                owner?.OnRowTextCommitted(this);
+                _owner?.OnRowTextCommitted(this);
             _wasActiveField = isActiveField;
         }
     }

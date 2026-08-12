@@ -22,7 +22,7 @@ namespace ModSettingsMenu.UI
     {
         public ListDetailBox box;
 
-        private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance — UNCHANGED
+        private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance
         private SettingDef _activeDef; // the setting this open session is showing/editing — set once
 
         // this open session's own copy of _activeDef.ReadOnly — set in Populate from _pending (which
@@ -89,7 +89,7 @@ namespace ModSettingsMenu.UI
         // immediately after this method returns, so that check never fires again for this row.
         public override void Deactivate(bool pop)
         {
-            if (Manager.input.activeInputField is ListDetailItem activeItem && activeItem.owner == this)
+            if (Manager.input.activeInputField is ListDetailItem activeItem && activeItem.Owner == this)
             {
                 activeItem.Deactivate(commit: false);
                 OnRowTextCommitted(activeItem);
@@ -147,7 +147,8 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Destroys every current row (real tokens + the trailing add-row) and rebuilds them fresh from
+        // Destroys every current row — real tokens, plus the trailing add-row for an editable list
+        // (a read-only list has none, see the !_readOnly guard below) — and rebuilds them fresh from
         // _activeDef's live value. The SAME rebuild-from-canonical-value path serves the initial open
         // (Populate) and every post-edit refresh (OnRowTextCommitted, via the deferred Update path) —
         // there is no separate incremental add/remove/edit logic, just "re-derive everything from the
@@ -174,12 +175,8 @@ namespace ModSettingsMenu.UI
             menuOptions.Clear();
 
             // One row per non-empty token...
-            foreach (var raw in Value().Split(','))
-            {
-                var token = raw.Trim();
-                if (token.Length > 0)
-                    AddItem(token, isAddRow: false);
-            }
+            foreach (var token in ListTokenizer.Tokenize(Value()))
+                AddItem(token, isAddRow: false);
             // ...plus one permanent trailing blank row for adding a new token — a read-only list has
             // nothing to add, so it gets no add-row at all, not just an inert one.
             if (!_readOnly)
@@ -196,9 +193,7 @@ namespace ModSettingsMenu.UI
             var item = row.GetComponent<ListDetailItem>();
             if (item == null)
                 return;
-            item.owner = this;
-            item.isAddRow = isAddRow;
-            item.readOnly = _readOnly;
+            item.Bind(this, isAddRow, _readOnly);
             if (item.pugText != null)
                 item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
             // SettingWidget.SetText and the hintText line below; must be
@@ -325,13 +320,7 @@ namespace ModSettingsMenu.UI
             // formatting (e.g. "Alpha, Beta, Gamma" with a space after each comma) that joined never
             // reproduces, so a raw comparison never matched and every mere open+close (no real edit at
             // all) wrote and rebuilt regardless, defeating the whole point of this no-op guard.
-            var existingTokens = new List<string>();
-            foreach (var raw in Value().Split(','))
-            {
-                var token = raw.Trim();
-                if (token.Length > 0)
-                    existingTokens.Add(token);
-            }
+            var existingTokens = ListTokenizer.Tokenize(Value());
             if (joined == string.Join(",", existingTokens))
                 return;
             _activeDef.Entry.BoxedValue = joined;
@@ -342,7 +331,7 @@ namespace ModSettingsMenu.UI
             if (_activeDef.RequiresRestart)
                 ModSettingsScreen.RestartPending = true;
             _rebuildPending = true;
-            _lastCommitWasAddRow = row.isAddRow;
+            _lastCommitWasAddRow = row.IsAddRow;
         }
 
         private void Update()
