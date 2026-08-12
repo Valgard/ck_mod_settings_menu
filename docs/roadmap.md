@@ -107,3 +107,14 @@ separator can sit between option 3 and 4).
   skim/activate to `ListWidget.ToggleView` while the row is selected, or make the
   icon a focusable element — so the toggle is reachable without a mouse. Deferred
   from the foreign-config list-widget feature. Requested 2026-07-21.
+- **Format-override toggle / misclassification confirmation for editable lists.**
+  `ForeignConfigDiscovery`'s `HeuristicSaysList` can misclassify a foreign plain
+  string as a list; in the read-only drill-in (ADR-002) that was harmless, but
+  the `list-widget-editing` slice makes the drill-in write `BoxedValue` back
+  into the foreign `ConfigEntry` on commit — a misclassification now risks a
+  lossy, comma-rejoined overwrite of a third-party mod's real config value.
+  ADR-002 §7's format-override toggle (or a lighter one-time confirmation
+  before the first write to an unconfirmed entry) is the fix; deliberately not
+  built in that slice (see its design spec's "Known risk, accepted for this
+  slice" note, §5). Flagged by the `pr-review-toolkit:review-pr` gate,
+  requested 2026-08-12.
