@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using CoreLib.Data.Configuration;
 using PugMod;
+using UnityEngine;
 
 namespace ModSettingsMenu.Settings
 {
@@ -31,14 +33,29 @@ namespace ModSettingsMenu.Settings
             if (_cache != null)
                 return;
             _cache = new HashSet<string>();
-            if (!API.ConfigFilesystem.FileExists(FilePath))
-                return;
-            var text = Encoding.ASCII.GetString(API.ConfigFilesystem.Read(FilePath));
-            foreach (var raw in text.Split('\n'))
+            try
             {
-                var line = raw.Trim();
-                if (line.Length > 0)
-                    _cache.Add(line);
+                if (!API.ConfigFilesystem.FileExists(FilePath))
+                    return;
+                var text = Encoding.ASCII.GetString(API.ConfigFilesystem.Read(FilePath));
+                foreach (var raw in text.Split('\n'))
+                {
+                    var line = raw.Trim();
+                    if (line.Length > 0)
+                        _cache.Add(line);
+                }
+            }
+            catch (Exception ex)
+            {
+                // A read failure here is low-stakes by design: this store is sticky MEMORY, not the
+                // list's own data — losing it only means an entry edited below the ForeignConfigDiscovery
+                // heuristic's 2-token threshold reclassifies to Info on the next open (the exact,
+                // already-documented ADR-002 limitation this store exists to soften), never data loss on
+                // the setting itself. Falling back to an empty cache (as if the file never existed) is
+                // therefore the correct, safe degradation — just log it so a real, recurring filesystem
+                // fault (Wine, disk full) doesn't go unnoticed.
+                Debug.LogWarning("[ModSettingsMenu] ListKindStore failed to load '" + FilePath + "': " + ex.Message);
+                _cache.Clear();
             }
         }
 
@@ -53,13 +70,26 @@ namespace ModSettingsMenu.Settings
             EnsureLoaded();
             if (!_cache.Add(id))
                 return; // already marked — no write needed
-            var dir = ConfigFile.GetDirectoryName(FilePath); // reuse CoreLib's path helper
-            if (!string.IsNullOrEmpty(dir))
-                API.ConfigFilesystem.CreateDirectory(dir);
-            var sb = new StringBuilder();
-            foreach (var key in _cache)
-                sb.Append(key).Append('\n');
-            API.ConfigFilesystem.Write(FilePath, Encoding.ASCII.GetBytes(sb.ToString()));
+            try
+            {
+                var dir = ConfigFile.GetDirectoryName(FilePath); // reuse CoreLib's path helper
+                if (!string.IsNullOrEmpty(dir))
+                    API.ConfigFilesystem.CreateDirectory(dir);
+                var sb = new StringBuilder();
+                foreach (var key in _cache)
+                    sb.Append(key).Append('\n');
+                API.ConfigFilesystem.Write(FilePath, Encoding.ASCII.GetBytes(sb.ToString()));
+            }
+            catch (Exception ex)
+            {
+                // A write failure here means this id's "was a genuine list" memory doesn't persist past
+                // this session (same low-stakes limitation as the read side above) — but _cache.Add(id)
+                // already ran, so THIS session still treats it correctly; only a future launch would see
+                // the un-flagged behavior. Not worth making the store read-only over (unlike the
+                // possession-ledger family's stores, nothing here can silently lose already-stored data —
+                // this file only ever grows a set of ids). Log so a recurring fault is visible.
+                Debug.LogWarning("[ModSettingsMenu] ListKindStore failed to save '" + FilePath + "': " + ex.Message);
+            }
         }
     }
 }
