@@ -38,44 +38,51 @@ namespace ModSettingsMenu
             else
                 Debug.LogWarning("[ModSettingsMenu] no AssetBundle — menu prefab will be unavailable.");
 
-            // TEMPORARY dev-only test fixture for the list-widget-editing feature branch — a raw
-            // CoreLib ConfigFile created OUTSIDE ConfigStore.ForMod, so ConfigStore.IsOwn doesn't
-            // recognize it and ForeignConfigDiscovery treats it exactly like a real 3rd-party mod's
-            // list setting. Gives two disposable List rows to edit/add/remove against without
-            // touching PlacementPlus's real ExcludeItems. REMOVE before this branch ships.
-            // Client scope (not CoreLib's Server default) so these stay editable at the title
-            // screen too, where Manager.main.player is null — ForeignConfigDiscovery.IsReadOnly
-            // conservatively treats a non-Client scope as read-only there (real foreign mods, incl.
-            // PlacementPlus's own ExcludeItems, are typically Server-scoped and share that limit).
-            var clientScope = new ConfigScope(ConfigAccessLevel.Client);
-            var testFile = new ConfigFile("TestListFixtures/config.cfg", saveOnInit: true, info);
-            testFile.Bind("Settings", "Short", "Alpha, Beta, Gamma", new ConfigDescription("A short test list."), clientScope);
-            const string longValue =
-                "Item01, Item02, Item03, Item04, Item05, Item06, Item07, Item08, Item09, Item10, "
-                + "Item11, Item12, Item13, Item14, Item15, Item16, Item17, Item18, Item19, Item20";
-            testFile.Bind("Settings", "Long", longValue, new ConfigDescription("A long test list (scroll-follow check)."), clientScope);
-            // ViewOnly (not Server) is read-only unconditionally, regardless of Manager.main.player —
-            // ForeignConfigDiscovery.IsReadOnly only treats Server/Admin as read-only AT THE TITLE
-            // SCREEN specifically (no player yet); a real world session would make a Server-scoped
-            // entry editable again. ViewOnly is the one access level IsReadOnly returns true for
-            // unconditionally, so this stays a genuine read-only List regression check in any session.
-            testFile.Bind(
-                "Settings",
-                "LongReadOnly",
-                longValue,
-                new ConfigDescription("A read-only copy of Long, to check the read-only List path."),
-                new ConfigScope(ConfigAccessLevel.ViewOnly)
-            );
-            // TEMPORARY — exercises OnRowTextCommitted's RequiresRestart wiring (no existing fixture
-            // above sets requireReload, so there was previously no way to trigger the restart prompt
-            // from a list edit at all). REMOVE alongside the other test fixtures.
-            testFile.Bind(
-                "Settings",
-                "ShortRestart",
-                "Alpha, Beta, Gamma",
-                new ConfigDescription("A restart-required copy of Short, to check the list RequiresRestart path."),
-                new ConfigScope(ConfigAccessLevel.Client, requireReload: true)
-            );
+            // Dev-only test fixtures for exercising the list-widget drill-in against something
+            // other than a real foreign mod's config — a raw CoreLib ConfigFile created OUTSIDE
+            // ConfigStore.ForMod, so ConfigStore.IsOwn doesn't recognize it and
+            // ForeignConfigDiscovery treats it exactly like a real 3rd-party mod's list setting.
+            // Gated on DevFlags.Is("TestFixtures") (see DevFlags.generated.cs, regenerated from
+            // the MOD_DEV_FLAGS env var by CLIBuildHelper.Build on every build) — OFF by default,
+            // so a normal build never ships these into a real player's settings screen; opt in
+            // locally with `MOD_DEV_FLAGS=TestFixtures ../utils/build.sh` while iterating on this
+            // widget. See .envrc.example.
+            if (DevFlags.Is("TestFixtures"))
+            {
+                // Client scope (not CoreLib's Server default) so these stay editable at the title
+                // screen too, where Manager.main.player is null — ForeignConfigDiscovery.IsReadOnly
+                // conservatively treats a non-Client scope as read-only there (real foreign mods, incl.
+                // PlacementPlus's own ExcludeItems, are typically Server-scoped and share that limit).
+                var clientScope = new ConfigScope(ConfigAccessLevel.Client);
+                var testFile = new ConfigFile("TestListFixtures/config.cfg", saveOnInit: true, info);
+                testFile.Bind("Settings", "Short", "Alpha, Beta, Gamma", new ConfigDescription("A short test list."), clientScope);
+                const string longValue =
+                    "Item01, Item02, Item03, Item04, Item05, Item06, Item07, Item08, Item09, Item10, "
+                    + "Item11, Item12, Item13, Item14, Item15, Item16, Item17, Item18, Item19, Item20";
+                testFile.Bind("Settings", "Long", longValue, new ConfigDescription("A long test list (scroll-follow check)."), clientScope);
+                // ViewOnly (not Server) is read-only unconditionally, regardless of Manager.main.player —
+                // ForeignConfigDiscovery.IsReadOnly only treats Server/Admin as read-only AT THE TITLE
+                // SCREEN specifically (no player yet); a real world session would make a Server-scoped
+                // entry editable again. ViewOnly is the one access level IsReadOnly returns true for
+                // unconditionally, so this stays a genuine read-only List regression check in any session.
+                testFile.Bind(
+                    "Settings",
+                    "LongReadOnly",
+                    longValue,
+                    new ConfigDescription("A read-only copy of Long, to check the read-only List path."),
+                    new ConfigScope(ConfigAccessLevel.ViewOnly)
+                );
+                // Exercises OnRowTextCommitted's RequiresRestart wiring (no other fixture above sets
+                // requireReload, so there would otherwise be no way to trigger the restart prompt from
+                // a list edit at all).
+                testFile.Bind(
+                    "Settings",
+                    "ShortRestart",
+                    "Alpha, Beta, Gamma",
+                    new ConfigDescription("A restart-required copy of Short, to check the list RequiresRestart path."),
+                    new ConfigScope(ConfigAccessLevel.Client, requireReload: true)
+                );
+            }
         }
 
         public void Init()
