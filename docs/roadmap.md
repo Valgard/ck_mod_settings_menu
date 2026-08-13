@@ -21,6 +21,13 @@ A row that holds **no value** and fires a callback on activate.
 - **Behaviour:** `SettingWidget.OnActivated` invokes `onClick` instead of
   `Adjust`; no skim (`OnSkimLeft/Right` no-op). `ValueString()` returns empty
   or a `»` chevron affordance.
+- **State-dependent label — CK's own pattern, found 2026-08-13.**
+  `RadicalEnterTextMenu_EnterButtonOption` (the *Join Game* menu's join button)
+  holds **two** `LocalizedString`s — `joinTerm` / `stopJoinTerm` — and swaps them
+  in `Update` based on the menu's `IsConnecting`. So a button label that reflects
+  state ("Apply" → "Applying…", "Reset" → "Reset!") is an established CK idiom,
+  implemented by plain polling rather than an event. Worth taking for a
+  bake-time consumer's "apply now": the action's effect is invisible otherwise.
 - **Prefab:** **reuses** the existing option prefab (label left; value column
   empty). No Editor work.
 - **Why first:** highest value, lowest cost. Unlocks a framework-built-in
@@ -84,7 +91,30 @@ separator can sit between option 3 and 4).
 - **Colour picker** — model as a `Choice<T>` over preset swatches instead.
 - **Multi-select / flags** — N separate toggles already cover it and read
   clearer.
-- **Dual-range (min–max) slider** — too niche for the single-row raster.
+- **Dual-range (min–max) slider** — too niche to build for. **Reason narrowed
+  2026-08-13:** this used to read "too niche for the single-row raster," and the
+  raster half of that is simply not true. CK's *Join Game* menu puts **four**
+  controls in one row — `sessionIP`, `sessionPort`, a `ServerDropdown` and a
+  visibility toggle as siblings under one `SessionIP` parent (screenshots plus
+  the prefab tree). A row can carry two controls; MSM's rows come from a
+  vertically-stacking `LinearLayout`, so it would mean a container row with
+  hand-positioned children — Editor work, not an impossibility. Staying out of
+  scope on the *niche* judgement alone, not on a layout limit. (The same
+  multi-control-row pattern is the prerequisite for a field with a trailing
+  affordance — see the dropdown and visibility-toggle items below.)
+- **Sprite-based toggle switch** — i.e. swapping the `Toggle` kind's `on`/`off`
+  text for CK's `RadicalMenuOption_Toggle` (`toggleOnSR`/`toggleOffSR`
+  checkbox sprites). **Checked and rejected 2026-08-13**, because it looks like
+  an obvious upgrade and is not: that class has **zero** subclasses, and all
+  **three** of its field uses in `Pug.Other` are companions *to a text field*
+  (`visibilityToggle`, `saveCodeToggle`,
+  `RadicalMenuOptionTextInput.radicalMenuOptionToggleVisibility`) — it is CK's
+  idiom for a small affordance beside an input, not for a boolean setting. For
+  options-menu booleans CK has a separate base class,
+  `RadicalOptionsMenuOption_TextToggle` (Touchpad, Vibration, …), and all 52
+  `RadicalOptionsMenuOption_*` classes use the text-value row. MSM's text
+  toggle is therefore already the options-menu-consistent idiom; changing it
+  would move *away* from vanilla.
 
 > **Correction (2026-08-13):** this list used to also carry "Free-text string
 > input — controller-hostile; CK has scarce text-entry surfaces." ADR-003
@@ -274,6 +304,27 @@ widgets") divergent geometry means a divergent prefab:
   patches are already in `MenuPatch` and currently gate on the active field
   being a `ListDetailItem` — they need to gate on the new row type too, or the
   main screen reproduces the exact bug they were written for.
+
+### Masked values (a secret setting)
+
+The eye icon in the *Join Game* screenshots is not a bespoke control: it is a
+`RadicalMenuOption_Toggle` assigned to the text input's own
+`radicalMenuOptionToggleVisibility` field, and the base class does the rest —
+`Update` mirrors the toggle into `pugText.isHidden` and re-renders, with
+`IsHidden()` exposing the state. So a **masked** string setting (an API key, a
+server password, a webhook token) costs the toggle sprites and one field
+assignment, and nothing in the value/persistence path changes.
+
+Worth recording now because MSM cannot express it at all today, and because it
+is the one place CK's sprite toggle **is** the right idiom — see the
+"Sprite-based toggle switch" entry under § Explicitly out of scope for why that
+same class is the wrong choice for a boolean setting. It presumes the
+multi-control row from that same § (field plus a trailing affordance).
+
+Open: whether masking is a declaration flag (`.Text(…, masked: true)`) or
+inferred, and whether a masked value should be excluded from any future
+config-export/diagnostics output — a secret that a status row prints defeats
+the mask.
 
 ### Open design questions
 
@@ -507,6 +558,18 @@ read-only list's rows `ACTIVE` so they remain navigable for *reading*.
   consumer-supplied callback running in the render path; a declarative
   `.EnabledWhen(SettingHandle<bool>)` covers the common "B only applies while A
   is on" case with no callback at all. Likely more than one of the three.
+
+  **CK already ships the declarative variant — with the wrong state (found
+  2026-08-13).** `RadicalMenuOption_Toggle.relatedOption` is exactly an
+  `.EnabledWhen`: a serialized reference to another option, and an override that
+  asks `relatedOption.GetActiveStateInCurrentScene()` and adopts its result. Its
+  tooltip even says "Will be disabled if related option is disabled". But it
+  only propagates **`INACTIVE`** — the dependent option *disappears* rather than
+  going grey-red-and-visible, which is the opposite of what this section's whole
+  convention is for. So the field validates the API shape (a plain reference
+  beats a per-render callback) while its state semantics must **not** be copied:
+  a MSM equivalent has to map the dependency to `GRAYED_OUT`. Worth knowing that
+  vanilla itself has both behaviours and picks per case.
 - **The reason text.** Mirror `SettingsNotAvailableNote` per section, per row,
   or fold it into the existing `Hint`? A locked row needs its own string either
   way, so this is a loc-term question as much as a layout one.
