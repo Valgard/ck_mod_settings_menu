@@ -217,7 +217,7 @@ namespace ModSettingsMenu.Settings
         /// genuine misclassification of a foreign mod's own string (prose that happens to look
         /// list-shaped, or vice versa) still has no user recourse — the format-override toggle that
         /// would let a player correct it is explicitly out of scope for this slice (see
-        /// docs/specs/2026-07-28-list-widget-editing-design.md §5). ListKindStore (see BuildDef) covers
+        /// docs/adrs/003-list-widget-editing.md). ListKindStore (see BuildDef) covers
         /// a narrower, different case: an entry ALREADY confirmed as a list staying one after our own
         /// editing shrinks it below this heuristic's own threshold.</summary>
         public static bool HeuristicSaysList(string value)
