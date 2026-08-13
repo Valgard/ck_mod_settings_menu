@@ -18,7 +18,7 @@ namespace ModSettingsMenu.Settings
     /// drill-in reclassifies the row from List back to Info on the very next open, silently losing
     /// editability for the rest of that entry's life (ADR-002 anticipated this exact instability
     /// returning "with editing"; the format-override toggle that would fully address it is still
-    /// out of scope — see docs/specs/2026-07-28-list-widget-editing-design.md §5). Once BuildDef
+    /// out of scope — see docs/adrs/003-list-widget-editing.md). Once BuildDef
     /// sees a genuine list for a given entry, marking it here keeps it classified as List even after
     /// an edit drops it below the heuristic's own threshold. Format: UTF-8, one id per line
     /// (presence = true; nothing else is ever stored). UTF-8 rather than ASCII: an id is normally a
