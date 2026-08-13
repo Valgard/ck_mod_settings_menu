@@ -81,12 +81,73 @@ separator can sit between option 3 and 4).
 - **Keybind capture** — attractive for action mods, but real input-capture
   breaks the skim-row model and Core Keeper already owns a rebinding system.
   Only if a consumer actually needs it.
-- **Free-text string input** — controller-hostile; CK has scarce text-entry
-  surfaces.
 - **Colour picker** — model as a `Choice<T>` over preset swatches instead.
 - **Multi-select / flags** — N separate toggles already cover it and read
   clearer.
 - **Dual-range (min–max) slider** — too niche for the single-row raster.
+
+> **Correction (2026-08-13):** this list used to also carry "Free-text string
+> input — controller-hostile; CK has scarce text-entry surfaces." ADR-003
+> (`docs/adrs/003-list-widget-editing.md`) disproved that outright: CK ships
+> `RadicalMenuOptionTextInput` (the same base class the character-name field
+> uses), which gives on-screen-keyboard support and focus/blink handling for
+> free — not controller-hostile at all. See the next section for what is
+> actually still missing (a *consumer-facing* way to declare one).
+
+## Consumer-facing List API + token reorder
+
+Two related gaps in the `List` kind `list-widget-editing` shipped (ADR-003),
+both surfaced by real external pressure rather than internal planning —
+tracked together since a Consumer List API would naturally carry reorder as
+part of its own design, not as a later bolt-on.
+
+### No consumer-facing way to declare a `List` (or even plain free text)
+
+`SettingKind.List` is currently produced **only** by `ForeignConfigDiscovery`'s
+auto-detection heuristic — `SectionBuilder` (the explicit consumer API:
+`Toggle`/`Slider`/`Stepper`/`Choice`/`Hint`/`SortOptions`/`RequiresRestart`)
+has no `.List(...)` or even a plain `.Text(...)` method. A mod author who
+*wants* a user-editable ordered/list (or just a free-text) value has no clean
+path today — only the indirect one of shipping a raw `ConfigFile` outside
+`ModSettings.Section` and letting `ForeignConfigDiscovery` auto-detect it as
+foreign, which is the mechanism built for mods that *don't* integrate with
+MSM, not ones that do.
+
+Surfaced 2026-08-08 while designing the sibling mod **auto-rail-bridges**:
+its author wanted the mod's bridge-type build order configurable, hit this
+exact gap (`SectionBuilder.cs` has no list/string declaration), and the mod
+shipped 1.0.0 with a **fixed** default order, deferring configurability to
+"v1.1, sobald Mod Settings Menu Listen- oder String-Werte kann." That mod is
+now a concrete, already-shipped consumer waiting on this.
+
+A cheap intermediate step was designed at the time but not built — deferred
+to avoid a cross-repo merge conflict with the then-in-progress
+`list-widget-editing` worktree, since both touch `SettingModel`/
+`SectionBuilder` (no longer a concern now that branch is merged): a
+`.Text(out SettingHandle<string> h, key, default)` on `SectionBuilder`,
+rendering through the existing `SettingKind.Info` path as a read-only
+placeholder until the full Consumer List API lands — at which point a
+consumer declaring it as a proper `List` would need no migration on their
+side, just a call-site change.
+
+### Token reorder
+
+ADR-003 deliberately left tokens' insertion order fixed — add/edit/remove
+only, no drag/up-down/keyboard reorder. Fine for an exclude-set (order is
+irrelevant), but not for a genuine priority list: auto-rail-bridges' own
+bridge-order use case is exactly this shape, and add/edit/remove alone means
+reordering by retyping every token. Any Consumer List API design should
+treat reorder as a first-class requirement from the start, given this
+already-known consumer need.
+
+### Also open: general List-widget UX
+
+Raised 2026-08-12 without a specific complaint attached — flagged as "mit
+der UI/UX bin ich nicht zufrieden" while deciding whether to merge
+`list-widget-editing`, deferred in favor of running the
+`pr-review-toolkit:review-pr` gate first and never revisited since. No
+concrete pain points recorded yet; needs its own conversation to pin down
+what specifically feels wrong before it can become an actionable item.
 
 ## Small fixes
 
