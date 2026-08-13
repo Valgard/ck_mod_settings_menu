@@ -130,6 +130,12 @@ placeholder until the full Consumer List API lands — at which point a
 consumer declaring it as a proper `List` would need no migration on their
 side, just a call-site change.
 
+> **Superseded 2026-08-13** as far as the free-text half goes: see
+> § "Text input for plain string settings" below. The read-only-placeholder
+> shortcut is no longer the cheapest route — the frame sprites that make a real
+> editable field possible are the same ones the drill-in rows need anyway. The
+> `List`-declaration half of this gap stands unchanged.
+
 ### Token reorder
 
 ADR-003 deliberately left tokens' insertion order fixed — add/edit/remove
@@ -220,6 +226,71 @@ A **side observation** while comparing: the template YAML still carries
 `owner`, `isAddRow` and a second `readOnly` — field names from before the
 CS0108 shadowing fix. Harmless (Unity drops them on the next Editor save), but
 it does confirm the prefab has not been reserialized since that refactor.
+
+## Text input for plain string settings (`SettingKind.Text`)
+
+A **genuinely editable** single-line string row in the main settings screen —
+the widget a consumer needs for a plain `string` value (a name, a prefix, a
+format token, an address). Requested 2026-08-13, alongside the drill-in row
+dressing above and sharing its prefab building block.
+
+Today there is no path to it at all: `SectionBuilder` exposes
+`Toggle`/`Slider`/`Stepper`/`Choice` and nothing string-shaped, and a foreign
+`string` that fails `HeuristicSaysList` is routed to `SettingKind.Info` — a
+**read-only** row. So a plain string is currently either unreachable (own
+consumers) or displayed-but-not-editable (foreign config).
+
+**What changed on 2026-08-13:** the § above establishes that the missing piece
+for an editable field is the *visual frame* (`border` + `selectedBorder`), not
+the mechanism — `RadicalMenuOptionTextInput` already delivers focus/blink,
+on-screen keyboard, width budgeting and commit handling, and ADR-003 has been
+running it in production in the drill-in since. That makes this widget mostly
+a **second consumer of the same two sprites and the same field wiring**, which
+is why the two items should be sequenced together rather than costed
+separately.
+
+This also **supersedes the cheap intermediate step** sketched under
+§ "No consumer-facing way to declare a `List` (or even plain free text)" — a
+`.Text(...)` rendering through the `Info` path as a *read-only placeholder*.
+With the frame available, a real editable field is barely more work than the
+placeholder, and the placeholder would ship a row that looks editable-ish and
+isn't.
+
+### What it needs beyond the drill-in row
+
+The geometry differs, and by this file's own rule (§ "Why 2 and 3 are separate
+widgets") divergent geometry means a divergent prefab:
+
+- **Two-column, not full-width.** A drill-in row *is* the value and spans the
+  row; a settings row is `label` left / `value` right. The text field has to
+  live in the value column, at the value column's width — so its `maxWidth`
+  and 9-slice size differ from `ListDetailItem`'s, even though both wrap the
+  same component.
+- **It sits among skim rows.** Neighbouring `SettingWidget`s answer `←/→`; a
+  focused text field must not. `RadicalMenuOptionTextInput` handles capture
+  itself via `Manager.input.SetActiveInputField`, but ADR-003 needed **two
+  Harmony prefixes** (`MenuManager.SelectOption`, `UIMouse.TrySelectNewElement`)
+  to stop CK's own hover-driven reselection from stealing an active edit. Those
+  patches are already in `MenuPatch` and currently gate on the active field
+  being a `ListDetailItem` — they need to gate on the new row type too, or the
+  main screen reproduces the exact bug they were written for.
+
+### Open design questions
+
+- **API shape.** `.Text(out SettingHandle<string> h, string key, string def)`
+  is the obvious signature. Whether it also takes validation (a
+  `Func<string,bool>`, or a max length) or accepts anything and relies on
+  `Shake()` for rejection feedback is undecided — the second is cheaper and
+  matches how CK itself handles a bad game ID.
+- **Commit trigger.** Reuse ADR-003's `activeInputField`-transition rule
+  verbatim (not `OnDeselected`, which CK's `UIMouse` fires on mere hover). This
+  is a solved problem; the only question is whether the logic is lifted into a
+  shared helper or duplicated in the new widget.
+- **Empty string.** Is clearing a text setting "empty" or "reset to default"?
+  The drill-in drops empty tokens; a scalar string has no such precedent.
+- **`RequiresRestart` interaction.** A text field can be edited character by
+  character; marking it restart-dirty on every keystroke would be wrong. The
+  dirty flag should be set on commit, not on change.
 
 ## Dropdown lists — CK's `DropdownUIElement`
 
