@@ -149,6 +149,96 @@ der UI/UX bin ich nicht zufrieden" while deciding whether to merge
 concrete pain points recorded yet; needs its own conversation to pin down
 what specifically feels wrong before it can become an actionable item.
 
+## Locked settings — CK's `GRAYED_OUT` convention
+
+Core Keeper has a **shipped convention for a setting that exists but cannot be
+changed right now**: the whole row (label *and* value) renders in a dull red,
+navigation skips it, and the mouse cannot click it — while the row stays
+visible and in the layout. Vanilla uses it for "Frame rate target" while V-Sync
+is on, and for the title-menu-only settings ("Season override",
+"Multiplayer connectivity") when opened from an in-game pause menu. The
+framework currently has **no way for a consumer to express this** — every
+declared setting is always editable.
+
+Surfaced 2026-08-13 from the user's own in-game observation; the mechanism was
+then verified against the decompiled `Pug.Other` (game 1.2.1.5 — class and
+member names are stable, the line numbers are not).
+
+### What CK gives for free
+
+`OptionActiveState { INACTIVE, ACTIVE, GRAYED_OUT }`, returned per row by the
+**virtual** `RadicalMenuOption.GetActiveStateInCurrentScene()`. From that single
+return value four independent effects follow:
+
+- **Navigation skips it** — `RadicalMenu.SelectNextIndex`/`SelectPrevIndex` walk
+  on while `!IsSelectionEnabled()`, which is `!ShouldBeGrayedOut()`.
+- **The mouse cannot hit it** — `UpdateClickCollider` enables the collider only
+  for `ACTIVE`; `GRAYED_OUT` does not count.
+- **It stays visible and laid out** — `GetAllCurrentlyActiveMenuOptions` and
+  `Activate` both accept `ACTIVE || GRAYED_OUT`; only `INACTIVE` is
+  `SetActive(false)`-ed out of the auto-layout.
+- **The red** — `PugTextEffectMenuOption.UNSELECTABLE_TEXT_COLOR` (`#6C2C2F`),
+  selected by `IsSelectionEnabled(visualOnly: true)` for the text *and* the
+  effect's `spriteRenderers`.
+
+Two ways vanilla reaches the state, both worth copying: **imperative** — an
+override that consults live state (`RadicalOptionsMenuOption_TargetFrameRate`
+returns `GRAYED_OUT` when `Manager.prefs.vsync`) — and **declarative**, the
+prefab flag `visibleButNotSelectableWhenInactive`, which turns a
+scene-mismatched row into `GRAYED_OUT` instead of hiding it.
+
+CK also pairs the red row with an explanation: `SettingsNotAvailableNote` is a
+`PugText` that switches itself on exactly while a named option is
+`GRAYED_OUT`. The red row alone is only half the convention — a locked setting
+whose reason is invisible is a worse UX than no lock at all.
+
+### Where it docks into this framework
+
+`SettingWidget.GetActiveStateInCurrentScene` (`SettingWidget.cs:88`) and
+`ListWidget`'s equivalent (`ListWidget.cs:27`) already override the method — but
+binary, `_def != null ? ACTIVE : INACTIVE`, so they actively rule the third
+state out. Returning `GRAYED_OUT` there buys skip + click-block + layout-stay
+outright. Two things it does **not** buy:
+
+- **The value column's colour.** The red is applied solely through
+  `PugTextEffectMenuOption`, and those are exactly the paths the widgets already
+  handle by hand (own value tinting, `isValueText` flipping, effect filtering —
+  see `docs/tutorial.md` §20 and `ListDetailItem`'s comments). Without an
+  explicit `UNSELECTABLE_TEXT_COLOR` on the value text, a locked row renders
+  half red.
+- **Skip on the UIelement navigation path.** The `while (!IsSelectionEnabled())`
+  skip only exists on the index-based path. `SelectIndexInDirection`
+  (`useUIElementsForNavigation`) asks `GetAdjacentUIElement` *before* filtering,
+  so a locked neighbour yields no match and navigation **stalls** instead of
+  stepping over. Verify which path both screens take before assuming the skip
+  works.
+
+### Not the same thing as `Info`
+
+`GRAYED_OUT` means "normally editable, not right now" — it is **contextual**,
+and its red is a signal that something is being withheld. It is *not* the model
+for a permanently display-only row: `SettingKind.Info` and the planned
+`Separator/Label` are inert by nature, and their "focusable or skipped?"
+question (see § Planned widgets #2) stays their own. The read-only-list
+precedent already goes the other way on purpose — `ListDetailItem` keeps a
+read-only list's rows `ACTIVE` so they remain navigable for *reading*.
+
+### Open design questions
+
+- **API shape.** A static `.Locked()` marker on the last-declared setting (like
+  `RequiresRestart`) cannot express V-Sync-style dependencies; a
+  `Func<bool>` predicate evaluated per `Refresh()` can, at the cost of a
+  consumer-supplied callback running in the render path; a declarative
+  `.EnabledWhen(SettingHandle<bool>)` covers the common "B only applies while A
+  is on" case with no callback at all. Likely more than one of the three.
+- **The reason text.** Mirror `SettingsNotAvailableNote` per section, per row,
+  or fold it into the existing `Hint`? A locked row needs its own string either
+  way, so this is a loc-term question as much as a layout one.
+- **Live re-colour.** Vanilla's V-Sync row calls `ResetEffects()` on its
+  neighbour's label *and* value by hand so the red appears immediately instead
+  of at the next selection change. A dependency-driven lock in this framework
+  needs the same nudge on whatever row just became locked.
+
 ## Small fixes
 
 - **English label casing: "Mod Settings" → "Mod settings".** The
