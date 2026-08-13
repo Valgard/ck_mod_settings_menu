@@ -37,6 +37,19 @@ A row that holds **no value** and fires a callback on activate.
 - **Open design question:** reset scope — per-section button vs. one global
   button vs. both. Decide during brainstorming before coding.
 
+  **A worked precedent exists (found 2026-08-13):** the foreign mod HealthBars
+  ships `MenuOptionResetToDefaults` — a plain `RadicalMenuOption` whose
+  `OnActivated` opens CK's own `centerPopUpText.StartNewDisplaySequence` with
+  CK's shipped loc terms `cancelDialogue` / `yes` and `pauseGame: false`, then
+  calls its options' `SetDefaults()` on confirm. It answers the scope question
+  with **one global row**. Two details worth copying: it fires from
+  `OnActivated`, so it never touches this framework's `Deactivate` re-entrancy
+  trap (that trap is specific to `Deactivate`, and a reset button has no reason
+  to go near it); and it follows the reset with a short input guard
+  (`TemporarilyPreventInteraction`, 1 s) so trailing input cannot immediately
+  re-edit the freshly restored values — the kind of detail a reset button only
+  reveals it needed after shipping without it.
+
 ### 2. Info (read-only)
 
 A row showing a **computed, non-editable** value in the normal option layout
@@ -88,7 +101,14 @@ separator can sit between option 3 and 4).
 - **Keybind capture** — attractive for action mods, but real input-capture
   breaks the skim-row model and Core Keeper already owns a rebinding system.
   Only if a consumer actually needs it.
-- **Colour picker** — model as a `Choice<T>` over preset swatches instead.
+- ~~**Colour picker**~~ — **moved out of this list 2026-08-13**, see
+  § "Colour settings — HealthBars' gradient-glyph slider". The entry used to
+  read "model as a `Choice<T>` over preset swatches instead", on the unstated
+  assumption that a colour picker needs a 2D area the row raster cannot give.
+  The installed foreign mod **HealthBars** disproves it: an HSV picker is four
+  scalars, and a scalar with a gradient is a `PugText` with per-glyph colours.
+  Not promoted to a planned widget yet — it needs its own design pass — but it
+  is no longer out of scope on the layout argument.
 - **Multi-select / flags** — N separate toggles already cover it and read
   clearer.
 - **Dual-range (min–max) slider** — too niche to build for. **Reason narrowed
@@ -475,6 +495,115 @@ dropdown.
   controller path (`NavigateInternally` + `dropdown.button.Select()`), so parity
   is achievable — but it is the part most easily left half-done, and this
   framework's own driver is "Core Keeper is controller-first".
+
+## Colour settings — HealthBars' gradient-glyph slider
+
+A colour-valued setting, rendered inside the ordinary row raster. Surfaced
+2026-08-13 from the installed foreign mod **HealthBars** (mod.io id `4164578`),
+which is a **source mod** — its `Scripts/` are readable in the mod.io cache, so
+this is real working code, not a decompile.
+
+**The technique.** `MenuOptionColorSlider : RadicalMenuOption` builds the
+gradient out of the value text itself: the value is a string of N pipe
+characters, drawn with negative letter spacing, and each glyph is coloured
+individually.
+
+```csharp
+private const char StepChar = '|';
+public int numberOfSteps = 90;
+// OnValidate:  valueText.SetText(new string(StepChar, numberOfSteps));
+//              valueText.style.extraCharSpacing = -2;
+// UpdateVisuals: valueText.glyphs[i].color = (CurrentColor with { Hue = i / (float) numberOfSteps }).Rgba
+```
+
+No sprite, no texture, no new prefab geometry — `valueText.glyphs[i].color` is
+the whole mechanism, and the row stays a normal two-column option. A pointer
+transform marks the current step, and a 9-slice `border` is resized to the
+text's measured width each update.
+
+**A picker is four rows, not a popup.** `ColorComponent { Hue, Saturation,
+Value, Alpha }` selects which component a given row edits; the subclass supplies
+nothing but the property (`MenuOptionColorHealth` → `Options.Instance.
+ColorHealth`). Four colours × their components are all plain rows. The value
+type is a `record HsvColor` whose `Rgba` goes through `Color.HSVToRGB` — and
+C# 9 records with `with` expressions evidently pass the Roslyn sandbox.
+
+### Open design questions
+
+- **One setting or four?** A `SettingKind.Color` that internally renders four
+  rows conflicts with `ModSection.Settings` being a flat ordered list of rows;
+  four coupled slider settings sharing one stored value is the other shape, and
+  it makes labelling awkward ("Health colour — hue").
+- **Persistence type.** This is the load-bearing unknown. MSM stores through
+  CoreLib `ConfigEntry<T>`; whether its TOML layer can round-trip a `Color` /
+  four floats grouped as one value needs checking before any API is designed.
+  HealthBars sidesteps it entirely by serializing its own JSON (see below), an
+  option MSM does not have without giving up the CoreLib contract.
+- **Alpha optional?** A bar colour wants alpha; a text colour usually does not.
+- **Does the gradient need the `boldLarge` atlas?** The `Steps` slider's `♦/♢`
+  already forced a per-widget font switch; `|` may have the same constraint.
+
+## Slider interaction & write amplification
+
+Three findings from the same mod that apply to **MSM's existing sliders**, not
+just to a future colour one:
+
+- **Mouse drag.** HealthBars' `LateUpdate` raycasts the UI layer against its own
+  `valueCollider` while the left button is held and derives the step from the hit
+  position (`RoundToPixelPerfectPosition.RoundPosition`). MSM's slider offers
+  only `←/→` and click — workable at a handful of steps, unusable at ninety, and
+  a real improvement even at MSM's current granularity.
+- **Halving the skim cooldown.** Per step it reaches into
+  `InputManager.menuSelectionInputCooldownTimer` and `MenuManager.
+  sfxCooldownTimer` via **`API.Reflection`** and fast-forwards them
+  (`inputTimer.FastForward(inputTimer.remainingTime / 2f)`), doubling the repeat
+  rate so a long range stays tolerable. Note `API.Reflection` is PugMod's
+  **sandbox-legal** reflection surface — HealthBars runs with
+  `skipSafetyChecks: false`. It also pitch-shifts the step SFX by position, which
+  is why its sliders feel responsive rather than merely fast.
+- **Write amplification — the one to act on.** MSM persists through CoreLib's
+  `SaveOnConfigSet`, so **every** `Value` write hits the file. HealthBars instead
+  sets an `_isDirty` flag and writes at most every 10 s (`AutosaveInterval`),
+  and its colour setters even compare before marking dirty. Today MSM is fine
+  (one key press = one step = one write), but drag or a halved cooldown turns
+  that into dozens of writes per gesture. So this is not a present defect — it
+  is the precondition under which the two items above create one, and it should
+  be solved *with* them, not after.
+
+## HealthBars as MSM's reference target
+
+HealthBars is the natural yardstick for "is the widget palette complete?", and
+the idea of asking its author to migrate onto MSM came up 2026-08-13. Recording
+the **order of operations**, because it is counter-intuitive:
+
+**MSM cannot host HealthBars' settings today, and a migration would cost it
+features.** Its stored options are seven booleans plus four `HsvColor` values
+and a reset row. MSM covers the booleans and nothing else: there is no colour
+kind (this file's own § above is the plan, not an implementation), the reset row
+is planned but unbuilt (§ Planned widgets #1), and the slider interaction its
+colour rows depend on is the § above. Asking now would mean asking a working mod
+to regress.
+
+**It is also invisible to ADR-001 discovery.** `ForeignConfigDiscovery` finds
+mods that use a CoreLib `ConfigFile`; HealthBars persists its own JSON through
+`API.ConfigFilesystem` + `Newtonsoft.Json` (with `accessesExtraAssemblies:
+true`). So it appears in MSM neither integrated nor auto-detected — it is
+outside the framework's reach in both directions, which is worth knowing
+independently of any migration: **CoreLib is not a safe proxy for "uses config"**
+when judging discovery coverage.
+
+What that makes it useful for right now is an **acceptance target**: when MSM can
+express HealthBars' options screen in full — colours, the reset row, draggable
+sliders — the palette is demonstrably complete, and the conversation with its
+author has something to offer instead of something to ask for. Reaching out is
+the user's call, not the framework's, and it belongs after that point.
+
+Its own integration details, for reference: it mounts as a **submenu of the UI
+options menu** rather than a screen of its own —
+`MenuAdder.AddMenu((RadicalOptionsMenu) Manager.menu.uiOptionsMenu, 19901,
+"HealthBars-Options/Header")`, with all rows coming from a single prefab via
+`AddOptionFromPath`. Menu id `19901` is one of the two ids MSM's own 29314/29315
+were deliberately chosen to avoid.
 
 ## Locked settings — CK's `GRAYED_OUT` convention
 
