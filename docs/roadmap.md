@@ -140,14 +140,219 @@ reordering by retyping every token. Any Consumer List API design should
 treat reorder as a first-class requirement from the start, given this
 already-known consumer need.
 
-### Also open: general List-widget UX
+## General List-widget UX: the drill-in rows don't look like input fields
 
 Raised 2026-08-12 without a specific complaint attached — flagged as "mit
 der UI/UX bin ich nicht zufrieden" while deciding whether to merge
 `list-widget-editing`, deferred in favor of running the
-`pr-review-toolkit:review-pr` gate first and never revisited since. No
-concrete pain points recorded yet; needs its own conversation to pin down
-what specifically feels wrong before it can become an actionable item.
+`pr-review-toolkit:review-pr` gate first. **Pinned down 2026-08-13** from the
+user's own in-game screenshots of CK's *Join Game* menu: the drill-in rows are
+editable but are not *dressed* as editable. ADR-003 adopted CK's text-input
+base class and got its whole mechanism; what it did not adopt is the visual
+field CK builds around that class in its own prefab.
+
+The rows and CK's own text inputs are the same component
+(`RadicalMenuOptionTextInput`), so the gap is a straight field-by-field
+comparison — MSM's `ItemTemplate` (`Prefabs/ListDetailScreen.prefab`) against
+CK's `sessionId` / `sessionIP` / `sessionPort` / `password`
+(`Resources/Assets/GameObject/Join Game Menu.prefab`, four identical instances
+in the AssetRipper export):
+
+| | CK's text inputs | MSM's `ItemTemplate` |
+|---|---|---|
+| `pugText` / `hintText` / `characterMarkBlinker` | set | set |
+| **`selectedMarker`** | → `selectedBorder` (a `SpriteRenderer`) | → `SelectedMarker`, **a GameObject with no renderer** |
+| **resting-state frame** | child `border`, 9-slice `9sl_black` | **no such child** |
+| `dontAllowNewLines` | `1` | `0` |
+
+The `selectedMarker` row is the mechanical core of it.
+`RadicalMenuOptionTextInput.OnSelected()` does exactly one thing —
+`selectedMarker.SetActive(true)` — so the focus affordance *is* wired, it just
+terminates on an empty GameObject. Nothing is missing in the code, which is why
+reading the code never surfaces this. CK points the same field at a
+`SpriteRenderer` (`character_customization_ui_dark_2`) and gets the blue focus
+frame; the resting frame is a second, separate child (`9sl_black`) that MSM has
+no equivalent of at all. Net effect: a row that can be typed into looks
+identical to static text, in both the resting and the focused state.
+
+Deliberately **not** part of this — verified before proposing, so it does not
+get re-raised:
+
+- `hintString` is already used, set at runtime rather than in the prefab
+  (`ListDetailScreen.cs:210`, the `+ Add` row's placeholder).
+- `maxWidth: 25` is deliberate and code-referenced (`ListDetailItem.cs:142`).
+- `characterWhiteList` staying empty is an **ADR-003 decision**, not an
+  oversight: it is an inclusion filter, unsuited to blocking the single
+  problematic character, so commas are stripped at commit instead.
+
+Two smaller items that do belong here:
+
+- **`dontAllowNewLines: 0`** — CK sets `1` on every single-line field.
+  `AppendString` only filters `\n`/`\r` when the flag is set, so a pasted
+  newline currently survives into a token.
+- **`Shake()` is inherited and unused.** The base class ships shake feedback
+  (0.4 s, 20/s, configured in the template already). ADR-003's commit path
+  strips a typed comma *silently* — the user types a comma, it vanishes, and
+  nothing explains why. This is the affordance for exactly that.
+
+**Cost: real Editor work, not a code change.** `border` and `selectedBorder`
+are new prefab objects, and per the project rule
+(`feedback_corekeeper_prefab_edits_in_editor` memory) new/structural prefab
+objects must be authored in the Unity Editor — a `-batchmode` build
+reserializes and drops hand-authored objects. Four traps apply, each already
+documented in this repo:
+
+1. **Both sprites must be imported** (`utils/import_vanilla_prefab.py` handles
+   the AssetRipper GUID remap and pulls transitive asset deps), then given the
+   ModBuilder sprite-meta treatment (`textureType: 8`, `spriteMode: 1`) or they
+   pack as `Texture2D` and `LoadAsset<Sprite>` returns null.
+2. **A new `SpriteRenderer` has two wrong defaults** — set the built-in
+   `Sprites-Default` material (the project-default custom material renders in
+   the Editor and is invisible in the AssetBundle) and `m_MaskInteraction:
+   VisibleInsideMask` (or the frame overscrolls the viewport mask).
+3. **The uiCamera z-sorts transparents by Z, not `sortingOrder`.** A frame
+   behind text at equal absolute Z sorts *in front* and dims the text grey —
+   it reads as a colour bug. The frame needs its own, larger Z.
+4. **The 9-slice `size` is per-row width**, the same thing `SectionBox` already
+   does for its box background.
+
+A **side observation** while comparing: the template YAML still carries
+`owner`, `isAddRow` and a second `readOnly` — field names from before the
+CS0108 shadowing fix. Harmless (Unity drops them on the next Editor save), but
+it does confirm the prefab has not been reserialized since that refactor.
+
+## Dropdown lists — CK's `DropdownUIElement`
+
+An **expanding dropdown** instead of `←/→` step-through, for a `Choice` whose
+option count outgrows the skim model, and as a value-suggestion list on an
+editable text row. Requested 2026-08-13 from the same *Join Game* menu
+screenshots as the two items above; verified against the decompiled
+`Pug.Other` (game 1.2.1.5 — class and member names are stable, line numbers are
+not) and the AssetRipper export of `Join Game Menu.prefab`.
+
+The motivating limit: `SettingWidget` drives `Choice` through
+`OnSkimLeft/Right` → `Adjust(±1)`, so selecting the 9th of 12 options is eight
+key presses with no overview of what else exists. Fine for `Low/Medium/High`,
+poor for a language list, item category, or any enum with real breadth.
+
+### What CK gives for free
+
+Three classes, all in `Pug.Other`, **all generic** — they contain no join-menu
+logic whatsoever:
+
+- **`DropdownUIElement : UIelement, IScrollable`** — the control: open/close
+  (`ToggleDropdownList`/`HideDropdownList`), entry instantiation and vertical
+  stacking (`InitList` via `UIManager.PositionElementBeneath`, the same helper
+  the section box uses), selection (`OnEntryClicked` → `activeEntry`/`activeId`
+  + an `OnActiveEntryChanged` UnityEvent), and its **own `UIScrollWindow`** so a
+  long list scrolls inside the popup.
+- **`DropdownEntry : UIelement`** — one row, with `text` **and** `subText`.
+- **`DropdownEntryData`** — the data record: `id`, `textStringToShow`,
+  `subtextStringToShow`, `subStringFormatFields`, `string0` (a free payload
+  slot).
+
+Two further pieces that matter for a mod:
+
+- **The close-on-back handling is menu-agnostic.** It lives in
+  `MenuManager.UpdateInputAndApplyToCurrentMenu`, keyed on
+  `Manager.input.activeDropdown` (set by `ToggleDropdownList`), and takes
+  priority over the menu pop — so Escape/B closes the list first, then the
+  screen. Nothing about it is bound to the join menu; it works in any
+  `RadicalMenu`, including this framework's two screens.
+- **Two-line entries come free** — `subtextStringToShow` +
+  `subStringFormatFields`, which vanilla uses for the server name plus its last
+  join date. That is "option label + explanation", something the single-row
+  skim model structurally cannot render. `localizeEntries: 1` is already set in
+  the vanilla prefab, so MSM's existing per-option loc terms drop straight in.
+
+**The two vanilla wrappers are the build instructions, not an obstacle:**
+`RadicalJoinGameMenu_JoinMethodDropdown` and `_ServerDropdown` are ~90-line
+`RadicalMenuOption`s that only supply entry data and forward navigation
+(`OnSelected` → `dropdown.button.Select()`, `NavigateInternally` delegating to
+the open list's current element, `OnActivated` → forward a `LeftClick`,
+`OnParentMenuActivation` → `HideDropdownList`). A MSM widget replaces them
+1:1 with its own `SettingDef`-driven equivalent.
+
+### Two places it docks in
+
+1. **`Choice` with many options** — either a new `SettingKind`, or a
+   presentation flag on `Choice` chosen at declaration (or automatically above
+   an option-count threshold). Undecided; see below.
+2. **Value suggestions on an editable text row.** `_ServerDropdown` carries a
+   `public RadicalMenuOptionTextInput textInput` and its `onActiveEntryChanged`
+   is wired to `RadicalJoinGameMenu.SetSessionData` — i.e. picking from the list
+   *writes into the text field*. That is the "type it **or** pick a known value"
+   pattern from the first screenshot, and it is exactly what an editable list
+   token wants (item names for PlacementPlus' `ExcludeItems`, for instance).
+   Same combination, no new mechanism.
+
+**This is not the inline widget ADR-002 rejected.** That one grew the row
+itself, so a long value pushed past the viewport into a controller dead zone.
+`DropdownUIElement` is an *overlay* with its own scroll window — the row keeps
+its height and the list scrolls internally. The rejection reason does not
+transfer; the new problems are different ones, below.
+
+### The three real obstacles
+
+1. **Sprite-mask range conflict.** Vanilla's dropdown masks run with
+   `m_IsCustomRangeActive: 1`, range sorting order **13–17** on layer 5 — they
+   deliberately affect only sprites inside that band. **Both** of this mod's
+   prefabs use `m_IsCustomRangeActive: 0`, i.e. an unbounded range that clips
+   everything. Dropping a dropdown into either screen puts two masks over the
+   same sprites. The fix is the mechanism CK itself uses (custom ranges), but it
+   means touching this framework's existing masking, and it must be **verified
+   in-game** — the interaction of two `SpriteMask`s is not readable off the YAML.
+2. **The popup must escape the scroll hierarchy.** An open list has to overhang
+   the viewport edge and must not scroll with the rows behind it. So on open it
+   needs reparenting to the screen root with a computed position, and closing
+   must restore it. The join menu has no equivalent problem —
+   `RadicalJoinGameMenu` is not `IScrollable` — so vanilla offers no pattern to
+   copy here.
+3. **Three serialized references that an extraction does not carry.** All
+   verified in the prefab YAML:
+   - `entryPrefab` is an **external** cross-prefab reference
+     (`guid: 74fbf6b0…, type: 2` → `DropdownEntry.prefab`), the shape the
+     `project_corekeeper_nested_prefab_variant` memory records as breaking on
+     extraction → wire at runtime.
+   - **`ToggleDropdownList()` has no C# caller at all** — it is reached solely
+     through the `button`'s `onLeftClick` UnityEvent in the prefab.
+   - `OnActiveEntryChanged`'s persistent call targets
+     `m_TargetAssemblyTypeName: RadicalJoinGameMenu_JoinMethodDropdown,
+     Pug.Other` — a class this mod never instantiates.
+
+   All three want `AddListener`/assignment in `Bind()` rather than trust in the
+   imported YAML. Half of a Unity dropdown's wiring is data, not code.
+
+Two smaller traps worth writing down now: `SelectFirstEntry()` indexes
+`entries[0]` unguarded (empty option set → exception, so seed or guard before
+calling), and vanilla hides the affordance entirely at one option —
+`JoinMethodDropdown.Awake` does `dropdown.button.gameObject.SetActive(false)`
+when `GetEntryDatas().Count <= 1`, which is the right precedent for a
+single-option `Choice`.
+
+### Cost and sequencing
+
+**The most expensive of the three CK-control items** — obstacles 1 and 2 both
+reach into this framework's scroll/mask architecture, whereas the drill-in
+frame and `SettingKind.Text` are additive. The drill-in frame is also its
+natural prerequisite in the second docking place above (a suggestion list on a
+text row presumes the text row looks like a field). Sequence: frame → `Text` →
+dropdown.
+
+### Open design questions
+
+- **New kind or presentation flag?** A `SettingKind.Dropdown` duplicates
+  `Choice`'s value handling; a flag on `Choice` (`.AsDropdown()`, or automatic
+  above N options) keeps one value path and one loc convention. The flag looks
+  right, but it means one `SettingKind` maps to two prefabs — which is exactly
+  the coupling § "Why 2 and 3 are separate widgets" argues against. Resolve
+  before coding.
+- **Does it belong in the drill-in, the main screen, or both?** Obstacle 1 has
+  to be solved per screen.
+- **Mouse-only or full controller parity?** The vanilla wrappers show the
+  controller path (`NavigateInternally` + `dropdown.button.Select()`), so parity
+  is achievable — but it is the part most easily left half-done, and this
+  framework's own driver is "Core Keeper is controller-first".
 
 ## Locked settings — CK's `GRAYED_OUT` convention
 
