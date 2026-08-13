@@ -115,6 +115,6 @@ separator can sit between option 3 and 4).
   lossy, comma-rejoined overwrite of a third-party mod's real config value.
   ADR-002 §7's format-override toggle (or a lighter one-time confirmation
   before the first write to an unconfirmed entry) is the fix; deliberately not
-  built in that slice (see its design spec's "Known risk, accepted for this
-  slice" note, §5). Flagged by the `pr-review-toolkit:review-pr` gate,
+  built in that slice (see ADR-003's "Consequences" section — the risk this
+  bullet describes). Flagged by the `pr-review-toolkit:review-pr` gate,
   requested 2026-08-12.
