@@ -11,7 +11,7 @@ namespace ModSettingsMenu.UI
     /// + auto-saves. Value display is per-kind. Label is the raw key for now (Phase 5
     /// swaps to Loc.T(_def.Term); Choice value likewise Loc.T(term/token) ?? token).
     /// </summary>
-    public sealed class SettingWidget : RadicalMenuOption
+    public sealed class SettingWidget : RadicalMenuOption, ISectionRow
     {
         // ♦ active / ♢ inactive step glyphs (U+2666/2662), as \u escapes (pure-ASCII source —
         // a literal is encoding-unsafe in the Roslyn sandbox). thinMedium's atlas LACKS these
@@ -21,10 +21,14 @@ namespace ModSettingsMenu.UI
         private const char StepInactive = '\u2662';
 
         private SettingDef _def;
+        private ModSection _section;
 
-        public void Bind(SettingDef def)
+        public ModSection Section => _section;
+
+        public void Bind(SettingDef def, ModSection section)
         {
             _def = def;
+            _section = section;
             // The ♦/♢ step glyphs only render in boldLarge (thinMedium's atlas lacks them — that's
             // the face CK's audio-volume value uses). Switch this row's value font for the Steps
             // display only; every other value keeps the prefab's thinMedium.
@@ -177,7 +181,7 @@ namespace ModSettingsMenu.UI
             Refresh();
         }
 
-        private void Refresh()
+        public void Refresh()
         {
             if (_def == null)
                 return;
