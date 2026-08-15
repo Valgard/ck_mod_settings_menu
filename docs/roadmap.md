@@ -190,14 +190,7 @@ needed after shipping without it.
 > free — not controller-hostile at all. See the next section for what is
 > actually still missing (a *consumer-facing* way to declare one).
 
-## Consumer-facing List API + token reorder
-
-Two related gaps in the `List` kind `list-widget-editing` shipped (ADR-003),
-both surfaced by real external pressure rather than internal planning —
-tracked together since a Consumer List API would naturally carry reorder as
-part of its own design, not as a later bolt-on.
-
-### No consumer-facing way to declare a `List` (or even plain free text)
+## Consumer-facing List declaration (`SectionBuilder.List`)
 
 `SettingKind.List` is currently produced **only** by `ForeignConfigDiscovery`'s
 auto-detection heuristic — `SectionBuilder` (the explicit consumer API:
@@ -222,7 +215,7 @@ to avoid a cross-repo merge conflict with the then-in-progress
 `SectionBuilder` (no longer a concern now that branch is merged): a
 `.Text(out SettingHandle<string> h, key, default)` on `SectionBuilder`,
 rendering through the existing `SettingKind.Info` path as a read-only
-placeholder until the full Consumer List API lands — at which point a
+placeholder until the full declaration API lands — at which point a
 consumer declaring it as a proper `List` would need no migration on their
 side, just a call-site change.
 
@@ -232,15 +225,26 @@ side, just a call-site change.
 > editable field possible are the same ones the drill-in rows need anyway. The
 > `List`-declaration half of this gap stands unchanged.
 
-### Token reorder
+**One constraint comes from elsewhere:** the consumer driving this item wants an
+*ordered* list, so the API has to carry reorder as part of its own design rather
+than as a later bolt-on — see § "Token reorder in the List drill-in", which
+ships independently of this one.
 
-ADR-003 deliberately left tokens' insertion order fixed — add/edit/remove
-only, no drag/up-down/keyboard reorder. Fine for an exclude-set (order is
-irrelevant), but not for a genuine priority list: auto-rail-bridges' own
-bridge-order use case is exactly this shape, and add/edit/remove alone means
-reordering by retyping every token. Any Consumer List API design should
-treat reorder as a first-class requirement from the start, given this
-already-known consumer need.
+## Token reorder in the List drill-in
+
+The drill-in that `list-widget-editing` shipped (ADR-003) lets a user add, edit
+and remove tokens, but their **insertion order is fixed** — no drag, no up/down,
+no keyboard reorder. Fine for an exclude-set, where order carries no meaning;
+wrong for a genuine priority list, where add/edit/remove alone means reordering
+by retyping every token.
+
+**Buildable on its own.** The editable drill-in already exists and already runs
+against discovered foreign configs, so reorder is a change to `ListDetailScreen`
+and needs no consumer-facing declaration API to be useful. It sits beside
+§ "Consumer-facing List declaration" for two reasons only: the same
+already-shipped consumer motivates both — auto-rail-bridges' bridge build order
+is exactly a priority list — and a declaration API designed without reorder in
+mind would have to be revisited.
 
 ## General List-widget UX: the drill-in rows don't look like input fields
 
@@ -346,7 +350,7 @@ is why the two items should be sequenced together rather than costed
 separately.
 
 This also **supersedes the cheap intermediate step** sketched under
-§ "No consumer-facing way to declare a `List` (or even plain free text)" — a
+§ "Consumer-facing List declaration" — a
 `.Text(...)` rendering through the `Info` path as a *read-only placeholder*.
 With the frame available, a real editable field is barely more work than the
 placeholder, and the placeholder would ship a row that looks editable-ish and
