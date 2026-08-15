@@ -210,7 +210,7 @@ namespace ModSettingsMenu.UI
                             lGo.SetActive(true);
                             lGo.name = "List " + def.Key;
                             var lw = lGo.GetComponent<ListWidget>();
-                            lw.Bind(def);
+                            lw.Bind(def, section);
                             lw.SetParentMenu(this);
                             // Row height is set in RenderContent (SetRowHeight(RowHeightPx(RenderAndMeasure)))
                             // after activation, like the normal rows — it depends on the preview's rendered
@@ -224,7 +224,7 @@ namespace ModSettingsMenu.UI
                     wGo.SetActive(true);
                     wGo.name = def.Kind + " " + def.Key;
                     var widget = wGo.GetComponent<SettingWidget>();
-                    widget.Bind(def); // renders label/value → dimensions available
+                    widget.Bind(def, section); // renders label/value → dimensions available
                     widget.SetParentMenu(this);
                     // The template's WrapperUIComponent lets the box layout measure this row;
                     // only its (content-adaptive) height is set here.
