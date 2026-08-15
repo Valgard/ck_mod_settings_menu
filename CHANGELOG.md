@@ -3,7 +3,7 @@
 All notable changes to this mod are documented here. The topmost `## [x.y.z]`
 entry is the version published to mod.io; its body is the modfile changelog.
 
-## [1.2.0]
+## [2.0.0]
 
 - **Any mod using CoreLib config is now discovered automatically**, even if it
   never integrates with Mod Settings Menu directly — its settings render as
@@ -20,6 +20,22 @@ entry is the version published to mod.io; its body is the modfile changelog.
   without leaving the game or hand-editing a config file. A read-only list
   (server-locked or view-only) still shows every entry, just without an edit
   affordance.
+- **A setting you cannot change still looks like itself.** A read-only value
+  used to collapse into a plain text row; it now keeps its native widget — a
+  locked toggle still reads as on/off, a locked slider still shows its
+  percentage — and simply stops responding to input.
+- **Fixed: rows could render without any text.** Opening and closing the
+  settings screen repeatedly eventually left labels and values blank until the
+  game was restarted. The screen now releases its text resources correctly and
+  renders reliably however often it is reopened.
+- **Fixed: keyboard and controller selection could scroll out of view.** With
+  several mods installed the list grows past the screen, and moving down walked
+  the highlighted row off the bottom edge. The view now follows the selection.
+- **Fixed: discovered settings are written back more carefully.** Adjusting a
+  numeric value no longer introduces rounding noise into the owning mod's
+  config file, and stepping through a choice no longer overwrites a value this
+  menu does not recognise. Section headings and hints also space correctly
+  again.
 
 ## [1.1.0]
 
