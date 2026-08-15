@@ -279,6 +279,39 @@ namespace ModSettingsMenu.UI
             ScrollSelectedIntoView();
         }
 
+        // CK asks the TOP menu for its footer prompts every frame from MenuManager.LateUpdate
+        // (UpdateHelperButtons). Note it calls GetHelpButtonsToShow() UNCONDITIONALLY as soon as a
+        // row is selected — UseCustomHelpButtons only decides the selection-less case — so the
+        // override below is what actually drives the bar.
+        public override bool UseCustomHelpButtons => true;
+
+        public override List<MenuHelperButtons.HelpButtonTypes> GetHelpButtonsToShow()
+        {
+            var buttons = base.GetHelpButtonsToShow();
+            if (!SectionReset.CanReset(SelectedSection()))
+                return buttons;
+            // NEVER append to the base result: RadicalMenu.GetHelpButtonsToShow returns
+            // Manager.menu.defaultHelpButtons — the SHARED list instance — so mutating it would
+            // permanently add a reset prompt to every vanilla menu in the game. Copy, then add.
+            //
+            // RESET_DEFAULTS is a fully-built but unused vanilla slot: the Global Objects (Main
+            // Manager) prefab wires its root, its per-platform glyph (keyboard "R", the Y-position
+            // face button) and a PugText carrying the shipped, localized term "Menu/Reset" — and no
+            // vanilla menu ever requests it. So this costs no prefab work and no own localization.
+            var withReset = new List<MenuHelperButtons.HelpButtonTypes>(buttons);
+            withReset.Add(MenuHelperButtons.HelpButtonTypes.RESET_DEFAULTS);
+            return withReset;
+        }
+
+        // The section the currently selected row belongs to, or null when nothing selectable is
+        // focused. GetSelectedMenuOption is RadicalMenu's own accessor (it is what CK's
+        // UpdateHelperButtons uses too).
+        private ModSection SelectedSection()
+        {
+            var row = GetSelectedMenuOption() as ISectionRow;
+            return row == null ? null : row.Section;
+        }
+
         // Scroll the viewport so the selected row follows keyboard / controller navigation.
         //
         // Positions are measured in contentRoot's (the scroll root's) local space: sum localPosition.y
