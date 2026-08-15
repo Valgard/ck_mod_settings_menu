@@ -10,19 +10,25 @@ namespace ModSettingsMenu.UI
     /// Read-only. The list-vs-plain classification now lives in ForeignConfigDiscovery
     /// (only genuine lists reach this widget), so there is no per-row toggle.
     /// </summary>
-    public sealed class ListWidget : RadicalMenuOption
+    public sealed class ListWidget : RadicalMenuOption, ISectionRow
     {
         private const int PreviewMaxChars = 22; // preview budget: fits one narrow value-column line
 
         private SettingDef _def;
+        private ModSection _section;
         private ListWidgetBox _box;
 
-        public void Bind(SettingDef def)
+        public ModSection Section => _section;
+
+        public void Bind(SettingDef def, ModSection section)
         {
             _def = def;
+            _section = section;
             _box = GetComponent<ListWidgetBox>();
             Render();
         }
+
+        public void Refresh() => Render();
 
         public override OptionActiveState GetActiveStateInCurrentScene() => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
