@@ -95,7 +95,7 @@ The mod is deployed through the fake-mod.io workaround (see parent `../CLAUDE.md
 `../utils/upload.sh` publishes this mod. It runs the shared Editor class `CoreKeeperModUtils.CLIPublishHelper.Publish` (symlinked in from `../utils/`, alongside `CLIBuildHelper`) via Unity batchmode. The publish reads `MOD_REPO_ROOT` (set in `.envrc`) to locate `CHANGELOG.md`.
 
 - `Editor/ModSettingsMenu.Editor.asmdef` references the mod.io plugin DLL via `overrideReferences: true` + `precompiledReferences: ["modio.UnityPlugin.dll"]`.
-- The published version comes from the topmost `## [x.y.z]` entry of `CHANGELOG.md` (currently **1.2.0**); bump it before publishing.
+- The published version comes from the topmost `## [x.y.z]` entry of `CHANGELOG.md`; bump it before publishing.
 - The profile logo is `unity/ModSettingsMenu/Editor/logo.png` (readable, uncompressed; min 512×288).
 - The real mod ID is **`6211950`**, in `unity/ModSettingsMenu/Editor/ModSettingsMenu_modio.asset`.
 - The mod.io listing lists **CoreLib** as a dependency (synced from the `.asset` `dependencies:` by `CLIPublishHelper`).
