@@ -130,6 +130,53 @@ namespace ModSettingsMenu.UI
             );
         }
 
+        // CK's own popup — the same call ShowRestartPrompt makes, so look and localization are the
+        // game's. Fires from an ordinary input frame, so unlike the restart prompt it needs NO
+        // deferral: that one fires from Deactivate, inside the menu-stack pop it would re-enter.
+        private void ConfirmReset(ModSection section)
+        {
+            Manager.menu.centerPopUpText.StartNewDisplaySequence(
+                "ModSettingsMenu-UI/ResetConfirm",
+                // The mod's display name is a LITERAL, not a loc term, so localizePlaceholders must
+                // be false below — otherwise CK looks the name up as a term and renders "<missing>".
+                new string[] { section.DisplayName },
+                menuInputCooldown: true,
+                fadeTime: 0f,
+                staticTime: 1.5f,
+                useUnscaledTime: true,
+                yPosition: 0f,
+                textBackgroundAlpha: 1f,
+                localize: true,
+                fontFace: TextManager.FontFace.boldMedium,
+                optionsCallback: delegate(PopupResponse response)
+                {
+                    if (!response.IsConfirm)
+                        return;
+                    if (SectionReset.Apply(section))
+                        RestartPending = true;
+                    RefreshSection(section);
+                },
+                options: new List<string> { "cancelDialogue", "yes" },
+                minWidth: 10f,
+                backgroundAlpha: 0.8f,
+                priority: 0,
+                textMaxWidth: 20f,
+                localizePlaceholders: false
+            );
+        }
+
+        // Redraw only the rows of the section that was reset. NOT Populate() — that destroys and
+        // rebuilds every row and would discard the selection (and with it the hint bar's context).
+        private void RefreshSection(ModSection section)
+        {
+            foreach (var option in menuOptions)
+            {
+                var row = option as ISectionRow;
+                if (row != null && row.Section == section)
+                    row.Refresh();
+            }
+        }
+
         // Pay the one-time first-enable cost (bundle asset load / shader-variant compile, ~1 s
         // under Wine) once at load instead of on the first open: build the real rows, then fire
         // the OnEnable cascade with a same-frame SetActive cycle. NOT RadicalMenu.Activate() — so
@@ -340,7 +387,7 @@ namespace ModSettingsMenu.UI
             bool gamepad = Manager.input != null && Manager.input.GetButtonDown(ResetActionId);
             if (!keyboard && !gamepad)
                 return;
-            Debug.Log($"[ModSettingsMenu] reset trigger: keyboard={keyboard} gamepad={gamepad} section='{section.DisplayName}'");
+            ConfirmReset(section);
         }
 
         // Scroll the viewport so the selected row follows keyboard / controller navigation.
