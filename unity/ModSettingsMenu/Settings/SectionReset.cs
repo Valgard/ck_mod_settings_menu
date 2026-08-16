@@ -6,7 +6,10 @@ namespace ModSettingsMenu.Settings
     /// a reset is one file, one owner, and one confirmable sentence. Discovered (foreign)
     /// sections are included on purpose — a reset only ever writes back the value that mod
     /// itself declared, so unlike the list-editing path it can never invent or lose a value.
-    /// ReadOnly entries are skipped: view-only / server-locked is not writable at all.
+    /// ReadOnly entries are always skipped, for either of the two reasons SettingDef.ReadOnly
+    /// itself carries: a genuine permission lock (view-only / server-locked and not this
+    /// session's host) or a Kind == Info fallback where no editable widget exists for the
+    /// value's shape at all — the latter is writable, but this menu never showed it as such.
     /// </summary>
     internal static class SectionReset
     {
@@ -29,9 +32,9 @@ namespace ModSettingsMenu.Settings
         /// </summary>
         internal static bool Apply(ModSection section)
         {
-            bool restartRelevantChange = false;
             if (section == null)
                 return false;
+            bool restartRelevantChange = false;
             foreach (var def in section.Settings)
             {
                 if (!IsInScope(def))
