@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using ModSettingsMenu.Settings;
-using Rewired;
 using UnityEngine;
 
 namespace ModSettingsMenu.UI
@@ -313,10 +312,14 @@ namespace ModSettingsMenu.UI
             return row == null ? null : row.Section;
         }
 
-        // Rewired action id for MenuSecondaryActivate. Defined in PugMod.SDK.Runtime and free in a
-        // settings menu — CK polls it only in the mod.io browser. Its category is "Menu", tagged
-        // system, so it is neither rebindable nor visible in CK's Controls screen.
-        private const int ResetActionId = 221;
+        // Rewired action id for OpenProfile. Chosen over MenuSecondaryActivate (221) because it is
+        // the action that actually sits on the button CK's RESET_DEFAULTS hint glyph depicts: an
+        // in-game probe showed Triangle reports 220 + 223 while Square reports 221 + 222, and the
+        // hint's sprite is the Y/Triangle one it shares with the openProfile hint. 223 is also the
+        // only candidate no vanilla menu consumes — its accessor IsOpenProfileButtonDown() has zero
+        // callers in Pug.Other, whereas 222 drives the join-game session refresh and 220/221 are
+        // dispatched through InputReceiver.OnOptions()/OnAlternate().
+        private const int ResetActionId = 223;
 
         // Poll the reset input. Gated on being the TOP menu, which also covers the two cases that
         // must not react: the list drill-in is open (a different menu is on top), and the
@@ -328,43 +331,6 @@ namespace ModSettingsMenu.UI
         // Update(), so this name is free.
         private void Update()
         {
-            // TEMPORARY DIAGNOSTIC — remove once the reset input is bound by element name.
-            // Logs every physically pressed joystick button with its raw index, Rewired element id
-            // and human-readable name, independent of any action mapping and before any gate below.
-            // CK's RESET_DEFAULTS hint glyph is a baked sprite with no link to an input action, so
-            // the only way to make hint and behaviour agree is to learn what Rewired calls each
-            // button here and bind to that name rather than to an action id.
-            var joysticks = ReInput.controllers.Joysticks;
-            for (int j = 0; j < joysticks.Count; j++)
-            {
-                var joystick = joysticks[j];
-                var identifiers = joystick.ButtonElementIdentifiers;
-                for (int b = 0; b < joystick.buttonCount; b++)
-                {
-                    if (!joystick.GetButtonDown(b))
-                        continue;
-                    var identifier = (identifiers != null && b < identifiers.Count) ? identifiers[b] : null;
-                    Debug.Log(
-                        $"[ModSettingsMenu] button probe: joystick='{joystick.name}' index={b} "
-                            + $"elementId={(identifier != null ? identifier.id : -1)} name='{(identifier != null ? identifier.name : "?")}'"
-                    );
-                }
-            }
-
-            // TEMPORARY DIAGNOSTIC — paired with the button probe above so one press produces both
-            // lines adjacently in the log: which physical button it was, and which of CK's own menu
-            // actions report it. 221 is known to land on Square; 223 (OpenProfile) shares its map
-            // element with 220 (MenuOptions) and is the candidate for the Triangle position.
-            if (Manager.input != null)
-            {
-                int[] probeActions = { 220, 221, 222, 223 };
-                for (int a = 0; a < probeActions.Length; a++)
-                {
-                    if (Manager.input.GetButtonDown(probeActions[a]))
-                        Debug.Log($"[ModSettingsMenu] action probe: id={probeActions[a]} down");
-                }
-            }
-
             if (Manager.menu == null || Manager.menu.GetTopMenu() != (RadicalMenu)this)
                 return;
             var section = SelectedSection();
