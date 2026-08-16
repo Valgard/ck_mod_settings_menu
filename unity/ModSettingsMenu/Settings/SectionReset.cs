@@ -30,7 +30,7 @@ namespace ModSettingsMenu.Settings
         /// caller can raise the restart flag. Deliberately returns that instead of setting
         /// ModSettingsScreen.RestartPending itself — Settings must not depend on UI.
         /// </summary>
-        internal static bool Apply(ModSection section)
+        internal static bool ApplyAndCheckRestart(ModSection section)
         {
             if (section == null)
                 return false;
