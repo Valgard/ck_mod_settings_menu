@@ -36,10 +36,10 @@ mod author wants reachable from the settings screen.
   no Editor work at all. Serves consumer actions like "apply now" for a
   bake-time mod (whose change is otherwise invisible until a restart), "clear
   checklist", or "open ledger".
-- **Not to be confused with "Reset to defaults"** (its own section below). That
-  is a framework-owned row with framework-owned logic; this is a declaration API
-  for a consumer's own callback. Reset *may* render through this row once it
-  exists, but it does not depend on it.
+- **Not to be confused with "Reset to defaults"**, which shipped 2026-08-16 as
+  a footer-hint-bar action rather than a row (see `CHANGELOG.md` and
+  `docs/adrs/004-section-reset-to-defaults.md`) — this is a declaration API for
+  a consumer's own callback, unrelated to that framework-owned logic.
 
 ### 2. Info (read-only)
 
@@ -86,61 +86,6 @@ The moment the geometry diverges, the prefab diverges, and that is precisely
 what a distinct `SettingKind` value is for (it selects prefab + behaviour). They
 only *share* membership in the ordered `ModSection.Settings` list (so a
 separator can sit between option 3 and 4).
-
-## Reset to defaults
-
-A row that restores settings to the values their owning mod declared. **This is
-a framework feature, not a widget** — it is listed separately from § Planned
-widgets #1 on purpose: that section adds a *declaration API* for a consumer's
-own callback, while everything below is logic this framework owns and the
-consumer never sees. The two are frequently confused because a reset happens to
-be reachable through a button; the button is not what makes it possible.
-
-What it actually needs, none of which a Button/Action-Row provides:
-
-- **The restore itself** — every `ConfigEntryBase` exposes its default, so the
-  value write is nearly free. Which entries are in scope is the design question,
-  not how to write them.
-- **A confirmation step.** Destroying every customised value on a single
-  activation needs a prompt. CK's own `centerPopUpText.StartNewDisplaySequence`
-  with the shipped loc terms `cancelDialogue` / `yes` and `pauseGame: false`
-  covers it — no own dialog, no own strings.
-- **A re-render of every visible row.** The rows read their value on `Refresh()`;
-  after a bulk write the whole open screen is stale, which no other write path in
-  this framework produces (a normal edit changes exactly one row).
-- **The `RequiresRestart` interaction.** If any restored setting is marked
-  restart-dirty, the reset has to raise that flag the same way an ordinary edit
-  does — otherwise the prompt on leaving the screen silently goes missing.
-- **`SettingHandle<T>.OnChanged` must fire** for every changed value, or a
-  consumer holding a live handle keeps acting on the pre-reset value.
-
-**A worked precedent exists (found 2026-08-13):** the foreign mod HealthBars
-ships `MenuOptionResetToDefaults` — a plain `RadicalMenuOption` (its own
-subclass, **not** a generic button row) whose `OnActivated` opens the CK popup
-described above and calls its options' `SetDefaults()` on confirm. It answers
-the scope question with **one global row**. Two details worth copying: it fires
-from `OnActivated`, so it never touches this framework's `Deactivate`
-re-entrancy trap (that trap is specific to `Deactivate`, and a reset has no
-reason to go near it); and it follows the reset with a short input guard
-(`TemporarilyPreventInteraction`, 1 s) so trailing input cannot immediately
-re-edit the freshly restored values — the kind of detail a reset only reveals it
-needed after shipping without it.
-
-### Open design questions
-
-- **Scope: global, per-section, or both?** HealthBars only ever had its own
-  options, so one global row was the whole question for it. This framework
-  renders many mods side by side, which makes a single global row a much larger
-  gesture than it looks.
-- **Do discovered foreign configs reset too?** The sharper form of the previous
-  question, and one HealthBars offers no answer to. `ForeignConfigDiscovery`
-  mounts settings belonging to mods that never opted in; a global reset that
-  silently rewrites a third-party mod's config file is a different act from
-  resetting the settings a consumer deliberately registered here. Related to the
-  misclassification-write risk under § Small fixes.
-- **Per-row reset?** A "restore this one value" affordance is a different
-  interaction (it would live on the row itself, not in a separate row) and would
-  answer most of the scope question by never needing a bulk mode.
 
 ## Explicitly out of scope
 
@@ -628,11 +573,12 @@ the **order of operations**, because it is counter-intuitive:
 
 **MSM cannot host HealthBars' settings today, and a migration would cost it
 features.** Its stored options are seven booleans plus four `HsvColor` values
-and a reset row. MSM covers the booleans and nothing else: there is no colour
-kind (this file's own § above is the plan, not an implementation), the reset row
-is planned but unbuilt (§ Reset to defaults), and the slider interaction its
-colour rows depend on is the § above. Asking now would mean asking a working mod
-to regress.
+and a reset row. MSM covers the booleans and, since 2026-08-16, resetting too
+(though as a per-section footer-hint action, not a row — see
+`docs/adrs/004-section-reset-to-defaults.md`): there is no colour kind (this
+file's own § above is the plan, not an implementation), and the slider
+interaction its colour rows depend on is the § above. Asking now would mean
+asking a working mod to regress.
 
 **It is also invisible to ADR-001 discovery.** `ForeignConfigDiscovery` finds
 mods that use a CoreLib `ConfigFile`; HealthBars persists its own JSON through
@@ -643,7 +589,7 @@ independently of any migration: **CoreLib is not a safe proxy for "uses config"*
 when judging discovery coverage.
 
 What that makes it useful for right now is an **acceptance target**: when MSM can
-express HealthBars' options screen in full — colours, the reset row, draggable
+express HealthBars' options screen in full — colours and draggable
 sliders — the palette is demonstrably complete, and the conversation with its
 author has something to offer instead of something to ask for. Reaching out is
 the user's call, not the framework's, and it belongs after that point.

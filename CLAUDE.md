@@ -134,6 +134,20 @@ from `../utils/`.
   Stepper, and a raw string→`List` when a heuristic judges it a genuine comma-list (≥2
   compact tokens), else `Info`. The routing decision lives here so the widgets stay dumb
   — only genuine lists reach `ListWidget`.
+- **`SectionReset`** — restores one section's settings to the defaults their owning mod
+  declared at `Bind()`. Section-scoped by design: one `ModSection` is one `ConfigFile`
+  is one owning mod, so a reset is one file, one owner, one confirmable sentence.
+  `CanReset(ModSection)` reports whether the section has anything a reset could write
+  (gates both the hint bar and the input poll); `Apply(ModSection)` writes every
+  in-scope entry's `ConfigEntryBase.BoxedValue` back to its `DefaultValue` — CoreLib's
+  own setter clamps, auto-saves, and raises `SettingChanged` (the same path that drives
+  `SettingHandle<T>.OnChanged`), so nothing here notifies or persists by hand — and
+  returns whether a `RequiresRestart` entry actually changed, so the caller can raise
+  the restart flag without `Settings` depending on `UI`. Discovered (foreign) sections
+  are included on purpose: a reset only ever writes back the value that mod itself
+  declared, so unlike the list-editing write path it can never invent or lose a value.
+  `ReadOnly` entries are always skipped — view-only/server-locked is not writable at
+  all.
 - **`ConfigStore`** — a `Dictionary<modId, ConfigFile>` cache. Creates one CoreLib
   `ConfigFile($"{modId}/config.cfg", saveOnInit: true, info)` per consumer. CoreLib does
   all `System.IO` in its own trusted assembly via `API.ConfigFilesystem`, so the
@@ -154,7 +168,14 @@ from `../utils/`.
   Sections render **alphabetically by `DisplayName`**; options within a box follow the
   section's `OptionSort`. `PreWarm()` pays the one-time first-enable cost at load via a
   same-frame `SetActive(true)/SetActive(false)`. `Deactivate` consumes the restart-dirty
-  flag and requests the deferred prompt.
+  flag and requests the deferred prompt. `UseCustomHelpButtons => true` plus an override
+  of `GetHelpButtonsToShow()` surface CK's dormant `RESET_DEFAULTS` footer-hint slot
+  whenever the selected row's section has anything resettable (`SectionReset.CanReset`);
+  a same-frame `Update()` polls the reset input (keyboard `R`, Rewired action 223) while
+  this screen is CK's top menu and, on press, opens a
+  `centerPopUpText.StartNewDisplaySequence` confirmation naming the section — on
+  **Yes**, `SectionReset.Apply(section)` runs and only that section's rows are
+  re-`Refresh()`ed (never `Populate()`, which would discard the selection).
 - **`SectionBox`** — a tiny `MonoBehaviour` on the section-template prefab exposing
   `header`, `hint`, and `widgetContainer` as **serialized references** (the screen wires
   by reference, not by fragile `Find()` paths). The `widgetContainer` is a
@@ -169,7 +190,9 @@ from `../utils/`.
   `Adjust` is a no-op and it takes no selection effect). The `Steps` `♦/♢` chain uses
   `♦`/`♢` escapes (pure-ASCII source; a literal diamond is encoding-unsafe in the Roslyn
   sandbox) and only renders in the `boldLarge` font atlas, so `Bind` switches a
-  Steps-slider's value font accordingly.
+  Steps-slider's value font accordingly. Implements `ISectionRow` (`Section` + a
+  now-public `Refresh()`) — one of the two row classes the section-scoped reset reads a
+  selected row's section from and redraws after a bulk write.
 
 The `List` kind is the one that does NOT render through `SettingWidget` — it has its own
 compact row plus a pushed detail screen:
@@ -180,7 +203,8 @@ compact row plus a pushed detail screen:
   drill affordance. `OnActivated` pushes the detail screen (`ListDetailScreen.Open`);
   `OnSelected/OnDeselected` tint the `drillIcon` sprite grey/blue to follow the row's
   text colour. Read-only — the classification already happened in
-  `ForeignConfigDiscovery`, so there is no per-row toggle.
+  `ForeignConfigDiscovery`, so there is no per-row toggle. Implements `ISectionRow`,
+  same as `SettingWidget`.
 - **`ListDetailScreen : RadicalMenu, IScrollable`** (+ **`ListDetailBox`** — `title`,
   `itemContainer`, `itemTemplate`; and **`ListDetailItem : RadicalMenuOptionTextInput`**
   for each row) — the drill-in itself, a pushed sub-menu (`ListDetailMenuType`) showing
@@ -289,6 +313,20 @@ traps, each verified in-game. Full detail (with the code paths) lives in
   (resets background active/z, deletes objects). Per the project rule
   (`feedback_corekeeper_prefab_edits_in_editor` memory), make prefab edits with the
   Editor **closed**, and never mutate prefab files while the user is in the Editor.
+- **The base `RadicalMenu.GetHelpButtonsToShow()` returns
+  `Manager.menu.defaultHelpButtons` — Core Keeper's shared list instance.** Appending to
+  it instead of to a copy would permanently add the prompt to every vanilla menu in the
+  game, and only after this screen has been opened once.
+- **`StartNewDisplaySequence` defaults `localizePlaceholders` to `true`,** which looks
+  every format field up as a localization term. A literal like a mod's display name then
+  renders as `<missing>`; Core Keeper passes `false` in all of its own popups that carry
+  a literal.
+- **Core Keeper ships the `RESET_DEFAULTS` hint slot fully wired** (glyph plus the
+  localized `Menu/Reset` label) **but never uses it** — no vanilla code path returns
+  that `HelpButtonTypes` value. Its controller glyph sits on the same face-button
+  position as `openProfile`, which is why the reset poll binds Rewired action 223
+  (`OpenProfile`) rather than the more obviously-named `MenuSecondaryActivate` (221):
+  223 is the action actually reported by the button the glyph depicts.
 
 `docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info,
 Separator/Label), out-of-scope items, and small fixes.
