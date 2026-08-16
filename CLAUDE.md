@@ -27,7 +27,7 @@ The runtime `ModSettingsMenu.asmdef` starts from the SDK "Create New Mod" wizard
 
 No automated tests — verification is a manual in-game check: with the reference consumer (Faster Talents, or another migrated sibling) installed, open **Options → Mod Settings**, confirm the section box renders, edit a widget, and confirm the value persists across a relaunch.
 
-Localization is generated at build: `LocalizationGenerator` (shared editor helper) templates `localization/localization.yaml` (EN/DE for the three framework UI terms) into native `TextDataBlock` assets under `unity/ModSettingsMenu/Localization/Generated/`, driven by `LOC_YAML`/`LOC_OUT`/`LOC_TABLE` in `.envrc`. `LOC_YAML` lives outside `unity/` so the ModBuilder doesn't pack the source yaml.
+Localization is generated at build: `LocalizationGenerator` (shared editor helper) templates `localization/localization.yaml` (EN/DE for the framework's own UI terms) into native `TextDataBlock` assets under `unity/ModSettingsMenu/Localization/Generated/`, driven by `LOC_YAML`/`LOC_OUT`/`LOC_TABLE` in `.envrc`. `LOC_YAML` lives outside `unity/` so the ModBuilder doesn't pack the source yaml.
 
 ## Architecture
 
@@ -75,7 +75,7 @@ Patch targets (`MenuManager`, `RadicalMenu`, `RadicalOptionsMenuOption_PushMenu`
 
 ## Mod-specific gotchas
 
-Adapting a vanilla `UISettings` prefab into a mod AssetBundle surfaced a series of CK-UI traps, each verified in-game. Full detail (with the code paths) lives in `docs/tutorial.md` §20; the load-bearing ones:
+Adapting a vanilla `UISettings` prefab into a mod AssetBundle surfaced a series of CK-UI traps, each verified in-game. Some carry fuller detail (with the code paths) in `docs/tutorial.md` §20; all of the following are load-bearing:
 
 - **"Red twin" — `SetText`, never `Render`, on a shared prefab template.** The Options-menu entries live on the **shared** `optionsMenuPrefab` that `MenuManager_PreInit` mutates. `PugText.Render` bakes glyph `SpriteRenderer`s into that prefab; CK's `InstantiateMenu` then clones them as **orphaned** renderers the live `PugText` never tracks or clears — a frozen duplicate label. `SetText` only sets `textString` (0 glyphs), leaving a clean template the live instance renders fresh.
 - **Clone parentless, THEN `SetParent`.** `Instantiate(go, parent)` activates the clone mid-clone and fires `OnEnable`/`ResetEffect` before the inner `PugText` is fully cloned → NRE. A parentless clone finishes first; parenting then activates cleanly.

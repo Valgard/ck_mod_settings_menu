@@ -8,7 +8,8 @@ entry is the version published to mod.io; its body is the modfile changelog.
 - **Any mod's settings can be restored to their defaults.** Select a row in that
   mod's box and press the reset button shown at the bottom of the screen; a
   confirmation names the mod before anything changes. Works for detected mods
-  too, and never touches a value the server or the mod has locked.
+  too, and only ever resets the settings this menu lets you edit — anything
+  shown read-only is left untouched.
 - **Any mod using CoreLib config is now discovered automatically**, even if it
   never integrates with Mod Settings Menu directly — its settings render as
   their own section (marked "(detected)"), inferring a Toggle/Slider/Stepper/

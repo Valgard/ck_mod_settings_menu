@@ -332,22 +332,30 @@ namespace ModSettingsMenu.UI
         // override below is what actually drives the bar.
         public override bool UseCustomHelpButtons => true;
 
+        // Reused across calls instead of allocating a fresh List every time: CK polls this at
+        // least once per frame (twice once a row is selected — see the comment above
+        // UseCustomHelpButtons), same as CK's own menus keep a pre-built list in a field rather
+        // than allocate per call.
+        private readonly List<MenuHelperButtons.HelpButtonTypes> _helpButtons = new List<MenuHelperButtons.HelpButtonTypes>();
+
         public override List<MenuHelperButtons.HelpButtonTypes> GetHelpButtonsToShow()
         {
             var buttons = base.GetHelpButtonsToShow();
             if (!SectionReset.CanReset(SelectedSection()))
                 return buttons;
-            // NEVER append to the base result: RadicalMenu.GetHelpButtonsToShow returns
-            // Manager.menu.defaultHelpButtons — the SHARED list instance — so mutating it would
-            // permanently add a reset prompt to every vanilla menu in the game. Copy, then add.
+            // NEVER mutate the base result in place: RadicalMenu.GetHelpButtonsToShow returns
+            // Manager.menu.defaultHelpButtons — the SHARED list instance — so appending to IT
+            // would permanently add a reset prompt to every vanilla menu in the game. Copy its
+            // entries into our own reused field instead, then add.
             //
             // RESET_DEFAULTS is a fully-built but unused vanilla slot: the Global Objects (Main
             // Manager) prefab wires its root, its per-platform glyph (keyboard "R", the Y-position
             // face button) and a PugText carrying the shipped, localized term "Menu/Reset" — and no
             // vanilla menu ever requests it. So this costs no prefab work and no own localization.
-            var withReset = new List<MenuHelperButtons.HelpButtonTypes>(buttons);
-            withReset.Add(MenuHelperButtons.HelpButtonTypes.RESET_DEFAULTS);
-            return withReset;
+            _helpButtons.Clear();
+            _helpButtons.AddRange(buttons);
+            _helpButtons.Add(MenuHelperButtons.HelpButtonTypes.RESET_DEFAULTS);
+            return _helpButtons;
         }
 
         // The section the currently selected row belongs to, or null when nothing selectable is

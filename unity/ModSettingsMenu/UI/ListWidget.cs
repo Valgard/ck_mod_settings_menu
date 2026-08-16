@@ -28,7 +28,15 @@ namespace ModSettingsMenu.UI
             Render();
         }
 
-        public void Refresh() => Render();
+        // RefreshSection (ModSettingsScreen, after a section-wide reset) calls this on every row
+        // in the section, selected or not — Render() alone always ends by painting the drill arrow
+        // unselected-grey, so a redraw of the currently selected row must also restore its
+        // selected tint, or the arrow would stay grey until the next OnSelected/OnDeselected.
+        public void Refresh()
+        {
+            Render();
+            TintDrill(IsSelected() ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+        }
 
         public override OptionActiveState GetActiveStateInCurrentScene() => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 

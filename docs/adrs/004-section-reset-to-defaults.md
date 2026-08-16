@@ -45,12 +45,19 @@ the box, and **includes detected sections**.
   many.
 - **The existing hint slot, not a new control.** The `RESET_DEFAULTS` hint
   already ships a wired prefab, glyph and label that no vanilla screen
-  requests — free UI. It shows only when the selected section has something
-  to restore, checked once per selection to avoid flicker.
+  requests — free UI. Core Keeper queries it itself every frame
+  (`MenuManager.LateUpdate → UpdateHelperButtons`, twice once a row is
+  selected); the check only asks "can this section be reset at all", never
+  "does any value currently differ from its default" — the latter, a
+  rejected per-value comparison, is what would have to run every frame and
+  would flicker as the player navigates.
 - **Detected sections included, locked settings excluded.** A reset only
   ever writes back a value the mod itself supplied, so it carries none of
   the misclassified-list risk; excluding detected mods would strand those
-  with no other undo path. `ReadOnly` entries are simply never in scope.
+  with no other undo path. `ReadOnly` entries are simply never in scope —
+  whether locked for a genuine permission reason (view-only / server-locked)
+  or only because no editable widget exists for that value's shape; a reset
+  covers exactly what this menu shows as editable, no more.
 - **The confirmation names the mod; the hint bar can't.** Highlighting a box
   or rewriting the shared hint per selection don't fit this screen, so the
   existing restart-style popup takes the display name as a plain
@@ -119,6 +126,14 @@ selection and scroll survive, and the glyph matches the input that works.
   (`MenuOptionResetToDefaults`, one global row) confirmed the restore
   mechanism and the confirmation-popup approach, but its single-mod global
   scope does not transfer to a framework hosting many mods side by side.
+- **Refines** ADR-002's input findings (`docs/adrs/002-list-widget-drill-in.md`
+  § More Information): that ADR recommended Rewired action 221
+  (`MenuSecondaryActivate`) as the controller path for a future feature. An
+  in-game probe for this feature found 221 dispatched through
+  `InputReceiver.OnAlternate()` on the Square button, while the
+  `RESET_DEFAULTS` glyph is the Triangle one shared with `openProfile` — so
+  the reset poll binds action 223 (`OpenProfile`) instead, the action that
+  button actually reports.
 
 The full raw design (decompile evidence for the hint-bar enum and its prefab
 wiring, the Rewired action-id investigation, and the precondition checklist)
