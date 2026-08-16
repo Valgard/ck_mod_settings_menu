@@ -25,6 +25,10 @@ ModSettingsMenu-UI:
     hint: "Hint text on the list drill-in's permanent trailing blank row."
     en: "+ Add"
     de: "+ Hinzufuegen"
+  ResetConfirm:
+    hint: "Confirmation question before restoring one mod's settings to the defaults it declared. {0} is that mod's display name, inserted via string.Format."
+    en: "Reset {0} to its default settings?"
+    de: "{0} auf Standardwerte zuruecksetzen?"
 ModSettingsMenu-Config:
   showForeignConfigs:
     hint: "Master toggle label: show config from other mods that use CoreLib config but did not integrate MSM."
