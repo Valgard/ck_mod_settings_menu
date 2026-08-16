@@ -138,16 +138,16 @@ from `../utils/`.
   declared at `Bind()`. Section-scoped by design: one `ModSection` is one `ConfigFile`
   is one owning mod, so a reset is one file, one owner, one confirmable sentence.
   `CanReset(ModSection)` reports whether the section has anything a reset could write
-  (gates both the hint bar and the input poll); `Apply(ModSection)` writes every
-  in-scope entry's `ConfigEntryBase.BoxedValue` back to its `DefaultValue` — CoreLib's
-  own setter clamps, auto-saves, and raises `SettingChanged` (the same path that drives
-  `SettingHandle<T>.OnChanged`), so nothing here notifies or persists by hand — and
-  returns whether a `RequiresRestart` entry actually changed, so the caller can raise
-  the restart flag without `Settings` depending on `UI`. Discovered (foreign) sections
-  are included on purpose: a reset only ever writes back the value that mod itself
-  declared, so unlike the list-editing write path it can never invent or lose a value.
-  `ReadOnly` entries are always skipped — view-only/server-locked is not writable at
-  all.
+  (gates both the hint bar and the input poll); `ApplyAndCheckRestart(ModSection)`
+  writes every in-scope entry's `ConfigEntryBase.BoxedValue` back to its `DefaultValue`
+  — CoreLib's own setter clamps, auto-saves, and raises `SettingChanged` (the same path
+  that drives `SettingHandle<T>.OnChanged`), so nothing here notifies or persists by
+  hand — and returns whether a `RequiresRestart` entry actually changed, so the caller
+  can raise the restart flag without `Settings` depending on `UI`. Discovered (foreign)
+  sections are included on purpose: a reset only ever writes back the value that mod
+  itself declared, so unlike the list-editing write path it can never invent or lose a
+  value. `ReadOnly` entries are always skipped — view-only/server-locked is not writable
+  at all.
 - **`ConfigStore`** — a `Dictionary<modId, ConfigFile>` cache. Creates one CoreLib
   `ConfigFile($"{modId}/config.cfg", saveOnInit: true, info)` per consumer. CoreLib does
   all `System.IO` in its own trusted assembly via `API.ConfigFilesystem`, so the
@@ -174,8 +174,8 @@ from `../utils/`.
   a same-frame `Update()` polls the reset input (keyboard `R`, Rewired action 223) while
   this screen is CK's top menu and, on press, opens a
   `centerPopUpText.StartNewDisplaySequence` confirmation naming the section — on
-  **Yes**, `SectionReset.Apply(section)` runs and only that section's rows are
-  re-`Refresh()`ed (never `Populate()`, which would discard the selection).
+  **Yes**, `SectionReset.ApplyAndCheckRestart(section)` runs and only that section's
+  rows are re-`Refresh()`ed (never `Populate()`, which would discard the selection).
 - **`SectionBox`** — a tiny `MonoBehaviour` on the section-template prefab exposing
   `header`, `hint`, and `widgetContainer` as **serialized references** (the screen wires
   by reference, not by fragile `Find()` paths). The `widgetContainer` is a

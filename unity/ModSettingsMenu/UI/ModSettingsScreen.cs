@@ -132,7 +132,8 @@ namespace ModSettingsMenu.UI
 
         // CK's own popup — the same call ShowRestartPrompt makes, so look and localization are the
         // game's. Fires from an ordinary input frame, so unlike the restart prompt it needs NO
-        // deferral: that one fires from Deactivate, inside the menu-stack pop it would re-enter.
+        // deferral: that one is only requested from Deactivate — calling it there directly,
+        // inside the menu-stack pop, would re-enter.
         private void ConfirmReset(ModSection section)
         {
             Manager.menu.centerPopUpText.StartNewDisplaySequence(
@@ -152,9 +153,32 @@ namespace ModSettingsMenu.UI
                 {
                     if (!response.IsConfirm)
                         return;
-                    if (SectionReset.Apply(section))
-                        RestartPending = true;
-                    RefreshSection(section);
+                    // This delegate is invoked BY PopUpText.OptionPressed, which only starts its
+                    // fade-out coroutine AFTER the callback returns, and its own caller only pops
+                    // this popup off the menu stack once OptionPressed itself returns. An exception
+                    // escaping from here would skip both: CK's shared popup stays the top menu and
+                    // every menu (including this one) stops reacting, with no error shown. So the
+                    // restore and the redraw are guarded SEPARATELY — a failure in one must not stop
+                    // the other — and each failure is logged with the section's name, since a config
+                    // write that throws partway (e.g. a failing ConfigFilesystem write) can leave
+                    // that section's file on disk with only some entries reset.
+                    try
+                    {
+                        if (SectionReset.ApplyAndCheckRestart(section))
+                            RestartPending = true;
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogError($"[ModSettingsMenu] reset of '{section.DisplayName}' failed partway; its config may be partly restored: {e}");
+                    }
+                    try
+                    {
+                        RefreshSection(section);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogError($"[ModSettingsMenu] redrawing '{section.DisplayName}' after reset failed: {e}");
+                    }
                 },
                 options: new List<string> { "cancelDialogue", "yes" },
                 minWidth: 10f,
@@ -382,8 +406,8 @@ namespace ModSettingsMenu.UI
         //
         // MUST be Update(), never LateUpdate(): RadicalMenu declares a PRIVATE LateUpdate(), so a
         // LateUpdate here would hide it and Unity would stop calling the base one — silently
-        // breaking CK's own per-frame menu work. Neither RadicalMenu nor UIelement declares
-        // Update(), so this name is free.
+        // breaking CK's own per-frame menu work. Neither RadicalMenu nor UIComponentMonoBehaviour
+        // declares Update(), so this name is free.
         private void Update()
         {
             if (Manager.menu == null || Manager.menu.GetTopMenu() != (RadicalMenu)this)
