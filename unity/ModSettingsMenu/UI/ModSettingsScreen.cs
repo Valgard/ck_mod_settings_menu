@@ -351,6 +351,20 @@ namespace ModSettingsMenu.UI
                 }
             }
 
+            // TEMPORARY DIAGNOSTIC — paired with the button probe above so one press produces both
+            // lines adjacently in the log: which physical button it was, and which of CK's own menu
+            // actions report it. 221 is known to land on Square; 223 (OpenProfile) shares its map
+            // element with 220 (MenuOptions) and is the candidate for the Triangle position.
+            if (Manager.input != null)
+            {
+                int[] probeActions = { 220, 221, 222, 223 };
+                for (int a = 0; a < probeActions.Length; a++)
+                {
+                    if (Manager.input.GetButtonDown(probeActions[a]))
+                        Debug.Log($"[ModSettingsMenu] action probe: id={probeActions[a]} down");
+                }
+            }
+
             if (Manager.menu == null || Manager.menu.GetTopMenu() != (RadicalMenu)this)
                 return;
             var section = SelectedSection();
