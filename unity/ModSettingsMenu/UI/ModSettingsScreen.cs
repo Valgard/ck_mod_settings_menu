@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using ModSettingsMenu.Settings;
+using Rewired;
 using UnityEngine;
 
 namespace ModSettingsMenu.UI
@@ -327,6 +328,29 @@ namespace ModSettingsMenu.UI
         // Update(), so this name is free.
         private void Update()
         {
+            // TEMPORARY DIAGNOSTIC — remove once the reset input is bound by element name.
+            // Logs every physically pressed joystick button with its raw index, Rewired element id
+            // and human-readable name, independent of any action mapping and before any gate below.
+            // CK's RESET_DEFAULTS hint glyph is a baked sprite with no link to an input action, so
+            // the only way to make hint and behaviour agree is to learn what Rewired calls each
+            // button here and bind to that name rather than to an action id.
+            var joysticks = ReInput.controllers.Joysticks;
+            for (int j = 0; j < joysticks.Count; j++)
+            {
+                var joystick = joysticks[j];
+                var identifiers = joystick.ButtonElementIdentifiers;
+                for (int b = 0; b < joystick.buttonCount; b++)
+                {
+                    if (!joystick.GetButtonDown(b))
+                        continue;
+                    var identifier = (identifiers != null && b < identifiers.Count) ? identifiers[b] : null;
+                    Debug.Log(
+                        $"[ModSettingsMenu] button probe: joystick='{joystick.name}' index={b} "
+                            + $"elementId={(identifier != null ? identifier.id : -1)} name='{(identifier != null ? identifier.name : "?")}'"
+                    );
+                }
+            }
+
             if (Manager.menu == null || Manager.menu.GetTopMenu() != (RadicalMenu)this)
                 return;
             var section = SelectedSection();
