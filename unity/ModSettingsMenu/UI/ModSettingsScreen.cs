@@ -312,6 +312,33 @@ namespace ModSettingsMenu.UI
             return row == null ? null : row.Section;
         }
 
+        // Rewired action id for MenuSecondaryActivate. Defined in PugMod.SDK.Runtime and free in a
+        // settings menu — CK polls it only in the mod.io browser. Its category is "Menu", tagged
+        // system, so it is neither rebindable nor visible in CK's Controls screen.
+        private const int ResetActionId = 221;
+
+        // Poll the reset input. Gated on being the TOP menu, which also covers the two cases that
+        // must not react: the list drill-in is open (a different menu is on top), and the
+        // confirmation popup is open (PushMenu(POP_UP) puts it on top).
+        //
+        // MUST be Update(), never LateUpdate(): RadicalMenu declares a PRIVATE LateUpdate(), so a
+        // LateUpdate here would hide it and Unity would stop calling the base one — silently
+        // breaking CK's own per-frame menu work. Neither RadicalMenu nor UIelement declares
+        // Update(), so this name is free.
+        private void Update()
+        {
+            if (Manager.menu == null || Manager.menu.GetTopMenu() != (RadicalMenu)this)
+                return;
+            var section = SelectedSection();
+            if (!SectionReset.CanReset(section))
+                return;
+            bool keyboard = Input.GetKeyDown(KeyCode.R);
+            bool gamepad = Manager.input != null && Manager.input.GetButtonDown(ResetActionId);
+            if (!keyboard && !gamepad)
+                return;
+            Debug.Log($"[ModSettingsMenu] reset trigger: keyboard={keyboard} gamepad={gamepad} section='{section.DisplayName}'");
+        }
+
         // Scroll the viewport so the selected row follows keyboard / controller navigation.
         //
         // Positions are measured in contentRoot's (the scroll root's) local space: sum localPosition.y
