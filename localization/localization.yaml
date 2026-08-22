@@ -2,8 +2,8 @@
 # at build by utils/LocalizationGenerator.cs. ASCII rule: no U+2026 '...'/U+2014 '-'.
 ModSettingsMenu-UI:
   Title:
-    hint: "The 'Mod Settings' entry label in the Options menu + the screen title."
-    en: "Mod Settings"
+    hint: "The Options-menu entry label + the screen title."
+    en: "Mod settings"
     de: "Mod-Einstellungen"
   On:
     hint: "Toggle value when enabled."

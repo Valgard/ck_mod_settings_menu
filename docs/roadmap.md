@@ -705,15 +705,6 @@ read-only list's rows `ACTIVE` so they remain navigable for *reading*.
 
 ## Small fixes
 
-- **English label casing: "Mod Settings" → "Mod settings".** The
-  `ModSettingsMenu-UI/Title` term (`localization/localization.yaml:6`, the `en:`
-  value) — the Options-menu entry label **and** the screen title — should be
-  sentence case, matching the framework's own `On`/`Off` values, which are
-  already lowercase (`"on"`/`"off"`). One-line loc edit; the German
-  `de: "Mod-Einstellungen"` stays unchanged (German noun capitalization). **Scope:**
-  only the loc term is user-facing — the "Mod Settings" mentions in code comments,
-  `README.md` and `CHANGELOG.md` are the feature *name* in prose and need no change.
-  Requested 2026-07-12.
 - **Format-override toggle / misclassification confirmation for editable lists.**
   `ForeignConfigDiscovery`'s `HeuristicSaysList` can misclassify a foreign plain
   string as a list; in the read-only drill-in (ADR-002) that was harmless, but
