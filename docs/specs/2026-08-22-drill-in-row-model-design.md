@@ -60,10 +60,18 @@ and no frame, and its lack of a frame is exactly what distinguishes it from a
 field. Activating it inserts an empty token row **before itself** and selects
 that row.
 
-Because the button is not a `ListDetailItem`, the value-assembly loop's existing
-`opt is ListDetailItem` filter already excludes it — no new guard is needed
-there. The same loop's `activeSelf` check (which skips the inactive
-`ItemTemplate`) stays as is.
+The button **reuses `ItemTemplate` and stays a `ListDetailItem`**, so no second
+template has to be authored in the Editor. What separates the types is a row-kind
+field replacing today's `bool isAddRow`, and the value-assembly loop filters on
+that kind rather than on the component type. Its caption goes into `pugText`, not
+`hintText`: the base class renders the hint only while `pugText` is empty, and a
+button's caption is a label rather than a placeholder. The loop's `activeSelf`
+check (which skips the inactive `ItemTemplate`) stays as is.
+
+Reusing the component carries the text-input machinery along as inert ballast.
+That is deliberate — the alternative costs an Editor-authored prefab, and
+`readOnly` already provably prevents a row from ever becoming
+`activeInputField`.
 
 ## 4 · Data flow — the inversion
 
