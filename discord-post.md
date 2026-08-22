@@ -1,6 +1,6 @@
 # Mod Settings Menu
 
-One shared **Options → Mod Settings** screen that other mods register their
+One shared **Options → Mod settings** screen that other mods register their
 options into. No config files to hand-edit, no separate menu per mod.
 
 If you landed here because something else asked for it: there is nothing to

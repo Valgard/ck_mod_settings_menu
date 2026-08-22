@@ -6,7 +6,7 @@ using Object = UnityEngine.Object;
 namespace ModSettingsMenu
 {
     /// <summary>
-    /// Mounts the "Mod Settings" screen into the vanilla Options menu (GMCM
+    /// Mounts the "Mod settings" screen into the vanilla Options menu (GMCM
     /// MenuPatch technique + HealthBars menu clone): a MenuManager.Init prefix
     /// clones the "Go to UI settings" entry and repoints it at our menu id, the
     /// postfix instantiates our screen prefab(s) (the settings screen + the list
@@ -33,7 +33,7 @@ namespace ModSettingsMenu
             text.SetText("ModSettingsMenu-UI/Title");
         }
 
-        // Add a "Mod Settings" entry to the Options menu by cloning the vanilla
+        // Add a "Mod settings" entry to the Options menu by cloning the vanilla
         // "Go to UI settings" push-menu entry and repointing it at our menu id.
         [HarmonyPatch(typeof(MenuManager), nameof(MenuManager.Init)), HarmonyPrefix]
         public static void MenuManager_PreInit(MenuManager __instance)
@@ -69,7 +69,7 @@ namespace ModSettingsMenu
             var prefab = ModSettingsMenuMod.MenuPrefab;
             if (prefab == null)
             {
-                Debug.LogWarning("[ModSettingsMenu] MenuPrefab not loaded; Mod Settings entry will have no menu.");
+                Debug.LogWarning("[ModSettingsMenu] MenuPrefab not loaded; Mod settings entry will have no menu.");
                 MenuInstance = null;
                 return;
             }

@@ -138,7 +138,7 @@ namespace ModSettingsMenu.Settings
         }
 
         /// <summary>Marks the most-recently-declared setting as requiring a game restart to take effect.
-        /// When such a setting is changed in the menu, leaving the Mod Settings screen raises CK's own
+        /// When such a setting is changed in the menu, leaving the Mod settings screen raises CK's own
         /// "restart to apply mod changes" prompt (Cancel/Yes → relaunch). Chain it right after the widget:
         /// <c>.Choice(out h, "key", …).RequiresRestart()</c>. Use for bake-time / load-time settings whose
         /// live value only matters at the next bake/launch (e.g. recipe rewrites).</summary>

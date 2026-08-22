@@ -2,7 +2,7 @@
 
 A hands-on, end-to-end guide to **Mod Settings Menu** (MSM) — the Core Keeper
 framework mod that gives *other* mods an in-game settings screen under
-**Options → Mod Settings**.
+**Options → Mod settings**.
 
 This tutorial has two halves, and you can read whichever you need:
 
@@ -707,7 +707,7 @@ if (type == ModSettingsMenuMod.SettingsMenuType) { __result = MenuInstance; retu
 return true;   // everything else → vanilla
 ```
 
-Now clicking "Mod Settings" pushes our menu exactly like any built-in submenu.
+Now clicking "Mod settings" pushes our menu exactly like any built-in submenu.
 
 ---
 

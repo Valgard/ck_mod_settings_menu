@@ -79,7 +79,7 @@ namespace ModSettingsMenu.UI
             RenderContent();
         }
 
-        // Leaving the Mod Settings screen (RadicalMenu's deactivate/back hook). If a restart-required
+        // Leaving the Mod settings screen (RadicalMenu's deactivate/back hook). If a restart-required
         // setting changed this visit, mirror CK's own mods-changed flow: raise the vanilla restart popup.
         // pop=false means we are merely being covered by a child menu (the list drill-in) and will
         // resume — not actually leaving — so RestartPending must be left untouched for that case (see
