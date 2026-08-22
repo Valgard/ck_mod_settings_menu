@@ -54,7 +54,7 @@ MonoBehaviour:
         m_address:
           m_low: 681352171529052915
           m_high: 2314507893210082619
-      title: 'Mod Settings'
+      title: 'Mod settings'
       description: 
     - m_language:
         m_address:
@@ -128,13 +128,13 @@ MonoBehaviour:
           m_high: 4238944138262099067
       title: 
       description: 
-  m_localizationHint: 'The ''Mod Settings'' entry label in the Options menu + the screen title.'
+  m_localizationHint: 'The Options-menu entry label + the screen title.'
   m_prevImportPrimaryEntry:
     m_language:
       m_address:
         m_low: 681352171529052915
         m_high: 2314507893210082619
-    title: 'Mod Settings'
+    title: 'Mod settings'
     description: 
   m_shouldBeLocalized: 1
   m_header: ModSettingsMenu-UI
