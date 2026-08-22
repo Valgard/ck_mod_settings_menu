@@ -358,6 +358,65 @@ the mask.
   character; marking it restart-dirty on every keystroke would be wrong. The
   dirty flag should be set on commit, not on change.
 
+## Horizontal scrolling in a text field — and the truncation it currently hides
+
+A text row today cannot show more than fits: `maxWidth` is the field's
+**capacity**, not a viewport. Raised 2026-08-22 while designing the drill-in
+field frame, and verified against the decompiled `Pug.Other` (game 1.2.1.5 —
+class and member names are stable, line numbers are not).
+
+`RadicalMenuOptionTextInput` enforces the limit in two places, and neither
+scrolls:
+
+- **`AppendString` rejects outright.** After inserting, it re-measures and, if
+  the text now exceeds `maxWidth`, restores the previous string and rewinds
+  `currentCharIndex`. The keystroke is discarded with no feedback at all.
+- **`Update` trims from the end, every frame.** A `while` loop strips one
+  trailing character at a time until the text fits. It is not gated on the field
+  being focused or edited — `Update` runs for every active row.
+
+There is no offset, no clipped window, no scroll state.
+`localCharacterEndPositions` exists only to place the caret. Turning the limit
+off (`maxWidth = 0`) is therefore the only way any scrolling could work, since
+otherwise that per-frame loop would fight it — but then the clipping has to be
+built by hand: a mask plus a text-transform offset that follows the caret.
+
+### The truncation reaches the owning mod's config file
+
+This is the part that makes the item more than cosmetic, and it needs no
+scrolling to fix.
+
+`ListDetailScreen.OnRowTextCommitted` assembles the value from `GetInputText()`
+of **every** active row, not just the one that was edited. So a foreign token
+that renders wider than `maxWidth` is trimmed by the loop above shortly after
+`SetInputText` seeds it, and the next commit on *any other row* writes that
+shortened token back into the owning mod's `ConfigEntry`. Nothing in the path
+notices: the no-op guard compares the assembled value against the stored one, and
+the trimmed value genuinely differs, so the write proceeds.
+
+**Not yet observed in practice** — whether a realistic token (PlacementPlus'
+item names are the live case) actually exceeds the drill-in's `maxWidth: 25` is
+an in-game measurement nobody has taken. The path is real; its reachability is
+not established.
+
+**The cheap fix is independent of scrolling:** keep each row's seeded token and
+refuse to commit a row whose text was never edited but no longer matches it.
+That closes the data-loss path whether or not a viewport is ever built. Worth
+doing first, and separately.
+
+### Open design questions
+
+- **Where does it dock?** The drill-in row and a future `SettingKind.Text` share
+  the component, so a viewport built for one should serve both — but the drill-in
+  already scrolls *vertically* inside a mask, and a second mask on the same
+  sprites hits the same custom-range conflict § "Dropdown lists" describes.
+- **Caret-follow or overflow indicator?** A field that scrolls with the caret is
+  the familiar behaviour; a static field with an ellipsis is far cheaper and may
+  be enough for values that are read more often than edited.
+- **Does rejection still need feedback?** With `maxWidth = 0` an overlong entry
+  is no longer rejected, so `Shake()` becomes unnecessary here — but only here.
+  The comma strip still discards input silently.
+
 ## Dropdown lists — CK's `DropdownUIElement`
 
 An **expanding dropdown** instead of `←/→` step-through, for a `Choice` whose
