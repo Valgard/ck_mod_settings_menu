@@ -1,13 +1,13 @@
 # Mod Settings Menu
 
 A shared in-game settings screen for Core Keeper mods. Other mods register their
-options here, and they appear as a tidy panel under **Options → Mod Settings** —
+options here, and they appear as a tidy panel under **Options → Mod settings** —
 no config files to hand-edit, no separate per-mod menus.
 
 **For players:** you most likely installed this because another mod depends on
 it. There is nothing to configure in Mod Settings Menu itself — each dependent
 mod adds its own section with its own toggles, sliders, and choices. Open
-**Options → Mod Settings** to find them.
+**Options → Mod settings** to find them.
 
 - Every setting saves automatically and is restored on the next launch.
 - Settings are grouped per mod, under the mod's name as the heading.

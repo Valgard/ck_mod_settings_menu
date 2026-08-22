@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A **framework** Core Keeper mod. Other mods register their settings into a shared Options-menu screen: a consumer calls `ModSettings.Section(this)` in its `IMod.Init` (or `EarlyInit` for bake-time settings), chains a few widget declarations, and Mod Settings Menu renders them as a labelled box under **Options → Mod Settings** and persists every value through a CoreLib `ConfigFile`. The consumer writes no UI, prefab, or `System.IO` code.
+A **framework** Core Keeper mod. Other mods register their settings into a shared Options-menu screen: a consumer calls `ModSettings.Section(this)` in its `IMod.Init` (or `EarlyInit` for bake-time settings), chains a few widget declarations, and Mod Settings Menu renders them as a labelled box under **Options → Mod settings** and persists every value through a CoreLib `ConfigFile`. The consumer writes no UI, prefab, or `System.IO` code.
 
 Namespace / internal name `ModSettingsMenu`; displayName "Mod Settings Menu". `requiredOn: 3` (ClientAndServer). One runtime dependency: **CoreLib** (declared in the `.asset` `dependencies:` and the runtime asmdef). Consumers depend on **both** ModSettingsMenu and CoreLib. Personal-use, non-commercial (Pugstorm EULA).
 
@@ -25,7 +25,7 @@ Unity Editor must be closed (it locks the shared SDK project). `utils/link.sh` s
 
 The runtime `ModSettingsMenu.asmdef` starts from the SDK "Create New Mod" wizard's comprehensive game-DLL reference set, plus one added reference: **CoreLib** (for the `ConfigFile` API). No manual game-DLL wiring is needed.
 
-No automated tests — verification is a manual in-game check: with the reference consumer (Faster Talents, or another migrated sibling) installed, open **Options → Mod Settings**, confirm the section box renders, edit a widget, and confirm the value persists across a relaunch.
+No automated tests — verification is a manual in-game check: with the reference consumer (Faster Talents, or another migrated sibling) installed, open **Options → Mod settings**, confirm the section box renders, edit a widget, and confirm the value persists across a relaunch.
 
 Localization is generated at build: `LocalizationGenerator` (shared editor helper) templates `localization/localization.yaml` (EN/DE for the framework's own UI terms) into native `TextDataBlock` assets under `unity/ModSettingsMenu/Localization/Generated/`, driven by `LOC_YAML`/`LOC_OUT`/`LOC_TABLE` in `.envrc`. `LOC_YAML` lives outside `unity/` so the ModBuilder doesn't pack the source yaml.
 
