@@ -8,7 +8,7 @@ this repository.
 A **framework** Core Keeper mod. Other mods register their settings into a shared
 Options-menu screen: a consumer calls `ModSettings.Section(this)` in its `IMod.Init` (or
 `EarlyInit` for bake-time settings), chains a few widget declarations, and Mod Settings
-Menu renders them as a labelled box under **Options → Mod Settings** and persists every
+Menu renders them as a labelled box under **Options → Mod settings** and persists every
 value through a CoreLib `ConfigFile`. The consumer writes no UI, prefab, or `System.IO`
 code.
 
@@ -49,7 +49,7 @@ comprehensive game-DLL reference set, plus one added reference: **CoreLib** (for
 
 No automated tests — verification is a manual in-game check: with the reference consumer
 (Faster Talents, or another migrated sibling) installed, open **Options → Mod
-Settings**, confirm the section box renders, edit a widget, and confirm the value
+settings**, confirm the section box renders, edit a widget, and confirm the value
 persists across a relaunch.
 
 Localization is generated at build: `LocalizationGenerator` (shared editor helper)

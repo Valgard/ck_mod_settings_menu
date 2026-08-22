@@ -2,7 +2,7 @@
 
 A framework mod for [Core Keeper](https://mod.io/g/corekeeper) that gives other mods an in-game settings
 screen. Consumer mods declare their settings in a few lines of `IMod.Init`; the
-framework renders them as a box of widgets under **Options → Mod Settings** and
+framework renders them as a box of widgets under **Options → Mod settings** and
 persists every value through a CoreLib `ConfigFile`. No UI, prefab, or
 localization code on the consumer side.
 
@@ -126,7 +126,7 @@ it stable across releases — changing it orphans the saved value.
 `RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key",
 …).RequiresRestart()`) to mark that setting as needing a game restart to take
 effect (e.g. a bake-time / load-time value that is only read at world load).
-When a so-marked setting is actually changed and you leave the Mod Settings
+When a so-marked setting is actually changed and you leave the Mod settings
 screen, the framework raises Core Keeper's own *restart to apply mod changes*
 popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod
 subscriptions change. Settings whose value applies live (read every frame /
@@ -244,7 +244,7 @@ the `name`.
 
 Each block carries the per-language strings (English, German, …).
 
-The Toggle on/off words and the "Mod Settings" menu title are supplied by this
+The Toggle on/off words and the "Mod settings" menu title are supplied by this
 framework (`ModSettingsMenu-UI/On`, `/Off`, `/Title`) — you don't localize
 those.
 
