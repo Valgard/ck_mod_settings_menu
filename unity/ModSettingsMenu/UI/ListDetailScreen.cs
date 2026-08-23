@@ -423,7 +423,12 @@ namespace ModSettingsMenu.UI
                 );
                 return;
             }
-            _rows[index] = row.CommittedText.Trim().Replace(",", "");
+            // Sanitize on the way in, not just on the way out. Join sanitizes too — it must, to stay
+            // total for any caller — but a row is rebuilt FROM _rows, so leaving a typed comma in
+            // there would show the user a character that silently disappears when the value is
+            // written. The rule itself lives in ListTokenizer; this is only the second place it is
+            // applied.
+            _rows[index] = ListTokenizer.Sanitize(row.CommittedText);
 
             // Join through ListTokenizer, not by hand: dropping the empties is the same rule Tokenize
             // applies when reading, and this method compares the two results directly below. A
