@@ -41,6 +41,15 @@ namespace ModSettingsMenu.UI
         // A rebuild's explicit selection target, or -1 to keep the previous slot (clamped).
         private int _pendingSelect = -1;
 
+        // Bumped once per open. This is the ONLY thing in the design that marks a session boundary:
+        // the screen is a singleton reused for every list, so `_owner` cannot tell two sessions
+        // apart and a row's index is a coordinate with no coordinate system. A row takes this value
+        // from the owner it is bound to (ListDetailItem.Bind), so a row from a previous session
+        // carries a stale one and can be recognised instead of silently writing into whatever
+        // setting happens to be open now.
+        private int _rowGeneration;
+        internal int RowGeneration => _rowGeneration;
+
         private bool _rebuildPending; // set by OnRowTextCommitted, consumed by Update — see design note
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
@@ -114,11 +123,23 @@ namespace ModSettingsMenu.UI
         {
             _activeDef = _pending;
             _readOnly = _activeDef != null && _activeDef.ReadOnly;
+            // Everything below marks the boundary to the previous session, and all of it must move
+            // together: the generation stamp rows are bound with, the row list itself, and BOTH
+            // deferred-rebuild fields. _rows is cleared here rather than after the wiring guard so a
+            // bailed-out open cannot leave the previous session's rows paired with the new setting.
+            _rowGeneration++;
+            _rows.Clear();
             _rebuildPending = false; // a stale deferred rebuild from a prior open can't apply here
+            _pendingSelect = -1; // ...and neither can its selection target
             _scroll = GetComponent<UIScrollWindow>();
-            if (box == null || box.itemContainer == null || box.itemTemplate == null)
+            if (box == null || box.itemContainer == null || box.itemTemplate == null || box.addRow == null)
             {
-                Debug.LogWarning("[ModSettingsMenu] ListDetailScreen prefab not wired (box/itemContainer/itemTemplate) — detail stays empty.");
+                Debug.LogWarning("[ModSettingsMenu] ListDetailScreen prefab not wired (box/itemContainer/itemTemplate/addRow) — detail stays empty.");
+                return;
+            }
+            if (box.itemTemplate.GetComponent<ListDetailItem>() == null)
+            {
+                Debug.LogWarning("[ModSettingsMenu] ListDetailScreen itemTemplate lacks its ListDetailItem component — detail stays empty.");
                 return;
             }
             box.itemTemplate.SetActive(false);
@@ -137,8 +158,7 @@ namespace ModSettingsMenu.UI
                     shadow.GetComponent<PugText>().RenderPlain(label);
             }
 
-            _rows.Clear();
-            _rows.AddRange(ListTokenizer.Tokenize(Value()));
+            _rows.AddRange(ListTokenizer.Tokenize(Value())); // cleared above, with the rest of the session state
 
             RebuildRows();
 
@@ -180,6 +200,13 @@ namespace ModSettingsMenu.UI
             for (int i = box.itemContainer.childCount - 1; i >= 0; i--)
             {
                 var child = box.itemContainer.GetChild(i).gameObject;
+                // Remove only the rows THIS method created. Anything else in the container belongs
+                // to the prefab and outlives every rebuild — today that is the add button, which is
+                // a live object rather than a clone precisely because there is only ever one of it.
+                // Phrasing the teardown as "my own rows" instead of "everything but that object"
+                // keeps it a statement about ownership rather than a carve-out.
+                if (child.GetComponent<ListDetailItem>() == null)
+                    continue;
                 // PugText pools its glyph SpriteRenderers (usePooledResources); destroying a row
                 // without releasing them first leaks pooled glyphs every rebuild (this screen
                 // rebuilds on every edit, unlike a static list built once per open) until the
@@ -189,6 +216,14 @@ namespace ModSettingsMenu.UI
                 // item-checklist fix and ModSettingsScreen's own section-teardown fix.
                 foreach (var text in child.GetComponentsInChildren<PugText>(includeInactive: true))
                     text.Clear();
+                // Silence the row BEFORE detaching it. Destroy is deferred to end-of-frame, and
+                // detaching a child that is activeSelf out of an inactive hierarchy makes it a root
+                // object — i.e. active again — so a doomed row can still receive Update() calls in
+                // this frame. A row that was mid-edit when the screen closed would use one of them
+                // to fire a commit against the list that is open NOW. A disabled component gets no
+                // Update at all, which closes that off at the source rather than at the write path.
+                foreach (var doomed in child.GetComponentsInChildren<RadicalMenuOption>(includeInactive: true))
+                    doomed.enabled = false;
                 child.transform.SetParent(null, worldPositionStays: false);
                 Object.Destroy(child);
             }
@@ -198,10 +233,21 @@ namespace ModSettingsMenu.UI
             // invisible to the stored value but must stay on screen until the drill-in closes.
             for (int i = 0; i < _rows.Count; i++)
                 AddItem(_rows[i], i);
-            // ...plus one permanent trailing button for adding a new token — a read-only list has
-            // nothing to add, so it gets no add button at all, not just an inert one.
+            // ...plus the permanent trailing button for adding a new token — a read-only list has
+            // nothing to add, so it is switched off entirely rather than left inert.
+            //
+            // menuOptions was just cleared, so the button has to re-register even though the object
+            // itself survived; and it has to move back to the end, because the rows above were
+            // Instantiate()d into the container and therefore landed AFTER it. The LinearLayout
+            // stacks in hierarchy order, so sibling order is the row order.
+            box.addRow.gameObject.SetActive(!_readOnly);
             if (!_readOnly)
-                AddButton();
+            {
+                box.addRow.transform.SetAsLastSibling();
+                box.addRow.Bind(this, Loc.T("ModSettingsMenu-UI/ListAddButton", "+ Add"));
+                box.addRow.SetParentMenu(this);
+                menuOptions.Add(box.addRow);
+            }
         }
 
         // Clone the (inactive) item template into the container, seed its text, register it as a
@@ -214,7 +260,7 @@ namespace ModSettingsMenu.UI
             var item = row.GetComponent<ListDetailItem>();
             if (item == null)
                 return;
-            item.Bind(this, ListDetailItem.RowKind.Token, rowIndex, _readOnly);
+            item.Bind(this, rowIndex, _readOnly);
             if (item.pugText != null)
                 item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
             // SettingWidget.SetText and the hintText line below; must be
@@ -225,32 +271,6 @@ namespace ModSettingsMenu.UI
                 item.hintText.localize = false; // same cloned-PugText trap as pugText above — every
                 // row's hintText clone otherwise inherits localize=true and renders its prefab-authored
                 // literal placeholder ("Hint Text") as a failed loc-term lookup ("missing: Hint Text")
-                item.hintText.SetText("");
-            }
-            item.SetParentMenu(this);
-            menuOptions.Add(item);
-        }
-
-        // The trailing button that appends an empty row. Same prefab, same component — see
-        // ListDetailItem.RowKind. readOnly: true is what keeps it out of edit mode; the kind
-        // check in OnActivated runs first, so the press itself still works.
-        private void AddButton()
-        {
-            var row = Object.Instantiate(box.itemTemplate, box.itemContainer);
-            row.SetActive(true);
-            var item = row.GetComponent<ListDetailItem>();
-            if (item == null)
-                return;
-            item.Bind(this, ListDetailItem.RowKind.AddButton, rowIndex: -1, readOnly: true);
-            if (item.pugText != null)
-                item.pugText.localize = false; // cloned PugText inherits localize=true
-            // The caption belongs in pugText, not hintString: the base class renders hintText
-            // only while pugText is empty, so a caption placed there is a placeholder that
-            // vanishes the moment anything writes the field.
-            item.SetInputText(Loc.T("ModSettingsMenu-UI/ListAddButton", "+ Add"));
-            if (item.hintText != null)
-            {
-                item.hintText.localize = false;
                 item.hintText.SetText("");
             }
             item.SetParentMenu(this);
@@ -283,15 +303,14 @@ namespace ModSettingsMenu.UI
                 var go = box.itemContainer.GetChild(i).gameObject;
                 if (!go.activeSelf)
                     continue;
-                // ItemTemplate's own label PugText now lives on a child GO (the ICL/SettingTemplate
-                // "Display" pattern), so it is read via ListDetailItem.pugText — the same serialized
-                // reference ModSettingsScreen reads via SettingWidget.labelText — not GetComponent<PugText>()
-                // on the row root, which would return null now that WrapperUIComponent is the row's only
-                // UIComponentMonoBehaviour.
-                var pt = go.GetComponent<ListDetailItem>()?.pugText;
+                // Each row type reports its own height, measured from its frame rather than from its
+                // text — see ListDetailItem.RowHeightPx for why. Both types must be asked: the add
+                // button is not a ListDetailItem, and a row left unmeasured keeps the prefab's
+                // renderHeightPixels of 0, which the LinearLayout collapses to nothing.
+                int px = go.GetComponent<ListDetailItem>()?.RowHeightPx ?? go.GetComponent<ListAddRow>()?.RowHeightPx ?? 0;
                 var wrap = go.GetComponent<WrapperUIComponent>();
-                if (pt != null && wrap != null)
-                    wrap.renderHeightPixels = ModSettingsScreen.RowHeightPx(pt);
+                if (px > 0 && wrap != null)
+                    wrap.renderHeightPixels = px;
             }
             _layout.RenderUIComponent(force: true); // re-lay out with the measured heights
         }
@@ -361,8 +380,11 @@ namespace ModSettingsMenu.UI
                 return;
             // Only the committing row can have changed — it is the only one that could hold
             // activeInputField. Write it back at its own index, then derive the value from the
-            // list. Reading the OTHER rows off screen (as this used to) is what let the base
-            // class's per-frame width trim escape into a third-party mod's config file.
+            // list. Reading the OTHER rows off screen (as this used to) kept the base class's
+            // per-frame width trim out of a third-party mod's config file FOR ROWS THE USER NEVER
+            // TOUCHED; the committing row is trimmed like any other and still contributes its
+            // rendered text. That remaining path is a roadmap item, not something this method
+            // solves.
             //
             // Dropping that menuOptions walk also retires the guard it needed: the walk saw the
             // inactive itemTemplate too (RadicalMenu's own option scan includes it — see
@@ -371,9 +393,26 @@ namespace ModSettingsMenu.UI
             // SetInputText; an activeSelf check kept that placeholder from being committed as a
             // phantom token. Nothing walks menuOptions any more, so the template is unreachable
             // from here by construction rather than by a check.
+            //
+            // The two checks below are LOUD on purpose. Neither has a legitimate case any more —
+            // the add button is a different type and cannot arrive here at all — so reaching one
+            // means a row outlived its session or was never bound, and the user's edit is about to
+            // be discarded. Silence there would look exactly like a successful save.
+            if (row.Generation != _rowGeneration)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] Ignoring a commit from a stale drill-in row (generation {row.Generation}, current {_rowGeneration}) — its edit is discarded."
+                );
+                return;
+            }
             int index = row.RowIndex;
             if (index < 0 || index >= _rows.Count)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] Ignoring a commit from an unbound drill-in row (index {index}, {_rows.Count} rows) — its edit is discarded."
+                );
                 return;
+            }
             _rows[index] = row.GetInputText().Trim().Replace(",", "");
 
             var tokens = new List<string>();
