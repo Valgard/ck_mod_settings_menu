@@ -43,3 +43,6 @@ unity/ModSettingsMenu/Editor/LocalizationGenerator.cs.meta
 docs/superpowers/
 
 .superpowers/
+
+# exclude templates directory
+sources/templates
