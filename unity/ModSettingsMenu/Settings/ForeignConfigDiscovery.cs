@@ -226,7 +226,7 @@ namespace ModSettingsMenu.Settings
         //
         // **Changed 2026-08-23.** This used to reject any token over 32 characters. That threshold
         // came from ADR-002 without a derivation, and it turned out to test the wrong property:
-        // "This is a long sentence, and another one" splits into tokens of 22 and 15 characters —
+        // "This is a long sentence, and another one" splits into tokens of 23 and 15 characters —
         // both under the limit, so prose passed — while a perfectly ordinary long identifier was
         // refused and fell through to a read-only Info row. Length is not what separates a list
         // from prose; INTERNAL WORD COUNT is.
@@ -239,7 +239,7 @@ namespace ModSettingsMenu.Settings
         // (see ADR-003's consequences and the roadmap's format-override item).
         //
         // The dot rule is unchanged and separate: it keeps decimals, versions and paths out.
-        private const int MaxSpacesPerToken = 1;
+        private const int MaxWhitespacePerToken = 1;
 
         public static bool HeuristicSaysList(string value)
         {
@@ -250,10 +250,13 @@ namespace ModSettingsMenu.Settings
             {
                 if (tok.IndexOf('.') >= 0)
                     return false;
-                int spaces = 0;
+                // Any whitespace counts, not just U+0020: a tab or a non-breaking space between two
+                // words separates them exactly as visibly, and a foreign config file is hand-edited
+                // text. Tokenize already trimmed the ends, so what is left here is internal.
+                int gaps = 0;
                 foreach (var c in tok)
                 {
-                    if (c == ' ' && ++spaces > MaxSpacesPerToken)
+                    if (char.IsWhiteSpace(c) && ++gaps > MaxWhitespacePerToken)
                         return false;
                 }
             }
