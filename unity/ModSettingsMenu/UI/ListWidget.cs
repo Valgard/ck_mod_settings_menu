@@ -57,8 +57,15 @@ namespace ModSettingsMenu.UI
         private string Value() => _def?.Entry?.BoxedValue?.ToString() ?? "";
 
         // A compact ONE-line preview: as many leading items as fit PreviewMaxChars, then a "+N" tail for
-        // the rest ("InventoryChest, +15"). Budget by WIDTH, not item count — long item names (the value
-        // column is narrow) otherwise wrap the PugText to several lines and blow up the row height.
+        // the rest ("InventoryChest, +15"). Budgeted by CHARACTER COUNT rather than by item count — a
+        // fixed number of items would wrap the PugText to several lines on long names (the value column
+        // is narrow) and blow up the row height.
+        //
+        // Character count is a stand-in for rendered width, and not an exact one: PugFont kerns per
+        // glyph pair, so 22 wide glyphs occupy noticeably more room than 22 narrow ones and can still
+        // wrap. Tolerable here because this row is read-only and a wrapped preview costs nothing but
+        // looks — unlike the drill-in, where the same confusion between counting and measuring reaches
+        // a foreign config file (see docs/ck/ui-framework.md § "A text row in a menu").
         private string Preview()
         {
             var tokens = ListTokenizer.Tokenize(Value());
