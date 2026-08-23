@@ -345,9 +345,17 @@ same change is what armed both — the fix and the exposure arrived together.
 characters fit depends on which characters they are. One data point exists from
 the wrapping bug above — with the PugText limit at `20`, a line held roughly 44
 **digits** — but digits are uniform and item names are not, so that number does
-not carry over. What remains open is comfort, not safety: at `maxWidth: 21` a long
-item name is **refused** keystroke by keystroke, silently, and a value that
-already exceeds it can be viewed but not meaningfully edited.
+not carry over.
+
+**What remains open is not comfort — it is a silent trap on edit**, and this
+entry is the fix for it. Measured 2026-08-23 with a 57-character token: viewing it
+is safe (the guard above returns the seeded value), but the moment the user types
+one character, their input wins by design — and their input is built on the
+**shortened** text they can see. Appending `l` to a row displaying
+`…VariantL` produced `…VariantLl`; the four characters `arge` were never on screen
+and are gone, with nothing in the UI hinting at it. A value too wide for its row
+can therefore be looked at safely and destroyed by editing, which is the worst of
+both. A viewport removes the premise: what you edit is what the value says.
 
 ### Open design questions
 
