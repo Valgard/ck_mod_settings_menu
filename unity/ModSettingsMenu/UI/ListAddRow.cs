@@ -43,15 +43,16 @@ namespace ModSettingsMenu.UI
         [SerializeField]
         private GameObject selectedMarker;
 
-        // The resting frame. CK's own joinButton carries one exactly like its text fields do, at the
-        // same size — a frame there means "interactive element", not "type here". So the button
-        // keeps it, and the clickable area derives from it just as a row's does.
+        // The resting frame. CK's own joinButton carries border + selectedBorder with the SAME
+        // SPRITES and the same height as its text fields, scaled to its own width (6.38 vs 11.5) —
+        // so a frame there means "interactive element", not "type here". This button follows that:
+        // same sprites, its own width, and the clickable area derived from it as a row's is.
         [SerializeField]
         private SpriteRenderer fieldBorder;
 
-        // Layout height in pixels (16 per world unit), from the frame for the same reason
-        // ListDetailItem takes it from there: the button is as tall as the frame drawn around it.
-        internal int RowHeightPx => fieldBorder != null ? Mathf.RoundToInt(16f * fieldBorder.size.y) : ModSettingsScreen.RowHeightPx(labelText);
+        // Layout height in pixels, from the frame for the same reason ListDetailItem takes it from
+        // there: the button is as tall as the frame drawn around it.
+        internal int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : ModSettingsScreen.RowHeightPx(labelText);
 
         private ListDetailScreen _owner;
 
@@ -75,7 +76,7 @@ namespace ModSettingsMenu.UI
             // to cloned rows, whose text is assigned at runtime anyway.
             if (labelText == null)
                 Debug.LogWarning(
-                    "[ModSettingsMenu] ListAddRow has no labelText assigned — it will render blank AND get no click collider (CK only creates one when labelText or valueText is set)."
+                    "[ModSettingsMenu] ListAddRow has no labelText assigned — it renders blank and has no click collider (CK only creates one when labelText or valueText is set, and that decision was already made in Awake)."
                 );
         }
 
