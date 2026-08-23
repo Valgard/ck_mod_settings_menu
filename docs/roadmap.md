@@ -166,8 +166,9 @@ side, just a call-site change.
 
 > **Superseded 2026-08-13** as far as the free-text half goes: see
 > § "Text input for plain string settings" below. The read-only-placeholder
-> shortcut is no longer the cheapest route — the frame sprites that make a real
-> editable field possible are the same ones the drill-in rows need anyway. The
+> shortcut is no longer the cheapest route — a real editable field needs a visual
+> frame, and **since 2026-08-23 those sprites exist**: `field_border` and
+> `field_focus` in `ui_chrome`, already dressing the drill-in rows. The
 > `List`-declaration half of this gap stands unchanged.
 
 **One constraint comes from elsewhere:** the consumer driving this item wants an
@@ -191,87 +192,6 @@ already-shipped consumer motivates both — auto-rail-bridges' bridge build orde
 is exactly a priority list — and a declaration API designed without reorder in
 mind would have to be revisited.
 
-## General List-widget UX: the drill-in rows don't look like input fields
-
-Raised 2026-08-12 without a specific complaint attached — flagged as "mit
-der UI/UX bin ich nicht zufrieden" while deciding whether to merge
-`list-widget-editing`, deferred in favor of running the
-`pr-review-toolkit:review-pr` gate first. **Pinned down 2026-08-13** from the
-user's own in-game screenshots of CK's *Join Game* menu: the drill-in rows are
-editable but are not *dressed* as editable. ADR-003 adopted CK's text-input
-base class and got its whole mechanism; what it did not adopt is the visual
-field CK builds around that class in its own prefab.
-
-The rows and CK's own text inputs are the same component
-(`RadicalMenuOptionTextInput`), so the gap is a straight field-by-field
-comparison — MSM's `ItemTemplate` (`Prefabs/ListDetailScreen.prefab`) against
-CK's `sessionId` / `sessionIP` / `sessionPort` / `password`
-(`Resources/Assets/GameObject/Join Game Menu.prefab`, four identical instances
-in the AssetRipper export):
-
-| | CK's text inputs | MSM's `ItemTemplate` |
-|---|---|---|
-| `pugText` / `hintText` / `characterMarkBlinker` | set | set |
-| **`selectedMarker`** | → `selectedBorder` (a `SpriteRenderer`) | → `SelectedMarker`, **a GameObject with no renderer** |
-| **resting-state frame** | child `border`, 9-slice `9sl_black` | **no such child** |
-| `dontAllowNewLines` | `1` | `0` |
-
-The `selectedMarker` row is the mechanical core of it.
-`RadicalMenuOptionTextInput.OnSelected()` does exactly one thing —
-`selectedMarker.SetActive(true)` — so the focus affordance *is* wired, it just
-terminates on an empty GameObject. Nothing is missing in the code, which is why
-reading the code never surfaces this. CK points the same field at a
-`SpriteRenderer` (`character_customization_ui_dark_2`) and gets the blue focus
-frame; the resting frame is a second, separate child (`9sl_black`) that MSM has
-no equivalent of at all. Net effect: a row that can be typed into looks
-identical to static text, in both the resting and the focused state.
-
-Deliberately **not** part of this — verified before proposing, so it does not
-get re-raised:
-
-- `hintString` is already used, set at runtime rather than in the prefab
-  (`ListDetailScreen.cs:210`, the `+ Add` row's placeholder).
-- `maxWidth: 25` is deliberate and code-referenced (`ListDetailItem.cs:142`).
-- `characterWhiteList` staying empty is an **ADR-003 decision**, not an
-  oversight: it is an inclusion filter, unsuited to blocking the single
-  problematic character, so commas are stripped at commit instead.
-
-Two smaller items that do belong here:
-
-- **`dontAllowNewLines: 0`** — CK sets `1` on every single-line field.
-  `AppendString` only filters `\n`/`\r` when the flag is set, so a pasted
-  newline currently survives into a token.
-- **`Shake()` is inherited and unused.** The base class ships shake feedback
-  (0.4 s, 20/s, configured in the template already). ADR-003's commit path
-  strips a typed comma *silently* — the user types a comma, it vanishes, and
-  nothing explains why. This is the affordance for exactly that.
-
-**Cost: real Editor work, not a code change.** `border` and `selectedBorder`
-are new prefab objects, and per the project rule
-(`feedback_corekeeper_prefab_edits_in_editor` memory) new/structural prefab
-objects must be authored in the Unity Editor — a `-batchmode` build
-reserializes and drops hand-authored objects. Four traps apply, each already
-documented in this repo:
-
-1. **Both sprites must be imported** (`utils/import_vanilla_prefab.py` handles
-   the AssetRipper GUID remap and pulls transitive asset deps), then given the
-   ModBuilder sprite-meta treatment (`textureType: 8`, `spriteMode: 1`) or they
-   pack as `Texture2D` and `LoadAsset<Sprite>` returns null.
-2. **A new `SpriteRenderer` has two wrong defaults** — set the built-in
-   `Sprites-Default` material (the project-default custom material renders in
-   the Editor and is invisible in the AssetBundle) and `m_MaskInteraction:
-   VisibleInsideMask` (or the frame overscrolls the viewport mask).
-3. **The uiCamera z-sorts transparents by Z, not `sortingOrder`.** A frame
-   behind text at equal absolute Z sorts *in front* and dims the text grey —
-   it reads as a colour bug. The frame needs its own, larger Z.
-4. **The 9-slice `size` is per-row width**, the same thing `SectionBox` already
-   does for its box background.
-
-A **side observation** while comparing: the template YAML still carries
-`owner`, `isAddRow` and a second `readOnly` — field names from before the
-CS0108 shadowing fix. Harmless (Unity drops them on the next Editor save), but
-it does confirm the prefab has not been reserialized since that refactor.
-
 ## Text input for plain string settings (`SettingKind.Text`)
 
 A **genuinely editable** single-line string row in the main settings screen —
@@ -285,14 +205,16 @@ Today there is no path to it at all: `SectionBuilder` exposes
 **read-only** row. So a plain string is currently either unreachable (own
 consumers) or displayed-but-not-editable (foreign config).
 
-**What changed on 2026-08-13:** the § above establishes that the missing piece
-for an editable field is the *visual frame* (`border` + `selectedBorder`), not
-the mechanism — `RadicalMenuOptionTextInput` already delivers focus/blink,
-on-screen keyboard, width budgeting and commit handling, and ADR-003 has been
-running it in production in the drill-in since. That makes this widget mostly
-a **second consumer of the same two sprites and the same field wiring**, which
-is why the two items should be sequenced together rather than costed
-separately.
+**The expensive half is already built (2026-08-23).** The missing piece for an
+editable field was never the mechanism — `RadicalMenuOptionTextInput` delivers
+focus/blink, on-screen keyboard, width budgeting and commit handling, and ADR-003
+has run it in production in the drill-in since — but the *visual frame*. That
+frame now exists: `field_border` and `field_focus` in the `ui_chrome` atlas, wired
+on `ItemTemplate` as a `Border` child plus a renderer on `SelectedMarker`, switched
+per row through `ListDetailItem`. This widget is therefore a **second consumer of
+the same two sprites and the same field wiring** — see ADR-005 for the row model
+they hang in, and `docs/ck/ui-framework.md` for the `PugText.maxWidth` trap that
+disables the capacity check if the text is allowed to wrap.
 
 This also **supersedes the cheap intermediate step** sketched under
 § "Consumer-facing List declaration" — a
@@ -798,3 +720,14 @@ read-only list's rows `ACTIVE` so they remain navigable for *reading*.
   built in that slice (see ADR-003's "Consequences" section — the risk this
   bullet describes). Flagged by the `pr-review-toolkit:review-pr` gate,
   requested 2026-08-12.
+- **`Shake()` is inherited and unused.** `RadicalMenuOptionTextInput` ships shake
+  feedback (0.4 s, 20/s, already configured on the row template) for exactly the
+  case where it silently discards input, and the drill-in has two such cases: a
+  typed comma is stripped at commit, and a value wider than `maxWidth` is refused
+  keystroke by keystroke. Both vanish without a word today. **Not the field flip
+  it looks like:** the comma strip happens at commit, and every commit path
+  destroys and rebuilds the row, so a shake started there would animate an object
+  that disappears in the same frame — the feedback has to move to the moment of
+  typing. `ShakeAndClear` despite its name clears only its own coroutine handle,
+  not the text. Carried over 2026-08-23 from the drill-in-frame work, which
+  shipped the rest of that section.

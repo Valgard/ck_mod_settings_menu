@@ -208,12 +208,24 @@ compact row plus a pushed detail screen:
 - **`ListDetailScreen : RadicalMenu, IScrollable`** (+ **`ListDetailBox`** — `title`,
   `itemContainer`, `itemTemplate`; and **`ListDetailItem : RadicalMenuOptionTextInput`**
   for each row) — the drill-in itself, a pushed sub-menu (`ListDetailMenuType`) showing
-  one comma-list in full: a title plus one navigable, **editable** row per token
-  (add/edit/remove — CK's own text-input base class, the same one the character-name
-  field uses, so on-screen-keyboard/controller input comes for free), scrollable, with
+  one comma-list in full: a title plus one navigable, **editable** row per entry
+  (edit/remove — CK's own text-input base class, the same one the character-name field
+  uses, so on-screen-keyboard/controller input comes for free), scrollable, with
   controller/keyboard scroll-follow that reaches the bottom (the overflow fix that
-  motivated the redesign). A genuinely read-only `SettingDef` (`SettingDef.ReadOnly`)
-  still shows every row navigable for viewing, just without the trailing "+ Add" row and
+  motivated the redesign). **The screen owns its rows** (`_rows`) for the lifetime of
+  one open drill-in: `Populate` seeds the list from the stored value through
+  `ListTokenizer`, `RebuildRows` renders it, and a commit writes the edited row back at
+  its own `RowIndex` and derives the value from the list, skipping empty entries. That
+  inversion is what lets a row sit there **blank** while you edit its neighbours — the
+  stored value never carries an empty token, so a row derived from it could not exist.
+  It also keeps the base class's per-frame width trim out of a foreign config file,
+  because an untouched row contributes what it was seeded with rather than what is on
+  screen. Every row is one of two `ListDetailItem.RowKind`s: a **`Token`** row, or the
+  trailing **`AddButton`** — the same component and prefab template, bound `readOnly` so
+  it can never become `activeInputField`, distinguished by carrying **no frame** and by
+  `OnActivated` appending an empty row (`AddEmptyRow`) instead of entering edit mode. A
+  genuinely read-only `SettingDef` (`SettingDef.ReadOnly`) still shows every row
+  navigable for viewing, just without the trailing add button, without frames, and
   without ever entering edit mode. Same three-step open as `ModSettingsScreen` (Populate
   → `base.Activate` → RenderContent) for the LinearLayout-height reason. `_pending` (the
   setting to show) is seeded on the singleton instance by `Open` before `PushMenu`
@@ -221,7 +233,10 @@ compact row plus a pushed detail screen:
   gates on `activeSelf` so the inactive row template isn't itself navigable. A row's
   edit commits when it stops being `Manager.input.activeInputField` (Enter/Escape/click
   a different row) or when the screen itself closes (`Deactivate`'s own safety net) —
-  never on mere mouse hover, which CK's own `OnDeselected` also fires on.
+  never on mere mouse hover, which CK's own `OnDeselected` also fires on. Rebuilds must
+  stay full teardown-and-recreate: destroying a row is the only thing that resets
+  `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid editing
+  tint and nothing else reverts.
 - **`ListKindStore`** (`Settings`, persisted via `API.ConfigFilesystem` like
   `ConfigStore`) — sticky "this foreign string was once a genuine list" memory.
   `ForeignConfigDiscovery.HeuristicSaysList` needs ≥2 tokens, and discovery re-runs on
@@ -321,6 +336,18 @@ traps, each verified in-game. Some carry fuller detail (with the code paths) in
   every format field up as a localization term. A literal like a mod's display name then
   renders as `<missing>`; Core Keeper passes `false` in all of its own popups that carry
   a literal.
+- **A drill-in row's width lives in three places, and two of them are derived.** The
+  frame sprites (`Border` / `SelectedMarker` on `ItemTemplate`) are 22 wide;
+  `ListDetailItem.maxWidth` is 21, half a unit narrower on each side so the text keeps
+  air inside the frame; and `UpdateClickCollider` reads its width and centre **off the
+  frame renderer**, because a literal copied from one of the others already went stale
+  once. The row's two `PugText`s must keep `maxWidth: 0` — a non-zero value there makes
+  `PugText.Render` wrap, which silently disables the text input's own capacity check
+  entirely (mechanism and the general rule in `docs/ck/ui-framework.md` § "A text row in
+  a menu"). The container's `paddingStart`/`paddingEnd` are `1` because the frame is a
+  pixel taller than its text-measured slot; between rows that overhang lands in
+  `gapBetweenItems`, but at the first and last row it would be clipped by the viewport
+  mask.
 - **Core Keeper ships the `RESET_DEFAULTS` hint slot fully wired** (glyph plus the
   localized `Menu/Reset` label) **but never uses it** — no vanilla code path returns
   that `HelpButtonTypes` value. Its controller glyph sits on the same face-button
