@@ -299,7 +299,15 @@ namespace ModSettingsMenu.UI
                     widget.SetParentMenu(this);
                     // The template's WrapperUIComponent lets the box layout measure this row;
                     // only its (content-adaptive) height is set here.
-                    SetRowHeight(wGo, RowHeightPx(widget.labelText));
+                    //
+                    // Measure BOTH columns. The label is single-line by nature, but the value is
+                    // whatever a foreign mod stored — and a long string wraps, so a row sized from
+                    // the label alone leaves the extra lines hanging over the row below it. Only a
+                    // read-only Info row can reach that state (every other kind renders a short,
+                    // generated value), which is why it stayed hidden: until the list-detection
+                    // heuristic was sharpened, prose with a comma was misread as a list and drawn as
+                    // a compact preview instead.
+                    SetRowHeight(wGo, Mathf.Max(RowHeightPx(widget.labelText), RowHeightPx(widget.valueText)));
                     menuOptions.Add(widget);
                 }
             }
