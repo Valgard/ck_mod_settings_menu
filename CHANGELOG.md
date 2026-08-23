@@ -21,10 +21,12 @@ entry is the version published to mod.io; its body is the modfile changelog.
   fully controller/keyboard navigable, unlike the raw text a plain Info row
   would otherwise show.
 - **List entries are directly editable.** Each token in the drill-in is its
-  own editable row: change, remove, or add entries (a permanent "+ Add" row)
-  without leaving the game or hand-editing a config file. A read-only list
-  (server-locked or view-only) still shows every entry, just without an edit
-  affordance.
+  own editable row: change, remove, or add entries without leaving the game or
+  hand-editing a config file. Every entry now looks like the input field it is,
+  a dedicated button at the end adds a new one, and a freshly added entry may
+  stay blank while you work on the others — blank entries are simply not saved.
+  A read-only list (server-locked or view-only) still shows every entry, just
+  without an edit affordance and without the add button.
 - **A setting you cannot change still looks like itself.** A read-only value
   used to collapse into a plain text row; it now keeps its native widget — a
   locked toggle still reads as on/off, a locked slider still shows its
