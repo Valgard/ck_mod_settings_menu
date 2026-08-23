@@ -47,6 +47,13 @@ namespace ModSettingsMenu.UI
         // container's rendered height here, so they share RowPaddingPx with the text-based rows.
         private static int RowHeightPx(float unitsHigh) => Mathf.RoundToInt(16f * unitsHigh) + RowPaddingPx;
 
+        // A drill-in row measured from its FRAME instead of its text — the same 16-px-per-unit
+        // convention, deliberately WITHOUT RowPaddingPx. The padding exists to give text-measured
+        // rows breathing room around glyphs that end exactly at their bounds; a frame already
+        // encloses that air, so adding it again would space the frames apart by a value nobody
+        // chose. Shared by ListDetailItem and ListAddRow so the two cannot drift.
+        internal static int FrameHeightPx(SpriteRenderer frame) => Mathf.RoundToInt(16f * frame.size.y);
+
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
         private readonly List<GameObject> _sectionRoots = new List<GameObject>(); // rendered inner-to-outer after activation

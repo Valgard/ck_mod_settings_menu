@@ -45,7 +45,7 @@ namespace ModSettingsMenu.UI
         //
         // Falls back to the text measurement when there is no frame to ask, which keeps a row
         // without frame references laid out rather than collapsed.
-        internal int RowHeightPx => fieldBorder != null ? Mathf.RoundToInt(16f * fieldBorder.size.y) : ModSettingsScreen.RowHeightPx(pugText);
+        internal int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : ModSettingsScreen.RowHeightPx(pugText);
 
         // Which drill-in session this row belongs to. A row does NOT receive this; it takes it from
         // the owner it is bound to, so a wrong generation is unrepresentable rather than merely

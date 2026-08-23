@@ -203,6 +203,16 @@ namespace ModSettingsMenu.UI
         // reverts — a reused row would stay stuck in the "actively editing" tint forever.
         private void RebuildRows()
         {
+            // Wiring check repeated from Populate rather than assumed: Update() reaches this method
+            // on the deferred path without passing Populate again, so on an unwired prefab the loop
+            // below would be the first thing to dereference a null and would report an NRE instead
+            // of the cause.
+            if (box == null || box.itemContainer == null || box.itemTemplate == null || box.addRow == null)
+            {
+                Debug.LogWarning("[ModSettingsMenu] ListDetailScreen rebuild skipped — prefab not wired (box/itemContainer/itemTemplate/addRow).");
+                return;
+            }
+
             // Clear the previous rows. Detach BEFORE Destroy (deferred to end-of-frame), else a rebuild
             // this same frame would count the stale rows and mis-size the layout.
             for (int i = box.itemContainer.childCount - 1; i >= 0; i--)
