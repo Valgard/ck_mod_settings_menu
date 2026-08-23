@@ -18,6 +18,18 @@ namespace ModSettingsMenu.UI
     /// </summary>
     public sealed class ListDetailItem : RadicalMenuOptionTextInput
     {
+        // The resting frame — a child of the row, mirroring CK's own sessionIP field where `border`
+        // sits beside `selectedBorder` under the text input. Serialized because it is a prefab
+        // reference, unlike the runtime identity below.
+        //
+        // There is deliberately NO second field for the focus frame: the base class already carries
+        // `selectedMarker`, and it points at the very GameObject that frame lives on. A second
+        // serialized reference to the same object could be pointed elsewhere by accident, after
+        // which the base class would keep toggling the marker while this class enabled a stranger's
+        // renderer — invisible in the Inspector, visible only in game.
+        [SerializeField]
+        private SpriteRenderer fieldBorder;
+
         // Owning screen and row identity — private + Bind(), not raw public fields, matching
         // SettingWidget.Bind/ListWidget.Bind's established idiom elsewhere in this framework.
         private ListDetailScreen _owner;
@@ -45,6 +57,20 @@ namespace ModSettingsMenu.UI
             _owner = owner;
             _isAddRow = isAddRow;
             this.readOnly = readOnly;
+            // A frame promises "you can type here". A read-only list's rows stay navigable for
+            // reading but can never become activeInputField (OnActivated returns before
+            // base.OnActivated below), so they get no frame — the third place this class draws
+            // that same line, after "no add row" and "no edit mode".
+            //
+            // .enabled, never SetActive: the base class owns selectedMarker's active state and
+            // toggles it on every select/deselect, so competing for that flag is a race it wins on
+            // the next selection change. Switching the renderer instead leaves that mechanism
+            // untouched and simply gives it nothing to draw.
+            if (fieldBorder != null)
+                fieldBorder.enabled = !readOnly;
+            var focus = selectedMarker != null ? selectedMarker.GetComponent<SpriteRenderer>() : null;
+            if (focus != null)
+                focus.enabled = !readOnly;
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
