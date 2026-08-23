@@ -692,9 +692,9 @@ MonoBehaviour:
   activeInStoreFronts: -1
   horizontal: 0
   reversed: 0
-  gapBetweenItems: 10
-  paddingStart: 0
-  paddingEnd: 0
+  gapBetweenItems: 5
+  paddingStart: 1
+  paddingEnd: 1
   background: {fileID: 0}
   renderFrameLate: 0
 --- !u!1 &1709254077376921
@@ -934,7 +934,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: -0.5, z: 0}
-  m_LocalScale: {x: 30, y: 11, z: 1}
+  m_LocalScale: {x: 25, y: 11, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4060945828524476}
@@ -1642,7 +1642,7 @@ MonoBehaviour:
   hintString: 
   selectedMarker: {fileID: 675010273461154613}
   characterMarkBlinker: {fileID: 1224832880473767755}
-  maxWidth: 25
+  maxWidth: 21
   resetTextOnActivate: 0
   dontAllowNewLines: 1
   trim: 1
@@ -1681,7 +1681,7 @@ Transform:
   m_GameObject: {fileID: 675010273461154613}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 12, y: 0, z: 0.1}
+  m_LocalPosition: {x: 10.5, y: 0, z: 0.1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1736,7 +1736,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 1
-  m_Size: {x: 25, y: 1.5}
+  m_Size: {x: 22, y: 1.5}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -1768,7 +1768,7 @@ Transform:
   m_GameObject: {fileID: 1050549467890413247}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 12, y: 0, z: 0.1}
+  m_LocalPosition: {x: 10.5, y: 0, z: 0.1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1823,7 +1823,7 @@ SpriteRenderer:
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 1
-  m_Size: {x: 25, y: 1.5}
+  m_Size: {x: 22, y: 1.5}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -1889,7 +1889,7 @@ MonoBehaviour:
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
   hideInStreamerMode: 0
-  maxWidth: 20
+  maxWidth: 0
   textString: Hint Text
   textSuffix: 
   formatFields: []
@@ -1980,7 +1980,7 @@ MonoBehaviour:
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
   hideInStreamerMode: 0
-  maxWidth: 20
+  maxWidth: 0
   textString: List Entry
   textSuffix: 
   formatFields: []
