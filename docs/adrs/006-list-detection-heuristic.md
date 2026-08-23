@@ -67,6 +67,17 @@ than offering one for a value that should not be rejoined on commas.
   format-override / one-time confirmation item, which is still unbuilt.
 - **A three-word value can no longer be edited in the drill-in.** No data is lost;
   it is shown read-only.
+- **It widens the exposure to the edit-time truncation trap, from bounded to
+  unbounded.** The 32-character cap was never meant as a safety device, but it
+  worked as one: only tokens between roughly the row's render width and 32
+  characters could reach the *editable* screen, so a mis-edit could lose about ten
+  invisible characters. Any length now qualifies, and `ListKindStore` makes the
+  classification sticky once granted. The mitigation is
+  `docs/roadmap.md` § "Horizontal scrolling in a text field", which is therefore no
+  longer a comfort item but the counterpart to this decision — the two are recorded
+  as pointing at each other. Accepted here because the alternative is keeping a
+  wrong rule for an effect it was not designed to have, while the underlying trap
+  stays open either way.
 - The change is invisible to consumers using the explicit API — the heuristic only
   ever applies to *discovered* foreign config.
 
