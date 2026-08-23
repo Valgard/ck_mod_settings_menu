@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 2108018792, guid: d00b036db31ed324f99d4111c393f019, type: 3}
-  m_Name: ListAddHint
+  m_Name: ListAddButton
   m_EditorClassIdentifier: 
   m_overload:
     m_address:
       m_low: 0
       m_high: 0
   m_address:
-    m_low: 2324039943754357338
-    m_high: -6417664016643987236
+    m_low: 5725580644723125244
+    m_high: 5142062060393257062
   m_dynamicCollections:
     m_list: []
   m_localizedTexts:
@@ -128,7 +128,7 @@ MonoBehaviour:
           m_high: 4238944138262099067
       title: 
       description: 
-  m_localizationHint: 'Hint text on the list drill-in''s permanent trailing blank row.'
+  m_localizationHint: 'Caption of the list drill-in''s trailing button, which appends an empty row.'
   m_prevImportPrimaryEntry:
     m_language:
       m_address:
