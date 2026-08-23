@@ -244,7 +244,7 @@ namespace ModSettingsMenu.UI
             if (!_readOnly)
             {
                 box.addRow.transform.SetAsLastSibling();
-                box.addRow.Bind(this, Loc.T("ModSettingsMenu-UI/ListAddButton", "+ Add"));
+                box.addRow.Bind(this);
                 box.addRow.SetParentMenu(this);
                 menuOptions.Add(box.addRow);
             }

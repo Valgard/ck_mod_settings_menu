@@ -23,12 +23,12 @@ ModSettingsMenu-UI:
     de: "(leer)"
   ListAddButton:
     hint: "Caption of the list drill-in's trailing button, which appends an empty row."
-    en: "+ Add"
-    de: "+ Hinzufuegen"
+    en: "Add entry"
+    de: "Hinzufügen"
   ResetConfirm:
     hint: "Confirmation question before restoring one mod's settings to the defaults it declared. {0} is that mod's display name, inserted via string.Format."
     en: "Reset {0} to its default settings?"
-    de: "{0} auf Standardwerte zuruecksetzen?"
+    de: "{0} auf Standardwerte zurücksetzen?"
 ModSettingsMenu-Config:
   showForeignConfigs:
     hint: "Master toggle label: show config from other mods that use CoreLib config but did not integrate MSM."

@@ -54,13 +54,13 @@ MonoBehaviour:
         m_address:
           m_low: 681352171529052915
           m_high: 2314507893210082619
-      title: '+ Add'
+      title: 'Add entry'
       description: 
     - m_language:
         m_address:
           m_low: 5554070574462901973
           m_high: -3923471906115629047
-      title: '+ Hinzufuegen'
+      title: 'Hinzufügen'
       description: 
     - m_language:
         m_address:
@@ -134,7 +134,7 @@ MonoBehaviour:
       m_address:
         m_low: 681352171529052915
         m_high: 2314507893210082619
-    title: '+ Add'
+    title: 'Add entry'
     description: 
   m_shouldBeLocalized: 1
   m_header: ModSettingsMenu-UI
