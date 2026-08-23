@@ -55,23 +55,28 @@ namespace ModSettingsMenu.UI
 
         private ListDetailScreen _owner;
 
-        public void Bind(ListDetailScreen owner, string caption)
+        public void Bind(ListDetailScreen owner)
         {
             _owner = owner;
-            // Start hidden — the base class does this for the rows in its own Awake, and a freshly
-            // cloned button would otherwise show the focus frame before it is ever selected.
+            // Start hidden — the base class does this for the rows in its own Awake, and this button
+            // would otherwise show its focus frame before ever being selected.
             if (selectedMarker != null)
                 selectedMarker.SetActive(false);
+            // The CAPTION is not set here. It lives in the prefab as the loc term itself
+            // (ModSettingsMenu-UI/ListAddButton) on a PugText with localize + renderOnStart, and
+            // PugText resolves and renders it on its own — Start() renders once, OnEnable() re-renders
+            // whenever the glyphs no longer match. Setting it from code would mean resolving the term
+            // here and then having to switch localize off so the already-resolved text is not looked
+            // up a second time; leaving it in the prefab avoids both steps and puts the button's
+            // wording where someone editing the button can see it.
+            //
+            // This is only safe because the button is a LIVE object rather than a clone: the
+            // localize-inherited-from-template trap that ListDetailScreen.AddItem documents applies
+            // to cloned rows, whose text is assigned at runtime anyway.
             if (labelText == null)
-            {
-                Debug.LogWarning("[ModSettingsMenu] ListAddRow template has no labelText assigned — the add button will render blank.");
-                return;
-            }
-            // localize = false before rendering: a cloned PugText inherits localize = true from the
-            // template and would look the already-resolved caption up AGAIN as a loc term, printing
-            // "missing: + Add". The same trap ListDetailScreen.AddItem documents for its own rows.
-            labelText.localize = false;
-            labelText.RenderPlain(caption);
+                Debug.LogWarning(
+                    "[ModSettingsMenu] ListAddRow has no labelText assigned — it will render blank AND get no click collider (CK only creates one when labelText or valueText is set)."
+                );
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) instance — the inactive prefab template
