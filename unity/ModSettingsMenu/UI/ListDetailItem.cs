@@ -14,9 +14,11 @@ namespace ModSettingsMenu.UI
     /// UIMouse also fires on mere hover; while a row holds activeInputField, clicking a DIFFERENT
     /// row is ignored (OnLeftClicked below) so only Enter/Escape (Deactivate) or the drill-in
     /// screen closing can end an edit. See ListDetailScreen.OnRowTextCommitted for the actual
-    /// persist-and-rebuild logic; this class only reports the event and its own current text.
+    /// persist-and-rebuild logic; this class only reports the event and what it may contribute —
+    /// CommittedText, which is deliberately NOT the current text: an untouched row hands back the
+    /// token it was seeded with, so a display-side truncation cannot reach a foreign config file.
     /// </summary>
-    public sealed class ListDetailItem : RadicalMenuOptionTextInput
+    public sealed class ListDetailItem : RadicalMenuOptionTextInput, IListRow
     {
         // The resting frame — a child of the row, mirroring CK's own sessionIP field where `border`
         // sits beside `selectedBorder` under the text input. Serialized because it is a prefab
@@ -45,7 +47,7 @@ namespace ModSettingsMenu.UI
         //
         // Falls back to the text measurement when there is no frame to ask, which keeps a row
         // without frame references laid out rather than collapsed.
-        internal int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : ModSettingsScreen.RowHeightPx(pugText);
+        public int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : ModSettingsScreen.RowHeightPx(pugText);
 
         // Which drill-in session this row belongs to. A row does NOT receive this; it takes it from
         // the owner it is bound to, so a wrong generation is unrepresentable rather than merely
@@ -162,6 +164,11 @@ namespace ModSettingsMenu.UI
             // toggles it on every select/deselect, so competing for that flag is a race it wins on
             // the next selection change. Switching the renderer instead leaves that mechanism
             // untouched and simply gives it nothing to draw.
+            //
+            // NOT a general rule, and ListAddRow deliberately does the opposite: it derives from
+            // RadicalMenuOption, which has no selectedMarker, so it declares and drives its own with
+            // SetActive. The rule is "do not fight the owner of the flag" — here the base class owns
+            // it, there this mod does.
             if (fieldBorder != null)
                 fieldBorder.enabled = !readOnly;
             var focus = selectedMarker != null ? selectedMarker.GetComponent<SpriteRenderer>() : null;
@@ -223,10 +230,12 @@ namespace ModSettingsMenu.UI
         // triggers ListDetailScreen.RebuildRows(), which destroys this (flipped) instance and
         // creates a fresh one starting back at the prefab's own isValueText = false.
         //
-        // A no-op commit is the exception, and it is deliberate rather than overlooked: activating a
-        // row and leaving it untouched returns early in OnRowTextCommitted, no rebuild follows, and
-        // the row keeps the vivid editing tint until the next real rebuild. Harmless — it marks the
-        // row you were last on — but do not read the sentence above as "always".
+        // A no-op commit is the expected exception, and it is deliberate rather than overlooked:
+        // activating a row and leaving it untouched returns early in OnRowTextCommitted, no rebuild
+        // follows, and the row keeps the vivid editing tint until the next real rebuild. Harmless —
+        // it marks the row you were last on. The same is true of that method's other early returns
+        // (no entry, stale generation, unbound index), but those are logged fault paths rather than
+        // ordinary use. Either way, do not read the sentence above as "always".
         public override void OnActivated()
         {
             // A read-only list's rows are still navigable (GetActiveStateInCurrentScene stays
@@ -282,22 +291,25 @@ namespace ModSettingsMenu.UI
             base.UpdateClickCollider();
             if (clickCollider == null)
                 return;
-            bool framed = fieldBorder != null;
-            float width = framed ? fieldBorder.size.x : maxWidth;
-            float centre = framed ? fieldBorder.transform.localPosition.x : maxWidth / 2f;
+            // Width, x-centre AND height come from the frame — the height matters most and bites
+            // hardest: the base sizes the collider from the rendered text, and PugText.Render
+            // reports Rect.zero for an EMPTY string, so a blank row would get a zero-height box and
+            // UIMouse's raycast could never hit it. That is precisely the row this screen now
+            // creates on purpose (the add button appends one, and clearing an entry leaves one), so
+            // without this the mouse cannot reach the very rows the feature exists for. Keyboard and
+            // controller reach them regardless, which is why an in-game check that does not
+            // deliberately click a blank row misses it.
+            if (fieldBorder != null)
+            {
+                ModSettingsScreen.FitColliderToFrame(clickCollider, fieldBorder);
+                return;
+            }
+            // No frame wired: fall back to the capacity width, which at least spans the field the
+            // player can type into. Height stays whatever the base measured.
             var size = clickCollider.size;
             var center = clickCollider.center;
-            size.x = width;
-            center.x = centre;
-            // HEIGHT matters for the same reason, and it bites harder: the base sizes the collider
-            // from the rendered text, and PugText.Render reports Rect.zero for an EMPTY string — so
-            // a blank row would get a zero-height box and UIMouse's raycast could never hit it.
-            // That is precisely the row this screen now creates on purpose (the add button appends
-            // one, and clearing an entry leaves one), so without this the mouse cannot reach the
-            // very rows the feature exists for. Keyboard and controller reach them regardless,
-            // which is why an in-game check that does not deliberately click a blank row misses it.
-            if (framed)
-                size.y = fieldBorder.size.y;
+            size.x = maxWidth;
+            center.x = maxWidth / 2f;
             clickCollider.size = size;
             clickCollider.center = center;
         }

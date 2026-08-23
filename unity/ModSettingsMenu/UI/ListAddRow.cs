@@ -3,8 +3,10 @@ using UnityEngine;
 namespace ModSettingsMenu.UI
 {
     /// <summary>
-    /// The trailing "+ Add" button of the list drill-in: activating it appends an empty row to the
-    /// screen's row list and selects that row.
+    /// The trailing add button of the list drill-in: activating it appends an empty row to the
+    /// screen's row list and selects that row. Its caption is the loc term
+    /// <c>ModSettingsMenu-UI/ListAddButton</c>, resolved by the prefab rather than by this class —
+    /// naming the term instead of the rendered wording, which has already drifted once.
     ///
     /// A plain <c>RadicalMenuOption</c>, deliberately NOT a <c>ListDetailItem</c>. The two used to
     /// share one component, separated only by a row-kind field, and the entire text-input machinery
@@ -24,7 +26,7 @@ namespace ModSettingsMenu.UI
     /// <c>ListDetailScreen.OnRowTextCommitted</c> takes a <c>ListDetailItem</c>, and this class
     /// simply is not one.
     /// </summary>
-    public sealed class ListAddRow : RadicalMenuOption
+    public sealed class ListAddRow : RadicalMenuOption, IListRow
     {
         // The caption lives in the INHERITED RadicalMenuOption.labelText, not in a field of our own,
         // because RadicalMenuOption.InitClickCollider only creates a click collider when labelText
@@ -57,8 +59,18 @@ namespace ModSettingsMenu.UI
 
         // Layout height in pixels, from the frame for the same reason ListDetailItem takes it from
         // there: the button is as tall as the frame drawn around it.
-        internal int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : ModSettingsScreen.RowHeightPx(labelText);
+        public int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : ModSettingsScreen.RowHeightPx(labelText);
 
+        // The one piece of row state in this screen WITHOUT a session stamp, unlike ListDetailItem's
+        // _generation. That is safe here for two reasons worth writing down, because the whole point
+        // of the generation work was that a row's session must be unrepresentably wrong:
+        //   * this button is a LIVE prefab object, not a clone, and the screen is a singleton — so
+        //     _owner can only ever point at the one instance that owns it, in any session;
+        //   * RebuildRows re-Binds it on every rebuild, so it is refreshed at least as often as a
+        //     cloned row is created.
+        // A read-only list skips Bind entirely (the button is switched off), which leaves _owner
+        // stale-but-identical — and the button is not in menuOptions there, so nothing can activate
+        // it anyway.
         private ListDetailScreen _owner;
 
         public void Bind(ListDetailScreen owner)
@@ -120,15 +132,7 @@ namespace ModSettingsMenu.UI
         protected override void UpdateClickCollider()
         {
             base.UpdateClickCollider();
-            if (clickCollider == null || fieldBorder == null)
-                return;
-            var size = clickCollider.size;
-            var center = clickCollider.center;
-            size.x = fieldBorder.size.x;
-            size.y = fieldBorder.size.y;
-            center.x = fieldBorder.transform.localPosition.x; // the frame sprite's pivot is centred
-            clickCollider.size = size;
-            clickCollider.center = center;
+            ModSettingsScreen.FitColliderToFrame(clickCollider, fieldBorder);
         }
     }
 }
