@@ -82,6 +82,22 @@ namespace ModSettingsMenu
                     new ConfigDescription("A restart-required copy of Short, to check the list RequiresRestart path."),
                     new ConfigScope(ConfigAccessLevel.Client, requireReload: true)
                 );
+                // A token WIDER than the row can render, which no other fixture provides. The base
+                // class trims any active row past maxWidth on sight, so this one shows up already
+                // shortened — and committing that shortening would truncate the value in what, for a
+                // real mod, is its own config file. Guarded by ListDetailItem.CommittedText; this
+                // entry is how you check that the guard actually holds.
+                //
+                // Neighbours on both sides so the two halves of the guard are visible at once: the
+                // untouched ones must survive because the value is assembled from the row list, and
+                // the long one must survive because it was never typed into.
+                testFile.Bind(
+                    "Settings",
+                    "Overlong",
+                    "Before, AncientGuardianStatueFragmentPolishedObsidianVariantLarge, After",
+                    new ConfigDescription("A token too wide for the row, to check that display-side truncation is not written back."),
+                    clientScope
+                );
             }
         }
 
