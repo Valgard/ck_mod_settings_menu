@@ -220,6 +220,27 @@ namespace ModSettingsMenu.Settings
         /// docs/adrs/003-list-widget-editing.md). ListKindStore (see BuildDef) covers
         /// a narrower, different case: an entry ALREADY confirmed as a list staying one after our own
         /// editing shrinks it below this heuristic's own threshold.</summary>
+        // Does this comma-separated string look like a LIST of values rather than one piece of
+        // prose that happens to contain a comma? Two or more tokens, none of which reads like a
+        // sentence fragment or a dotted value.
+        //
+        // **Changed 2026-08-23.** This used to reject any token over 32 characters. That threshold
+        // came from ADR-002 without a derivation, and it turned out to test the wrong property:
+        // "This is a long sentence, and another one" splits into tokens of 22 and 15 characters —
+        // both under the limit, so prose passed — while a perfectly ordinary long identifier was
+        // refused and fell through to a read-only Info row. Length is not what separates a list
+        // from prose; INTERNAL WORD COUNT is.
+        //
+        // The new rule: a token may contain at most one space. Identifiers ("InventoryChest") and
+        // two-word names ("Copper Ore") stay lists; anything with more internal spacing reads as
+        // prose and is left as an Info row. That is deliberately not airtight — a three-word item
+        // name would now be misjudged — but it errs toward NOT offering an editable drill-in, which
+        // is the safer direction: a misclassified entry is written back comma-rejoined on commit
+        // (see ADR-003's consequences and the roadmap's format-override item).
+        //
+        // The dot rule is unchanged and separate: it keeps decimals, versions and paths out.
+        private const int MaxSpacesPerToken = 1;
+
         public static bool HeuristicSaysList(string value)
         {
             var tokens = ListTokenizer.Tokenize(value);
@@ -227,8 +248,14 @@ namespace ModSettingsMenu.Settings
                 return false;
             foreach (var tok in tokens)
             {
-                if (tok.Length > 32 || tok.IndexOf('.') >= 0)
+                if (tok.IndexOf('.') >= 0)
                     return false;
+                int spaces = 0;
+                foreach (var c in tok)
+                {
+                    if (c == ' ' && ++spaces > MaxSpacesPerToken)
+                        return false;
+                }
             }
             return true;
         }

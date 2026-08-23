@@ -88,14 +88,29 @@ namespace ModSettingsMenu
                 // real mod, is its own config file. Guarded by ListDetailItem.CommittedText; this
                 // entry is how you check that the guard actually holds.
                 //
-                // Neighbours on both sides so the two halves of the guard are visible at once: the
-                // untouched ones must survive because the value is assembled from the row list, and
-                // the long one must survive because it was never typed into.
+                // A long identifier, of the kind HeuristicSaysList used to refuse on its old
+                // 32-character limit — it doubles as a check that such a value now reaches the
+                // drill-in as an editable list rather than a read-only Info row.
+                //
+                // Neighbours on both sides so both halves of the truncation guard are visible at
+                // once: the untouched ones must survive because the value is assembled from the row
+                // list, and the long one must survive because no keystroke ever changed it.
                 testFile.Bind(
                     "Settings",
                     "Overlong",
                     "Before, AncientGuardianStatueFragmentPolishedObsidianVariantLarge, After",
-                    new ConfigDescription("A token too wide for the row, to check that display-side truncation is not written back."),
+                    new ConfigDescription("A token far wider than the row can render, to check that display-side truncation is not written back."),
+                    clientScope
+                );
+                // Prose that happens to contain a comma — the case the length limit was meant to
+                // catch and never did (its tokens are 22 and 15 characters, both under 32). It must
+                // render as a read-only Info row, NOT as an editable list: committing it would
+                // rejoin it on commas and quietly reformat the owning mod's sentence.
+                testFile.Bind(
+                    "Settings",
+                    "ProseNotAList",
+                    "This is a long sentence, and another one",
+                    new ConfigDescription("Prose with a comma, to check it is not mistaken for a list."),
                     clientScope
                 );
             }
