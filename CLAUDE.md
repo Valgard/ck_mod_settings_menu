@@ -218,23 +218,32 @@ compact row plus a pushed detail screen:
   its own `RowIndex` and derives the value from the list, skipping empty entries. That
   inversion is what lets a row sit there **blank** while you edit its neighbours — the
   stored value never carries an empty token, so a row derived from it could not exist.
-  It also keeps the base class's per-frame width trim out of a foreign config file,
-  because an untouched row contributes what it was seeded with rather than what is on
-  screen. Every row is one of two `ListDetailItem.RowKind`s: a **`Token`** row, or the
-  trailing **`AddButton`** — the same component and prefab template, bound `readOnly` so
-  it can never become `activeInputField`, distinguished by carrying **no frame** and by
-  `OnActivated` appending an empty row (`AddEmptyRow`) instead of entering edit mode. A
-  genuinely read-only `SettingDef` (`SettingDef.ReadOnly`) still shows every row
-  navigable for viewing, just without the trailing add button, without frames, and
-  without ever entering edit mode. Same three-step open as `ModSettingsScreen` (Populate
-  → `base.Activate` → RenderContent) for the LinearLayout-height reason. `_pending` (the
-  setting to show) is seeded on the singleton instance by `Open` before `PushMenu`
-  resolves it, and cleared after consume. `ListDetailItem.GetActiveStateInCurrentScene`
-  gates on `activeSelf` so the inactive row template isn't itself navigable. A row's
-  edit commits when it stops being `Manager.input.activeInputField` (Enter/Escape/click
-  a different row) or when the screen itself closes (`Deactivate`'s own safety net) —
-  never on mere mouse hover, which CK's own `OnDeselected` also fires on. Rebuilds must
-  stay full teardown-and-recreate: destroying a row is the only thing that resets
+  Two things together keep the base class's per-frame width trim out of a foreign config
+  file: an untouched row contributes what it was seeded with rather than what is on
+  screen, and the committing row hands back `CommittedText`, which is the seeded token
+  unless a keystroke actually changed it (a text comparison could not tell a trimmed
+  value from a backspaced one; the timing can). Each open bumps `RowGeneration`, and a
+  row takes that stamp **from the owner it binds to** — the screen is a singleton reused
+  for every setting, so without it a row outliving its session could commit its stale
+  index against the next list; doomed rows are additionally disabled before being
+  detached, so they cannot fire at all. The trailing add button is **`ListAddRow`**, a
+  plain `RadicalMenuOption` and deliberately not a `ListDetailItem`:
+  `OnRowTextCommitted` therefore cannot receive it, which is what let both of its guards
+  become loud. It is a live object inside `itemContainer` (there is only ever one),
+  keeps a resting frame and focus marker like CK's own `joinButton`, and takes its
+  caption straight from the prefab — a `PugText` holding the loc term with `localize` +
+  `renderOnStart` resolves and renders itself, so no code sets it. A genuinely read-only
+  `SettingDef` (`SettingDef.ReadOnly`) still shows every row navigable for viewing, just
+  without the trailing add button, without frames, and without ever entering edit mode.
+  Same three-step open as `ModSettingsScreen` (Populate → `base.Activate` →
+  RenderContent) for the LinearLayout-height reason. `_pending` (the setting to show) is
+  seeded on the singleton instance by `Open` before `PushMenu` resolves it, and cleared
+  after consume. `ListDetailItem.GetActiveStateInCurrentScene` gates on `activeSelf` so
+  the inactive row template isn't itself navigable. A row's edit commits when it stops
+  being `Manager.input.activeInputField` (Enter/Escape/click a different row) or when
+  the screen itself closes (`Deactivate`'s own safety net) — never on mere mouse hover,
+  which CK's own `OnDeselected` also fires on. Rebuilds must stay full
+  teardown-and-recreate: destroying a row is the only thing that resets
   `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid editing
   tint and nothing else reverts.
 - **`ListKindStore`** (`Settings`, persisted via `API.ConfigFilesystem` like
