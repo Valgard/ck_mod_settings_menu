@@ -1,7 +1,22 @@
 # List widget editing: uniform editable text rows via RadicalMenuOptionTextInput
 
-- Status: accepted
+- Status: accepted, partially superseded by
+  [ADR-005](005-drill-in-row-model.md) (2026-08-23)
 - Date: 2026-07-28
+
+> **What ADR-005 changed.** The editing mechanism below stands unaltered: token
+> rows are still `RadicalMenuOptionTextInput`, and a row still commits on the
+> `activeInputField` transition. What it reversed is the **"plus one permanent
+> trailing blank '+ Add' row"** half of the chosen option — adding an entry no
+> longer happens by typing into a row that pretends to already exist. It is a
+> button (`ListAddRow`), which is close to Option 2's "separate non-text '+ Add'
+> row" below, rejected here at the time.
+>
+> The reason is not that the argument below was wrong, but that its premise
+> expired: rows were a projection of the stored value, so typing into a
+> projection was the only way to make the source grow. Once the screen owns its
+> rows (ADR-005), an add action needs no text path at all — and a button costs
+> nothing that the shared-component version did not also cost.
 
 ## Context and Problem Statement
 
@@ -127,6 +142,10 @@ token leaves the compact row's placeholder rather than falling back to
   confirming abandons an edit — see the raw spec's edge cases).
 
 ### Row + explicit remove/add actions
+
+> **Half of this was adopted after all (2026-08-23, ADR-005):** the "separate
+> non-text '+ Add' row" is now what ships. The explicit per-row delete
+> affordance is still not built and remains on the roadmap.
 
 - Good: an explicit per-row delete affordance is harder to trigger by
   accident than clearing text to empty.

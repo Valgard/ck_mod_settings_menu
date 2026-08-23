@@ -164,15 +164,22 @@ namespace ModSettingsMenu.UI
             RebuildRows();
 
             // ListDetailScreen is a singleton reused for every list — selectedIndex survives across
-            // opens of DIFFERENT lists (RadicalMenu's own field, never reset by this screen otherwise).
-            // A stale index from a longer previous list is out of range for a shorter one, and
-            // RadicalMenu.Activate() indexes menuOptions[selectedIndex] UNGUARDED via
-            // DeselectAnyCurrentOption() whenever SystemIsUsingMouse() — throwing before base.Activate()
-            // ever reaches RenderContent() below, so every row keeps its prefab-default
-            // renderHeightPixels (0) and collapses onto the same position. -1 is RadicalMenu's own
-            // "nothing selected" sentinel (its declared default, and what every one of its own range
-            // checks treats as safe) — the same reset the post-edit rebuild path in Update() already
-            // does for the identical reason.
+            // opens of DIFFERENT lists (RadicalMenu's own field, never reset by this screen
+            // otherwise), so without this an index left over from a longer previous list would be
+            // applied to a shorter new one.
+            //
+            // **Correction (2026-08-23):** this used to claim RadicalMenu.Activate() indexes
+            // menuOptions[selectedIndex] UNGUARDED via DeselectAnyCurrentOption(). It does not —
+            // that method checks `selectedIndex != -1 && selectedIndex < menuOptions.Count` before
+            // dereferencing, and the non-mouse branch clamps. The reset is still right, but as
+            // correctness rather than crash avoidance: a stale index would silently select the wrong
+            // row of a different setting's list. Do not read the old rationale as licence to drop
+            // this line, and do not trust "unguarded" claims about CK without opening the method.
+            //
+            // -1 is RadicalMenu's own "nothing selected" sentinel (its declared default, and what
+            // every one of its range checks treats as safe) — the same reset the post-edit rebuild
+            // path in Update() does, there because SelectOptionIndex's `selectedIndex == index`
+            // early-out would otherwise skip re-selecting a slot whose row is a different object.
             selectedIndex = -1;
 
             if (_scroll != null)
@@ -418,21 +425,17 @@ namespace ModSettingsMenu.UI
             }
             _rows[index] = row.CommittedText.Trim().Replace(",", "");
 
-            var tokens = new List<string>();
-            foreach (var text in _rows)
-            {
-                if (text.Length > 0)
-                    tokens.Add(text);
-            }
-            string joined = string.Join(",", tokens);
-            // Compare against the STORED value tokenized the same way (Split/Trim/drop-empty via
-            // ListTokenizer — the rule Populate seeded _rows with and the loop above re-applies)
-            // rather than the raw string — Value() may carry authoring formatting
-            // (e.g. "Alpha, Beta, Gamma" with a space after each comma) that joined never
-            // reproduces, so a raw comparison never matched and every mere open+close (no real edit at
-            // all) wrote and rebuilt regardless, defeating the whole point of this no-op guard.
-            var existingTokens = ListTokenizer.Tokenize(Value());
-            if (joined == string.Join(",", existingTokens))
+            // Join through ListTokenizer, not by hand: dropping the empties is the same rule Tokenize
+            // applies when reading, and this method compares the two results directly below. A
+            // hand-written loop here would be a second copy of that rule — exactly the divergence
+            // ListTokenizer was introduced to end (see its own comment, commit f9eb96f).
+            string joined = ListTokenizer.Join(_rows);
+            // Compare against the STORED value tokenized the same way rather than against the raw
+            // string — Value() may carry authoring formatting (e.g. "Alpha, Beta, Gamma" with a
+            // space after each comma) that a join never reproduces, so a raw comparison never
+            // matched and every mere open+close (no real edit at all) wrote and rebuilt regardless,
+            // defeating the whole point of this no-op guard.
+            if (joined == ListTokenizer.Join(ListTokenizer.Tokenize(Value())))
                 return;
             _activeDef.Entry.BoxedValue = joined;
             // Mirrors SettingWidget.Adjust's identical line: a restart-required setting that actually
@@ -464,6 +467,14 @@ namespace ModSettingsMenu.UI
             // slot the button itself occupies would land on the button again. Everything else leaves
             // it at -1, meaning "keep the same numeric slot" (clamped), which is what every
             // edit/removal wants anyway.
+            // Nothing to select is a legitimate outcome, and Mathf.Clamp cannot express it: with an
+            // empty list the bounds invert (0 .. -1) and Clamp returns its MINIMUM, i.e. 0 — an
+            // index into a list that has none. Unreachable as things stand (an editable list always
+            // has the add button, and a read-only one can never set _rebuildPending), which is
+            // exactly why it needs saying: the next row kind or a read-only rebuild path would make
+            // it reachable without anyone looking at this line.
+            if (menuOptions.Count == 0)
+                return;
             int target = explicitTarget >= 0 ? explicitTarget : previousIndex;
             SelectOptionIndex(Mathf.Clamp(target, 0, menuOptions.Count - 1));
         }
