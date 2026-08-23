@@ -488,8 +488,9 @@ namespace ModSettingsMenu.UI
             // it at -1, meaning "keep the same numeric slot" (clamped), which is what every
             // edit/removal wants anyway.
             // Nothing to select is a legitimate outcome, and Mathf.Clamp cannot express it: with an
-            // empty list the bounds invert (0 .. -1) and Clamp returns its MINIMUM, i.e. 0 — an
-            // index into a list that has none. Unreachable as things stand (an editable list always
+            // empty list the bounds invert (0 .. -1), and Clamp's `if (v < min) v = min; else if
+            // (v > max) v = max;` then yields -1 for any non-negative target — or 0 for a negative
+            // one. Both index a list that has none. Unreachable as things stand (an editable list always
             // has the add button, and a read-only one can never set _rebuildPending), which is
             // exactly why it needs saying: the next row kind or a read-only rebuild path would make
             // it reachable without anyone looking at this line.

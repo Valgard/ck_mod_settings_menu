@@ -103,7 +103,7 @@ namespace ModSettingsMenu
                     clientScope
                 );
                 // Prose that happens to contain a comma — the case the length limit was meant to
-                // catch and never did (its tokens are 22 and 15 characters, both under 32). It must
+                // catch and never did (its tokens are 23 and 15 characters, both under 32). It must
                 // render as a read-only Info row, NOT as an editable list: committing it would
                 // rejoin it on commas and quietly reformat the owning mod's sentence.
                 testFile.Bind(

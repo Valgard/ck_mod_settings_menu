@@ -1,5 +1,6 @@
 # ModSettingsMenu localisation source. Generated into native TextDataBlock assets
-# at build by utils/LocalizationGenerator.cs. ASCII rule: no U+2026 '...'/U+2014 '-'.
+# at build by utils/LocalizationGenerator.cs. Not an ASCII-only file (umlauts and
+# sharp s render fine), but avoid U+2026 ellipsis and U+2014 em dash: write "..." and "-".
 ModSettingsMenu-UI:
   Title:
     hint: "The Options-menu entry label + the screen title."

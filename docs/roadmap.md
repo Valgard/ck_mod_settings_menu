@@ -724,43 +724,39 @@ read-only list's rows `ACTIVE` so they remain navigable for *reading*.
   of at the next selection change. A dependency-driven lock in this framework
   needs the same nudge on whatever row just became locked.
 
-## A world event can delete a list entry mid-edit
+## Escape does not cancel an edit
 
 Found 2026-08-23 by the `pr-review-toolkit:silent-failure-hunter` gate while
-reviewing the drill-in row model. **Pre-existing** — not introduced by that work,
-and not made worse by it.
+reviewing the drill-in row model. **Pre-existing** — not introduced by that work.
 
-`UIManager.HideAllInventoryAndCraftingUI` does this to whatever field is being
-edited:
+CK carries the intent in `Deactivate(bool commit)` and
+**`RadicalMenuOptionTextInput.Deactivate` discards that parameter**: it only clears
+`activeInputField` and hides the caret. The drill-in commits on the
+`activeInputField` transition, which is the only reliable "the user is done" signal
+CK offers, and a transition cannot see what a dropped parameter said. `Pug.Other`
+calls `Deactivate(!IsMenuBackButtonDown())` for Escape, so Escape means "commit what
+is typed" exactly like Enter — there is no way to abandon an edit.
 
-```csharp
-Manager.input.activeInputField.SetInputText("");
-Manager.input.activeInputField.Deactivate(commit: false);
-```
+Possible answers, none tried: patching `Deactivate` to honour its own parameter,
+which is the honest fix and the widest blast radius (every text input in the game
+runs through it, the character-name field included); or a narrower prefix that
+records the argument for the current field so the commit path can read it.
 
-The drill-in commits on the `activeInputField` transition, which is the only
-reliable "the user is done" signal CK offers — and this sequence is
-indistinguishable from pressing Enter on an emptied row. The entry is therefore
-dropped from the list and the shortened value written to the owning mod's config.
-
-**Its callers are world events, not menu actions:** opening a chest, a cattle pen,
-a vending machine, a crafting station, a sign, the map, and
-`PlayerController.FadeOutAndLockPlayer`. In multiplayer the simulation keeps
-running while a player sits in the options menu, so another player — or a mob —
-can trigger it.
-
-The structural problem is that CK carries the intent in `Deactivate(bool commit)`
-and **`RadicalMenuOptionTextInput.Deactivate` discards that parameter**: it only
-clears `activeInputField` and hides the caret. A transition-based trigger cannot
-see what a dropped parameter said. Escape has the same shape — `Pug.Other` calls
-`Deactivate(!IsMenuBackButtonDown())` and the implementation throws the flag away
-— which is why Escape is not a cancel in this screen either.
-
-Possible answers, none tried: a Harmony prefix on `SetInputText` that flags an
-externally-cleared field so the commit can skip it; treating "text became empty
-without a keystroke" as suspicious (`ListDetailItem` already tracks exactly that
-distinction for `CommittedText`); or patching `Deactivate` to honour its own
-parameter, which is the honest fix and the widest blast radius.
+**The sibling half of this finding is fixed in 2.0.0.** The same dropped parameter
+let a *world event* delete a list entry mid-edit:
+`UIManager.HideAllInventoryAndCraftingUI` ends with
+`SetInputText("")` + `Deactivate(commit: false)` on whatever field is being edited,
+which is indistinguishable from pressing Enter on an emptied row — the entry was
+dropped and the shortened value written to the owning mod's config. Its callers are
+world events, not menu actions (opening a chest, a cattle pen, a vending machine, a
+crafting station, a sign, the map, and `PlayerController.FadeOutAndLockPlayer`), and
+in multiplayer the simulation keeps running while a player sits in the options menu,
+so another player or a mob can trigger it. `MenuPatch` now prefixes that method and
+commits the row first, which also clears `activeInputField` and thereby disarms CK's
+own `if (textInputIsActive)` blanking. It had to be a patch rather than a rule in
+`ListDetailItem`: that sequence is byte-for-byte the on-screen keyboard's own result
+handler, so only the call's *source* can separate "the player just typed this" from
+"the world just wiped it" — see that patch's comment.
 
 ## Small fixes
 
