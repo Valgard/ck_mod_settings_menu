@@ -192,37 +192,48 @@ already-shipped consumer motivates both — auto-rail-bridges' bridge build orde
 is exactly a priority list — and a declaration API designed without reorder in
 mind would have to be revisited.
 
-### A grab mode is the cheap shape, and CK carries it (verified 2026-08-24)
+### Decided 2026-08-24: per-row ↑/↓ buttons, not a grab mode
 
-Grab a row, move it with ↑/↓, drop it — **no per-row buttons, no prefab change,
-no Harmony patch.** Checked against the decompiled `Pug.Other` rather than
-assumed; the mechanism and its line numbers now live in
-`docs/ck/ui-framework.md` § "Redirecting menu input". In short:
-`MenuManager.UpdateInputAndApplyToCurrentMenu` routes ↑/↓ solely through
-`RadicalMenu.SelectNextIndex`/`SelectPrevIndex`, both `public virtual`, so this
-screen can reinterpret them; `OnCloseMenuRequest` is virtual too and ends the
-mode on Escape without popping the screen; and the hint bar re-reads
-`GetHelpButtonsToShow()` every frame, so the mode can announce itself for free.
-Vanilla overrides the same two methods in `RadicalCreditsMenu`.
+Both shapes were checked against the decompiled `Pug.Other` and the ripped
+vanilla prefabs; the mechanics and their line numbers live in
+`docs/ck/ui-framework.md` § "Redirecting menu input". **Buttons won on
+consistency:** a grab mode's only workable mouse form is drag-and-drop, and
+Core Keeper's menus have none — dragging exists in the inventory, which is a
+different system entirely. A control the mouse cannot reach is the wrong default
+for a screen mouse users also open.
 
-**Core Keeper itself never reorders anything** — the search for a precedent came
-back empty across `Pug.Other`. So the interaction has no in-game model to copy
-and has to be judged on its own.
+**Both shapes share one prerequisite, which is the real cost.** Anything with a
+second control inside a row runs through
+`RadicalMenuOption.handleNavigationInternally` +
+`NavigateInternally(Direction.Id)`, and that pair is only consulted on the
+`useUIElementsForNavigation` path. **Both MSM prefabs sit on the index path
+(`useUIElementsForNavigation: 0`)** — inherited from `UISettings.prefab`, which
+is also `0` and whose options never set `handleNavigationInternally`. Ten
+vanilla menus do set it, `Join Game Menu` among them, and that prefab is the
+working reference for several controls in one row. Switching MSM's screens over
+is a prefab change that alters how *every existing row* is reached, so it wants
+its own verification pass — including the `GRAYED_OUT` skip, which behaves
+differently there (see § "Locked settings").
 
-**Mouse support is a second path, not the same one.** The levers above are the
-keyboard/controller dispatcher; the mouse runs through `UIMouse`, which drives
-selection from hover. A mouse equivalent is a drag: read the held state
-(`IsMenuMouseInteractButtonPressed`), read CK's own hover selection as the drop
-target, act on release — CK's `PopUpOption` already polls held-controller and
-held-mouse in one branch, so the gesture is established. It meets the keyboard
-path at the swap operation, not at the input. Budget both, or the feature is
-controller-only in a menu that mouse users also reach.
+**Consequence for sequencing:** this couples back to § "Per-row delete button".
+Once the row carries buttons, delete and ↑/↓ are three affordances beside the
+same field, and the row width has to carry all three or none. Design the
+geometry once, for the full set; the code can still land in two steps.
 
-**What it still needs beyond the overrides:** an input to enter the mode (A /
-Enter is taken by the row's text edit, so a free hint slot plus an action —
-the drill-in uses only `NAVIGATE`/`SELECT`/`BACK` of CK's seven), and the swap
-has to move the selection with the row, since `RebuildRows` tears every row
-down and re-seeds the selection through `_pendingSelect`.
+**Rejected, and why it is worth remembering:** the grab mode needs no prefab
+change at all if built on `SelectNextIndex`/`SelectPrevIndex` overrides (both
+`public virtual`, and `RadicalCreditsMenu` overrides exactly those) — that
+remains the cheapest way to reinterpret ↑/↓ on the index path, should a later
+feature want one without leaving it. CK's own idiom for the same thing is the
+flag above, worked out in `RadicalOptionsMenuOption_Slider`'s
+`_requiresActivationForAdjustment`, which is switched on in exactly one shipped
+prefab (`ControlMappingMenu`).
+
+**What the chosen shape still needs:** the swap has to move the selection with
+the row, since `RebuildRows` tears every row down and re-seeds the selection
+through `_pendingSelect`; and the buttons need their own reachable focus, which
+is what `NavigateInternally` is for — copy the player list (`:331681`), which
+asks `GetAdjacentUIElement` on the selected child and calls `Select()`.
 
 ## Per-row delete button in the List drill-in
 
