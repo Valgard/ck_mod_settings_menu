@@ -1,0 +1,123 @@
+using UnityEngine;
+
+namespace ModSettingsMenu.UI
+{
+    /// <summary>
+    /// The trailing "+ Add" button of the list drill-in: activating it appends an empty row to the
+    /// screen's row list and selects that row.
+    ///
+    /// A plain <c>RadicalMenuOption</c>, deliberately NOT a <c>ListDetailItem</c>. The two used to
+    /// share one component, separated only by a row-kind field, and the entire text-input machinery
+    /// rode along on a button that can never accept text. That cost more than it saved:
+    /// <list type="bullet">
+    /// <item>the commit path took a row index of <c>-1</c> as a normal case, so its guard had to
+    /// stay silent and could no longer tell "this is the button" from "this row lost its index" —
+    /// the second case being a user's edit vanishing without a word;</item>
+    /// <item>three fields had to agree (kind, index, readOnly) with nothing enforcing it;</item>
+    /// <item>the button inherited <c>Update()</c>, and with it the ability to fire a commit while
+    /// being torn down.</item>
+    /// </list>
+    /// Splitting the type makes all three unrepresentable rather than merely guarded:
+    /// <c>ListDetailScreen.OnRowTextCommitted</c> takes a <c>ListDetailItem</c>, and this class
+    /// simply is not one.
+    /// </summary>
+    public sealed class ListAddRow : RadicalMenuOption
+    {
+        // The caption lives in the INHERITED RadicalMenuOption.labelText, not in a field of our own.
+        // That field is what CK's own selection tinting drives (PugTextEffectMenuOption reads the
+        // option's labelText/valueText), so a private label would render fine and then simply never
+        // light up when the button is selected.
+
+        // The focus frame, shown while this button is the selected option.
+        //
+        // Re-declared here because `selectedMarker` belongs to RadicalMenuOptionTextInput, which this
+        // class deliberately does NOT derive from — so splitting the button off the text row would
+        // otherwise have cost it its selection affordance, leaving only CK's text tinting. That is
+        // vanilla-normal for a menu option, but it would be weaker than the rows directly above it,
+        // and weakest exactly where it matters most: controller and keyboard navigation, where this
+        // frame is the only thing saying where you are.
+        //
+        // Note the division of labour, which the rows draw the same way: the FIELD frame means "you
+        // can type here" and a button has none; the FOCUS frame means "this is selected" and every
+        // navigable row deserves one.
+        [SerializeField]
+        private GameObject selectedMarker;
+
+        // The resting frame. CK's own joinButton carries one exactly like its text fields do, at the
+        // same size — a frame there means "interactive element", not "type here". So the button
+        // keeps it, and the clickable area derives from it just as a row's does.
+        [SerializeField]
+        private SpriteRenderer fieldBorder;
+
+        // Layout height in pixels (16 per world unit), from the frame for the same reason
+        // ListDetailItem takes it from there: the button is as tall as the frame drawn around it.
+        internal int RowHeightPx => fieldBorder != null ? Mathf.RoundToInt(16f * fieldBorder.size.y) : ModSettingsScreen.RowHeightPx(labelText);
+
+        private ListDetailScreen _owner;
+
+        public void Bind(ListDetailScreen owner, string caption)
+        {
+            _owner = owner;
+            // Start hidden — the base class does this for the rows in its own Awake, and a freshly
+            // cloned button would otherwise show the focus frame before it is ever selected.
+            if (selectedMarker != null)
+                selectedMarker.SetActive(false);
+            if (labelText == null)
+            {
+                Debug.LogWarning("[ModSettingsMenu] ListAddRow template has no labelText assigned — the add button will render blank.");
+                return;
+            }
+            // localize = false before rendering: a cloned PugText inherits localize = true from the
+            // template and would look the already-resolved caption up AGAIN as a loc term, printing
+            // "missing: + Add". The same trap ListDetailScreen.AddItem documents for its own rows.
+            labelText.localize = false;
+            labelText.RenderPlain(caption);
+        }
+
+        // ACTIVE only for a live (cloned, SetActive(true)) instance — the inactive prefab template
+        // must report INACTIVE, or RadicalMenu's includeInactive option scan navigates to it too.
+        // Same reasoning as ListDetailItem's override.
+        public override OptionActiveState GetActiveStateInCurrentScene() => gameObject.activeSelf ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
+
+        // Mirrors what RadicalMenuOptionTextInput does for the rows: show the marker on select, hide
+        // it on deselect. None of that row's hover-suppression logic applies here — this button can
+        // never be the active input field, so there is no edit for a stray mouse move to disturb.
+        public override void OnSelected()
+        {
+            base.OnSelected();
+            if (selectedMarker != null)
+                selectedMarker.SetActive(true);
+        }
+
+        public override void OnDeselected(bool playEffect = true)
+        {
+            base.OnDeselected(playEffect);
+            if (selectedMarker != null)
+                selectedMarker.SetActive(false);
+        }
+
+        public override void OnActivated()
+        {
+            base.OnActivated();
+            _owner?.AddEmptyRow();
+        }
+
+        // Derive the clickable area from the frame, exactly as ListDetailItem does — the frame is
+        // what the player sees and aims at, and reading it means an Editor resize needs no code
+        // change. The base class would otherwise size the collider to the caption alone, leaving
+        // most of the button dead to the mouse.
+        protected override void UpdateClickCollider()
+        {
+            base.UpdateClickCollider();
+            if (clickCollider == null || fieldBorder == null)
+                return;
+            var size = clickCollider.size;
+            var center = clickCollider.center;
+            size.x = fieldBorder.size.x;
+            size.y = fieldBorder.size.y;
+            center.x = fieldBorder.transform.localPosition.x; // the frame sprite's pivot is centred
+            clickCollider.size = size;
+            clickCollider.center = center;
+        }
+    }
+}
