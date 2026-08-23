@@ -101,6 +101,18 @@ namespace ModSettingsMenu.UI
             SetInputText(_seededText);
         }
 
+        // Re-baseline the edit detector against what is actually on screen, after the base class has
+        // had a chance to trim it. Called once per row from RenderContent, i.e. after the layout
+        // pass that follows seeding.
+        //
+        // Without this, the first frame after seeding compares the (already trimmed) live text
+        // against the untrimmed seed and would set _edited from the trim alone. That is harmless
+        // only because a row cannot own activeInputField on its creation frame — a fact that
+        // AddEmptyRow's "selected but NOT activated" choice currently guarantees. Making the
+        // baseline explicit means that choice stays a UX decision instead of quietly becoming
+        // load-bearing for data integrity.
+        internal void RebaselineEditDetector() => _textLastFrame = GetInputText();
+
         /// <summary>What this row may contribute to the stored value: its own text once the user has
         /// typed, otherwise the token it was seeded with — never a shortening the user did not ask
         /// for.</summary>
@@ -322,7 +334,24 @@ namespace ModSettingsMenu.UI
             // outside it. Note the trim cannot masquerade as typing either: once it has cut the
             // text down to maxWidth it stops, so it produces no further changes during an edit.
             string now = GetInputText();
-            if (isActiveField && now != _textLastFrame)
+            // `|| _wasActiveField` covers the on-screen keyboard, and without it the drill-in is
+            // read-only on a controller while looking editable. CK's OSK result handler
+            // (UIManager.TrySetInputText) does SetInputText(result) and Deactivate(success) in ONE
+            // synchronous callback, so there is no frame in which the text has changed AND this row
+            // still owns activeInputField: while the keyboard is open the text does not move, and by
+            // the frame it does, ownership is already gone. Checking the PREVIOUS frame's ownership
+            // catches exactly that landing frame.
+            //
+            // It does not readmit the width trim: an untouched row has both flags false, so the trim
+            // still cannot mark a row edited. And it cannot be fixed on this class instead — CK
+            // calls SetInputText and Deactivate through InputManager.TextInputInterface, and
+            // RadicalMenuOptionTextInput implements both non-virtually, so a shadowing member here
+            // would never be dispatched.
+            //
+            // Cancelling the keyboard is unaffected and was already correct: no SetInputText runs,
+            // so the seeded value is what gets committed. That asymmetry is why a quick controller
+            // test can look healthy while every CONFIRMED edit is being discarded.
+            if ((isActiveField || _wasActiveField) && now != _textLastFrame)
                 _edited = true;
             _textLastFrame = now;
 
