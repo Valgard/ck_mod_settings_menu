@@ -21,8 +21,8 @@ ModSettingsMenu-UI:
     hint: "Compact-row preview shown when a foreign list setting has zero tokens."
     en: "(empty)"
     de: "(leer)"
-  ListAddHint:
-    hint: "Hint text on the list drill-in's permanent trailing blank row."
+  ListAddButton:
+    hint: "Caption of the list drill-in's trailing button, which appends an empty row."
     en: "+ Add"
     de: "+ Hinzufuegen"
   ResetConfirm:
