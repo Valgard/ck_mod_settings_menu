@@ -1,6 +1,7 @@
 # List widget presentation: compact row + drill-in detail screen
 
-- Status: accepted
+- Status: accepted; its list-detection rule superseded by
+  [ADR-006](006-list-detection-heuristic.md) (2026-08-23)
 - Date: 2026-07-23
 
 ## Context and Problem Statement
@@ -59,6 +60,9 @@ Key sub-decisions:
   `SettingKind.Info` (the plain read-only ADR-001 row). The heuristic **moves from
   `ListWidget`** (where it had picked a per-render default view) **to `BuildDef`**
   (where it now picks the widget kind). The widgets stay dumb.
+
+  > The `≤ 32 chars` half of this rule was replaced on 2026-08-23 — see
+  > [ADR-006](006-list-detection-heuristic.md).
 - **Remove the per-row toggle entirely** — the toggle icon, its two sprites,
   `ListToggleButton`, `ListWidget.ToggleView`, and `SettingDef.OverrideKey`. With no
   writer, `ListOverrideStore` is removed in v1 (it returns with editing, storing a
