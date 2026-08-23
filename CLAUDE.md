@@ -249,12 +249,17 @@ compact row plus a pushed detail screen:
   without ever entering edit mode. Same three-step open as `ModSettingsScreen` (Populate
   → `base.Activate` → RenderContent) for the LinearLayout-height reason. `_pending` (the
   setting to show) is seeded on the singleton instance by `Open` before `PushMenu`
-  resolves it, and cleared after consume. `ListDetailItem.GetActiveStateInCurrentScene`
-  gates on `activeSelf` so the inactive row template isn't itself navigable. A row's
-  edit commits when it stops being `Manager.input.activeInputField` (Enter/Escape/click
-  a different row) or when the screen itself closes (`Deactivate`'s own safety net) —
-  never on mere mouse hover, which CK's own `OnDeselected` also fires on. Rebuilds must
-  stay full teardown-and-recreate: destroying a row is the only thing that resets
+  resolves it, and cleared after consume. Both row types implement **`IListRow`**
+  (`RowHeightPx`) so the container's measuring loop asks an interface instead of naming
+  each class — the `ISectionRow` precedent one screen up, for the same
+  single-inheritance reason: the two sit at different points of CK's own hierarchy, and
+  a row that goes unmeasured silently collapses to `renderHeightPixels: 0`.
+  `ListDetailItem.GetActiveStateInCurrentScene` gates on `activeSelf` so the inactive
+  row template isn't itself navigable. A row's edit commits when it stops being
+  `Manager.input.activeInputField` (Enter/Escape/click a different row) or when the
+  screen itself closes (`Deactivate`'s own safety net) — never on mere mouse hover,
+  which CK's own `OnDeselected` also fires on. Rebuilds must stay full
+  teardown-and-recreate: destroying a row is the only thing that resets
   `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid editing
   tint and nothing else reverts.
 - **`ListKindStore`** (`Settings`, persisted via `API.ConfigFilesystem` like

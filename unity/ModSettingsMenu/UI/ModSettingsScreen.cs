@@ -54,6 +54,24 @@ namespace ModSettingsMenu.UI
         // chose. Shared by ListDetailItem and ListAddRow so the two cannot drift.
         internal static int FrameHeightPx(SpriteRenderer frame) => Mathf.RoundToInt(16f * frame.size.y);
 
+        // The click-area counterpart, shared for the same reason: the frame is what the player sees
+        // and aims at, so both drill-in row types size their collider to it instead of to the text
+        // CK's base class measures. Width AND height matter — PugText.Render reports Rect.zero for
+        // an empty string, so a text-measured box on a blank row is unhittable. The x-centre comes
+        // from the frame's localPosition because the sprite's pivot is centred.
+        internal static void FitColliderToFrame(BoxCollider collider, SpriteRenderer frame)
+        {
+            if (collider == null || frame == null)
+                return;
+            var size = collider.size;
+            var center = collider.center;
+            size.x = frame.size.x;
+            size.y = frame.size.y;
+            center.x = frame.transform.localPosition.x;
+            collider.size = size;
+            collider.center = center;
+        }
+
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
         private readonly List<GameObject> _sectionRoots = new List<GameObject>(); // rendered inner-to-outer after activation

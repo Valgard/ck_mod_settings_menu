@@ -303,8 +303,15 @@ namespace ModSettingsMenu.UI
             _rows.Add("");
             _rebuildPending = true;
             // The new row lands last in _rows, and the button follows it — so this index is the
-            // new row, not the button. Selected but NOT activated: entering edit mode here would
-            // raise the on-screen keyboard on a controller unasked.
+            // new row, not the button. Selected but NOT activated, and that choice is now
+            // LOAD-BEARING twice over: entering edit mode here would raise the on-screen keyboard on
+            // a controller unasked, and it would also let the base class's width trim masquerade as
+            // a keystroke. SeedText baselines the edit detector against the UNTRIMMED token, and
+            // RenderContent re-baselines it against what actually rendered — but only because no row
+            // can be activeInputField on the frame it is created. Auto-activating here would run the
+            // trim inside an active edit window, set _edited from a change the user never made, and
+            // commit the truncation. Reversing this line therefore needs the detector reworked, not
+            // just a controller check.
             _pendingSelect = _rows.Count - 1;
         }
 
@@ -321,16 +328,16 @@ namespace ModSettingsMenu.UI
                 var go = box.itemContainer.GetChild(i).gameObject;
                 if (!go.activeSelf)
                     continue;
-                // Each row type reports its own height, measured from its frame rather than from its
-                // text — see ListDetailItem.RowHeightPx for why. Both types must be asked: the add
-                // button is not a ListDetailItem, and a row left unmeasured keeps the prefab's
-                // renderHeightPixels of 0, which the LinearLayout collapses to nothing.
+                // Each row type reports its own height through IListRow, measured from its frame
+                // rather than from its text — see ListDetailItem.RowHeightPx for why. The interface
+                // exists so a new row kind cannot be forgotten here: a row left unmeasured keeps the
+                // prefab's renderHeightPixels of 0, which the LinearLayout collapses to nothing.
                 var row = go.GetComponent<ListDetailItem>();
                 // The row has rendered by now, so the base class has already trimmed anything too
                 // wide. Re-baseline the edit detector against what is actually on screen — see
                 // ListDetailItem.RebaselineEditDetector.
                 row?.RebaselineEditDetector();
-                int px = row?.RowHeightPx ?? go.GetComponent<ListAddRow>()?.RowHeightPx ?? 0;
+                int px = go.GetComponent<IListRow>()?.RowHeightPx ?? 0;
                 var wrap = go.GetComponent<WrapperUIComponent>();
                 if (px > 0 && wrap != null)
                     wrap.renderHeightPixels = px;
