@@ -192,6 +192,38 @@ already-shipped consumer motivates both — auto-rail-bridges' bridge build orde
 is exactly a priority list — and a declaration API designed without reorder in
 mind would have to be revisited.
 
+### A grab mode is the cheap shape, and CK carries it (verified 2026-08-24)
+
+Grab a row, move it with ↑/↓, drop it — **no per-row buttons, no prefab change,
+no Harmony patch.** Checked against the decompiled `Pug.Other` rather than
+assumed; the mechanism and its line numbers now live in
+`docs/ck/ui-framework.md` § "Redirecting menu input". In short:
+`MenuManager.UpdateInputAndApplyToCurrentMenu` routes ↑/↓ solely through
+`RadicalMenu.SelectNextIndex`/`SelectPrevIndex`, both `public virtual`, so this
+screen can reinterpret them; `OnCloseMenuRequest` is virtual too and ends the
+mode on Escape without popping the screen; and the hint bar re-reads
+`GetHelpButtonsToShow()` every frame, so the mode can announce itself for free.
+Vanilla overrides the same two methods in `RadicalCreditsMenu`.
+
+**Core Keeper itself never reorders anything** — the search for a precedent came
+back empty across `Pug.Other`. So the interaction has no in-game model to copy
+and has to be judged on its own.
+
+**Mouse support is a second path, not the same one.** The levers above are the
+keyboard/controller dispatcher; the mouse runs through `UIMouse`, which drives
+selection from hover. A mouse equivalent is a drag: read the held state
+(`IsMenuMouseInteractButtonPressed`), read CK's own hover selection as the drop
+target, act on release — CK's `PopUpOption` already polls held-controller and
+held-mouse in one branch, so the gesture is established. It meets the keyboard
+path at the swap operation, not at the input. Budget both, or the feature is
+controller-only in a menu that mouse users also reach.
+
+**What it still needs beyond the overrides:** an input to enter the mode (A /
+Enter is taken by the row's text edit, so a free hint slot plus an action —
+the drill-in uses only `NAVIGATE`/`SELECT`/`BACK` of CK's seven), and the swap
+has to move the selection with the row, since `RebuildRows` tears every row
+down and re-seeds the selection through `_pendingSelect`.
+
 ## Per-row delete button in the List drill-in
 
 **There is no way to delete a list entry.** The drill-in offers edit and add;
