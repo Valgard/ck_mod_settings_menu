@@ -53,12 +53,33 @@ describes how a *stored value* becomes an initial row list, and is no longer a
 statement about what is on screen.
 
 With rows no longer projected from the value, the trailing row no longer needs to
-be an input at all. It became `ListDetailItem.RowKind.AddButton` — the same
-component and prefab template, bound `readOnly` so it can never become
-`activeInputField`, distinguished by carrying no frame and by appending an empty
-row on activation. Reusing the component keeps its text-input machinery around as
-inert ballast; the alternative was authoring a second prefab template in the
-Editor, which costs more than the ballast does.
+be an input at all. It became **`ListAddRow`**, a plain `RadicalMenuOption` that
+appends an empty row on activation — a live object inside the container rather
+than a template, because there is only ever one of it and cloning it per rebuild
+would destroy and re-render an unchanging object on every commit.
+
+**A first attempt kept it on `ListDetailItem`**, separated only by a row-kind
+field, on the argument that a second prefab object costs more than carrying the
+inherited text-input machinery as inert ballast. That was wrong, and the review
+showed why: the ballast had consequences the machinery itself did not. The commit
+path had to accept a row index of `-1` as a normal case, which forced its guard to
+stay silent — and a silent guard cannot distinguish "this is the button" from
+"this row lost its index", the second being a user's edit vanishing without a
+word. Three fields had to agree (`kind`, `rowIndex`, `readOnly`) with nothing
+enforcing it. And the button inherited `Update()`, hence the ability to fire a
+commit while being torn down.
+
+Splitting the type makes all three **unrepresentable** rather than guarded:
+`OnRowTextCommitted` takes a `ListDetailItem`, and a `ListAddRow` is not one. The
+teardown likewise stopped needing an exemption for the button and now says what it
+means — it removes the rows it created.
+
+The button keeps a resting frame and a focus marker. CK's own `joinButton` carries
+both exactly as its text fields do, so a frame there means "interactive element",
+not "type here"; and the focus marker is the only thing telling a controller or
+keyboard user where they are. `selectedMarker` belongs to
+`RadicalMenuOptionTextInput`, so `ListAddRow` re-declares it and mirrors the
+show/hide in `OnSelected`/`OnDeselected`.
 
 ### Consequences
 
@@ -67,13 +88,29 @@ Editor, which costs more than the ballast does.
   destroying a row is the only thing that resets
   `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid
   editing tint and nothing else reverts. A reused row would stay tinted forever.
-- **A latent write-back defect closed itself.** The old assembly walked the screen
-  and read `GetInputText()` from every row. `RadicalMenuOptionTextInput.Update`
-  trims any text wider than `maxWidth` one character per frame, on every active
-  row, edited or not — so a foreign token too wide for the field was shortened on
-  display and could be written back shortened when any *other* row was committed.
-  Assembling from `_rows` means an untouched row contributes the token it was
-  seeded with. This was never observed in the wild and is now unreachable.
+- **A write-back defect needed closing in two places, not one.**
+  `RadicalMenuOptionTextInput.Update` trims any text wider than `maxWidth` — a
+  `while` loop that cuts it down to fit within a single frame — on every active
+  row, edited or not. A foreign token too wide for the field is therefore shortened
+  *on display*, and writing that shortening back would truncate someone else's
+  config value.
+
+  Assembling from `_rows` closes the half that concerns **untouched neighbours**:
+  they contribute the token they were seeded with, whatever the screen shows. It
+  does nothing for the row being committed, which is trimmed like any other — so
+  merely activating an over-long row and pressing Enter would still have persisted
+  the shortened form. Escape is no escape either: `Deactivate(bool commit)` ignores
+  its parameter.
+
+  The second half is `ListDetailItem.CommittedText`, which returns the seeded token
+  unless a keystroke actually changed the text. A text comparison could not have
+  decided this — a trimmed value and a backspaced one look identical — but the
+  timing can: while a row holds `activeInputField`, a change is the user's; outside
+  that window only the trim runs. Neither half suffices alone.
+
+  Never observed in the wild, and it could not have been: the row's `PugText`
+  carried a `maxWidth` of its own until this same pass, so it wrapped instead of
+  overflowing and the trim never fired at all.
 - **A guard retired by construction.** That walk also saw the inactive
   `ItemTemplate`, whose `pugText` carries a prefab placeholder forever, and needed
   an `activeSelf` check to keep it from being committed as a phantom token.
@@ -97,8 +134,10 @@ button nor frames.
 
 - Good, because an empty row is expressible without inventing a stored
   representation for it.
-- Good, because the write path stops reading rendered text, which is the only
-  thing that could feed display-side truncation back into a foreign config file.
+- Good, because the write path stops reading rendered text **for every row but the
+  one being committed**, which removes most of the surface through which
+  display-side truncation could reach a foreign config file. The remainder needed
+  its own answer (`CommittedText`); the row list alone would not have sufficed.
 - Good, because it makes the add button possible: the button needs no path from
   screen text into the value.
 - Bad, because there are now two representations of the same list during a

@@ -318,36 +318,36 @@ built by hand: a mask plus a text-transform offset that follows the caret.
 > The refusal, the per-frame trim and the config-file path below are real from
 > 2026-08-23 onward — they were not before, which is why nobody had seen them.
 
-### The truncation reaches the owning mod's config file
+### The truncation no longer reaches the owning mod's config file
 
-This is the part that makes the item more than cosmetic, and it needs no
-scrolling to fix.
+**Closed on 2026-08-23** — kept here because the reasoning explains why the
+remaining scrolling work is a comfort feature rather than a data-safety one.
 
-`ListDetailScreen.OnRowTextCommitted` assembles the value from `GetInputText()`
-of **every** active row, not just the one that was edited. So a foreign token
-that renders wider than `maxWidth` is trimmed by the loop above shortly after
-`SetInputText` seeds it, and the next commit on *any other row* writes that
-shortened token back into the owning mod's `ConfigEntry`. Nothing in the path
-notices: the no-op guard compares the assembled value against the stored one, and
-the trimmed value genuinely differs, so the write proceeds.
+The hazard was that a foreign token wider than the field gets trimmed *on
+display* and could then be written back in that shortened form. Two changes close
+it, and neither needs a viewport:
 
-**Not yet observed in practice** — whether a realistic token (PlacementPlus'
-item names are the live case) actually exceeds the drill-in's `maxWidth: 25` is
-an in-game measurement nobody has taken. The path is real; its reachability is
-not established.
+- The value is assembled from the screen's own row list, so **untouched rows**
+  contribute the token they were seeded with, whatever their row happens to show.
+- The committing row hands back `ListDetailItem.CommittedText`, which is the
+  seeded token unless a keystroke actually changed the text. A text comparison
+  could not have decided that — a trimmed value and a backspaced one look
+  identical — but the timing can: while a row holds `activeInputField`, a change
+  is the user's; outside that window only the trim runs.
+
+**It was never reachable before that pass anyway.** The row's own `PugText`
+carried a `maxWidth`, so an over-long value wrapped instead of overflowing and
+neither the capacity check nor the trim ever fired. Clearing that limit in the
+same change is what armed both — the fix and the exposure arrived together.
 
 **The limit is a rendered width, not a character count.** Both checks measure
 `pugText.dimensions.width`, and `PugFont` kerns per glyph pair, so how many
 characters fit depends on which characters they are. One data point exists from
 the wrapping bug above — with the PugText limit at `20`, a line held roughly 44
 **digits** — but digits are uniform and item names are not, so that number does
-not carry over. The honest measurement is to type the longest real item name into
-a row at `maxWidth: 25` and see whether it is refused.
-
-**The cheap fix is independent of scrolling:** keep each row's seeded token and
-refuse to commit a row whose text was never edited but no longer matches it.
-That closes the data-loss path whether or not a viewport is ever built. Worth
-doing first, and separately.
+not carry over. What remains open is comfort, not safety: at `maxWidth: 21` a long
+item name is **refused** keystroke by keystroke, silently, and a value that
+already exceeds it can be viewed but not meaningfully edited.
 
 ### Open design questions
 
@@ -706,6 +706,44 @@ read-only list's rows `ACTIVE` so they remain navigable for *reading*.
   neighbour's label *and* value by hand so the red appears immediately instead
   of at the next selection change. A dependency-driven lock in this framework
   needs the same nudge on whatever row just became locked.
+
+## A world event can delete a list entry mid-edit
+
+Found 2026-08-23 by the `pr-review-toolkit:silent-failure-hunter` gate while
+reviewing the drill-in row model. **Pre-existing** — not introduced by that work,
+and not made worse by it.
+
+`UIManager.HideAllInventoryAndCraftingUI` does this to whatever field is being
+edited:
+
+```csharp
+Manager.input.activeInputField.SetInputText("");
+Manager.input.activeInputField.Deactivate(commit: false);
+```
+
+The drill-in commits on the `activeInputField` transition, which is the only
+reliable "the user is done" signal CK offers — and this sequence is
+indistinguishable from pressing Enter on an emptied row. The entry is therefore
+dropped from the list and the shortened value written to the owning mod's config.
+
+**Its callers are world events, not menu actions:** opening a chest, a cattle pen,
+a vending machine, a crafting station, a sign, the map, and
+`PlayerController.FadeOutAndLockPlayer`. In multiplayer the simulation keeps
+running while a player sits in the options menu, so another player — or a mob —
+can trigger it.
+
+The structural problem is that CK carries the intent in `Deactivate(bool commit)`
+and **`RadicalMenuOptionTextInput.Deactivate` discards that parameter**: it only
+clears `activeInputField` and hides the caret. A transition-based trigger cannot
+see what a dropped parameter said. Escape has the same shape — `Pug.Other` calls
+`Deactivate(!IsMenuBackButtonDown())` and the implementation throws the flag away
+— which is why Escape is not a cancel in this screen either.
+
+Possible answers, none tried: a Harmony prefix on `SetInputText` that flags an
+externally-cleared field so the commit can skip it; treating "text became empty
+without a keystroke" as suspicious (`ListDetailItem` already tracks exactly that
+distinction for `CommittedText`); or patching `Deactivate` to honour its own
+parameter, which is the honest fix and the widest blast radius.
 
 ## Small fixes
 

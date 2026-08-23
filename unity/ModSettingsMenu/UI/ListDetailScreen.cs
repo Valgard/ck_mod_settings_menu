@@ -6,8 +6,9 @@ namespace ModSettingsMenu.UI
 {
     /// <summary>
     /// The list drill-in detail screen: a pushed RadicalMenu showing one comma-list in full — a
-    /// title plus one navigable row per token, scrollable, each row a live text-input field
-    /// (add/edit/remove a token, committed on Enter/Escape/click-away — see ListDetailItem).
+    /// title plus one navigable row per entry, scrollable, each row a live text-input field
+    /// (edit or clear an entry, committed on Enter/Escape/click-away — see ListDetailItem); adding
+    /// goes through the trailing button (ListAddRow), not by typing into a row.
     /// A genuinely read-only SettingDef (SettingDef.ReadOnly) still shows every row navigable for
     /// viewing, just without the trailing add button and without ever entering edit mode. Controller/
     /// keyboard navigation walks the rows and scroll-follow reaches the bottom (the overflow fix
@@ -50,7 +51,7 @@ namespace ModSettingsMenu.UI
         private int _rowGeneration;
         internal int RowGeneration => _rowGeneration;
 
-        private bool _rebuildPending; // set by OnRowTextCommitted, consumed by Update — see design note
+        private bool _rebuildPending; // set by OnRowTextCommitted and AddEmptyRow, consumed by Update
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
 
@@ -265,7 +266,7 @@ namespace ModSettingsMenu.UI
                 item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
             // SettingWidget.SetText and the hintText line below; must be
             // set before SetInputText's internal Render() call, not after
-            item.SetInputText(token);
+            item.SeedText(token); // not SetInputText: the row must remember what the value said
             if (item.hintText != null)
             {
                 item.hintText.localize = false; // same cloned-PugText trap as pugText above — every
@@ -380,11 +381,13 @@ namespace ModSettingsMenu.UI
                 return;
             // Only the committing row can have changed — it is the only one that could hold
             // activeInputField. Write it back at its own index, then derive the value from the
-            // list. Reading the OTHER rows off screen (as this used to) kept the base class's
-            // per-frame width trim out of a third-party mod's config file FOR ROWS THE USER NEVER
-            // TOUCHED; the committing row is trimmed like any other and still contributes its
-            // rendered text. That remaining path is a roadmap item, not something this method
-            // solves.
+            // list.
+            //
+            // Two things together keep the base class's per-frame width trim out of a third-party
+            // mod's config file: reading the other rows from _rows rather than off screen (they were
+            // never touched, so their stored text stands), and asking this row for CommittedText
+            // rather than GetInputText — which hands back the seeded token unless a keystroke
+            // actually changed it. Either alone leaves half the hazard open.
             //
             // Dropping that menuOptions walk also retires the guard it needed: the walk saw the
             // inactive itemTemplate too (RadicalMenu's own option scan includes it — see
@@ -413,7 +416,7 @@ namespace ModSettingsMenu.UI
                 );
                 return;
             }
-            _rows[index] = row.GetInputText().Trim().Replace(",", "");
+            _rows[index] = row.CommittedText.Trim().Replace(",", "");
 
             var tokens = new List<string>();
             foreach (var text in _rows)
