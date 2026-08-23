@@ -381,6 +381,21 @@ off (`maxWidth = 0`) is therefore the only way any scrolling could work, since
 otherwise that per-frame loop would fight it — but then the clipping has to be
 built by hand: a mask plus a text-transform offset that follows the caret.
 
+> **Correction (2026-08-23):** both bullets above were derived from the decompile
+> without checking them against the prefab, and **neither fired in the shipped
+> drill-in**. The row's `Label` PugText carried `maxWidth: 20`, so `PugText.Render`
+> wrapped the text instead — and because both checks compare
+> `pugText.dimensions.width`, a wrapped text can never exceed the limit. Typing
+> past the capacity grew the row *downward* across three lines and out of its
+> frame, silently. Fixed by setting the PugText's own `maxWidth` to `0`, which is
+> what CK does on every one of its text fields; the mechanism and the
+> capacity-versus-wrapping distinction now live in `docs/ck/ui-framework.md`
+> § "A text row in a menu".
+>
+> Consequence for this entry: it describes the state that fix *establishes*.
+> The refusal, the per-frame trim and the config-file path below are real from
+> 2026-08-23 onward — they were not before, which is why nobody had seen them.
+
 ### The truncation reaches the owning mod's config file
 
 This is the part that makes the item more than cosmetic, and it needs no
@@ -398,6 +413,14 @@ the trimmed value genuinely differs, so the write proceeds.
 item names are the live case) actually exceeds the drill-in's `maxWidth: 25` is
 an in-game measurement nobody has taken. The path is real; its reachability is
 not established.
+
+**The limit is a rendered width, not a character count.** Both checks measure
+`pugText.dimensions.width`, and `PugFont` kerns per glyph pair, so how many
+characters fit depends on which characters they are. One data point exists from
+the wrapping bug above — with the PugText limit at `20`, a line held roughly 44
+**digits** — but digits are uniform and item names are not, so that number does
+not carry over. The honest measurement is to type the longest real item name into
+a row at `maxWidth: 25` and see whether it is refused.
 
 **The cheap fix is independent of scrolling:** keep each row's seeded token and
 refuse to commit a row whose text was never edited but no longer matches it.
