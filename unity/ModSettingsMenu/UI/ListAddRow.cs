@@ -13,20 +13,25 @@ namespace ModSettingsMenu.UI
     /// <item>the commit path took a row index of <c>-1</c> as a normal case, so its guard had to
     /// stay silent and could no longer tell "this is the button" from "this row lost its index" —
     /// the second case being a user's edit vanishing without a word;</item>
-    /// <item>three fields had to agree (kind, index, readOnly) with nothing enforcing it;</item>
-    /// <item>the button inherited <c>Update()</c>, and with it the ability to fire a commit while
-    /// being torn down.</item>
+    /// <item>three fields had to agree (kind, index, readOnly) with nothing enforcing it.</item>
     /// </list>
+    /// (An earlier version of this list also claimed the shared button could fire a commit while
+    /// being torn down. It could not: bound <c>readOnly</c>, it never became
+    /// <c>activeInputField</c>, so the transition that triggers a commit never armed. That hazard is
+    /// real but belongs to token rows, and is handled by disabling doomed rows before detaching
+    /// them.)
     /// Splitting the type makes all three unrepresentable rather than merely guarded:
     /// <c>ListDetailScreen.OnRowTextCommitted</c> takes a <c>ListDetailItem</c>, and this class
     /// simply is not one.
     /// </summary>
     public sealed class ListAddRow : RadicalMenuOption
     {
-        // The caption lives in the INHERITED RadicalMenuOption.labelText, not in a field of our own.
-        // That field is what CK's own selection tinting drives (PugTextEffectMenuOption reads the
-        // option's labelText/valueText), so a private label would render fine and then simply never
-        // light up when the button is selected.
+        // The caption lives in the INHERITED RadicalMenuOption.labelText, not in a field of our own,
+        // because RadicalMenuOption.InitClickCollider only creates a click collider when labelText
+        // or valueText is set — a private field would render fine and leave the button unclickable.
+        // (Selection tinting is NOT a reason: PugTextEffect binds to the PugText on its own
+        // GameObject and RadicalMenuOption.Awake collects the effects from the children, so tinting
+        // works regardless of where labelText points.)
 
         // The focus frame, shown while this button is the selected option.
         //

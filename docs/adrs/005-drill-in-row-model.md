@@ -68,17 +68,22 @@ path had to accept a row index of `-1` as a normal case, which forced its guard 
 stay silent — and a silent guard cannot distinguish "this is the button" from
 "this row lost its index", the second being a user's edit vanishing without a
 word. Three fields had to agree (`kind`, `rowIndex`, `readOnly`) with nothing
-enforcing it. And the button inherited `Update()`, hence the ability to fire a
-commit while being torn down.
+enforcing it. (An earlier draft of this ADR named a third cost — the button
+inheriting `Update()` and with it the ability to commit while being torn down.
+It could not: bound `readOnly`, it never became `activeInputField`, so the
+transition that fires a commit never armed. That hazard is real, but it belongs
+to the token rows, and the teardown handles it by disabling doomed rows before
+detaching them.)
 
-Splitting the type makes all three **unrepresentable** rather than guarded:
+Splitting the type makes both **unrepresentable** rather than guarded:
 `OnRowTextCommitted` takes a `ListDetailItem`, and a `ListAddRow` is not one. The
 teardown likewise stopped needing an exemption for the button and now says what it
 means — it removes the rows it created.
 
 The button keeps a resting frame and a focus marker. CK's own `joinButton` carries
-both exactly as its text fields do, so a frame there means "interactive element",
-not "type here"; and the focus marker is the only thing telling a controller or
+both with the same sprites and the same height as its text fields, scaled to its
+own narrower width — so a frame there means "interactive element", not "type
+here"; and the focus marker is the only thing telling a controller or
 keyboard user where they are. `selectedMarker` belongs to
 `RadicalMenuOptionTextInput`, so `ListAddRow` re-declares it and mirrors the
 show/hide in `OnSelected`/`OnDeselected`.

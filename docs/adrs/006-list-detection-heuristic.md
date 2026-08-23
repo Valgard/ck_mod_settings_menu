@@ -17,11 +17,11 @@ and did not derive the 32.
 Both halves of that threshold turned out wrong in the same session:
 
 - **It lets prose through.** `"This is a long sentence, and another one"` splits
-  into tokens of 22 and 15 characters. Both clear the limit, so a sentence is
+  into tokens of 23 and 15 characters. Both clear the limit, so a sentence is
   offered as an editable list — and committing it rejoins it on commas, quietly
   reformatting the owning mod's text.
 - **It refuses legitimate entries.** An ordinary long identifier
-  (`AncientGuardianStatueFragmentPolishedObsidianVariantLarge`, 56 characters) is
+  (`AncientGuardianStatueFragmentPolishedObsidianVariantLarge`, 57 characters) is
   a perfectly good list member, but falls through to an `Info` row — which then
   also breaks that row's layout, because the `Info` path was never built for
   values that wide.
@@ -65,6 +65,15 @@ than offering one for a value that should not be rejoined on commas.
 - **The false-positive risk moves, it does not vanish.** Prose whose every token
   has at most one space still passes. The mitigation remains the roadmap's
   format-override / one-time confirmation item, which is still unbuilt.
+- **A false positive already granted is permanent — tightening the rule cannot
+  revoke one.** `BuildDef` reads `HeuristicSaysList(value) || WasEverList(id)`, so
+  `ListKindStore` outranks the heuristic by design: an entry a previous build
+  admitted stays an editable list whatever the rule says today. The new rule
+  therefore only ever protects entries a profile has not seen yet. No migration is
+  offered, because the store cannot distinguish a stale false positive from the
+  case it exists for — a genuine list the user edited down below the threshold.
+  The manual remedy is deleting the entry's line from
+  `mods/ModSettingsMenu/list-kind-memory`.
 - **A three-word value can no longer be edited in the drill-in.** No data is lost;
   it is shown read-only.
 - **It widens the exposure to the edit-time truncation trap, from bounded to
@@ -83,10 +92,12 @@ than offering one for a value that should not be rejoined on commas.
 
 ### Confirmation
 
-Two fixtures, behind `DevFlags.Is("TestFixtures")`: `Overlong` carries a 56-character
+Two fixtures, behind `DevFlags.Is("TestFixtures")`: `Overlong` carries a 57-character
 identifier and must appear as an editable list with a drill-in; `ProseNotAList`
 carries `"This is a long sentence, and another one"` and must stay a read-only
-`Info` row. The second is the case ADR-002's rule was meant to catch and never did.
+`Info` row. The second is the case ADR-002's rule was meant to catch and never did
+— and it only holds on a profile whose `list-kind-memory` has never recorded that
+entry, per the stickiness consequence above.
 
 ## Pros and Cons of the Options
 
