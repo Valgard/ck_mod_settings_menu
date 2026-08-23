@@ -75,6 +75,18 @@ namespace ModSettingsMenu.UI
         //
         // The TIMING can tell them apart: while this row holds activeInputField, a text change is
         // the user's; outside that window the only thing that changes the text is the trim.
+        //
+        // _textLastFrame is what makes that EDGE-triggered rather than level-triggered, and it is
+        // not redundant. Comparing the live text against _seededText instead would misfire on the
+        // very case this exists for: a token wider than the row is trimmed down over several frames
+        // BEFORE anyone touches it, so on the first active frame the live text already differs from
+        // the seed — the row would be marked edited without a single keystroke, and the trim would
+        // land in the config file after all.
+        //
+        // Seed only through SeedText, never through the inherited SetInputText: the latter leaves
+        // _seededText behind and reopens exactly that hole. (Shadowing SetInputText to redirect it
+        // would be worse — the base class calls it while typing, which would clear _edited on every
+        // keystroke.)
         private string _seededText = "";
         private string _textLastFrame = "";
         private bool _edited;
@@ -113,12 +125,22 @@ namespace ModSettingsMenu.UI
             _rowIndex = rowIndex;
             _generation = owner != null ? owner.RowGeneration : -1;
             this.readOnly = readOnly;
-            // A fresh row has never been the active input field, whatever the pooled GameObject did
-            // in a previous life. Without this reset a row that still held activeInputField when the
+            // A fresh row has never been the active input field, whatever the GameObject did in a
+            // previous life. Without this reset a row that still held activeInputField when the
             // screen closed keeps the latch set, and can fire one more commit while being torn down
             // — against the NEXT session's list. The generation check in OnRowTextCommitted is the
             // second lock on the same door.
+            //
+            // The text trio is reset here for the same reason and not because anything needs it
+            // today: AddItem always calls SeedText straight after Bind, so these values never
+            // actually survive. But this method's whole premise is "assume nothing about what this
+            // object was before", and leaving three of its fields outside that promise is how the
+            // premise quietly stops being true — which is exactly the shape of the stale-row bug
+            // this same reset exists to prevent.
             _wasActiveField = false;
+            _seededText = "";
+            _textLastFrame = "";
+            _edited = false;
             // A frame promises "you can type here". A read-only list's rows stay navigable for
             // reading but can never become activeInputField (OnActivated returns before
             // base.OnActivated below), so they get no frame — the same line this class draws in

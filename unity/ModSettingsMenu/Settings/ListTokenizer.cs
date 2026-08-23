@@ -36,9 +36,16 @@ namespace ModSettingsMenu.Settings
             return tokens;
         }
 
-        /// <summary>Joins tokens into a stored value, applying the same trim-and-drop-empties rule
-        /// Tokenize applies when reading. Safe to hand the drill-in's row list directly, blanks
-        /// included — a row the user left empty is visible on screen and absent from the value.</summary>
+        /// <summary>Joins tokens into a stored value under the same rule Tokenize applies when
+        /// reading: trim, drop empties — and strip commas, because a comma INSIDE a token would
+        /// split it in two on the way back. Safe to hand the drill-in's row list directly, blanks
+        /// included: a row the user left empty is visible on screen and absent from the value.
+        ///
+        /// The comma strip lives here rather than at the call site so that
+        /// <c>Tokenize(Join(x))</c> yields x back for ANY input. It used to sit in
+        /// ListDetailScreen.OnRowTextCommitted, which made this method total only by the grace of
+        /// its single caller — and this class exists precisely because a rule kept in one call site
+        /// is a rule waiting to diverge.</summary>
         public static string Join(IEnumerable<string> tokens)
         {
             var kept = new List<string>();
@@ -46,11 +53,18 @@ namespace ModSettingsMenu.Settings
                 return "";
             foreach (var raw in tokens)
             {
-                var token = raw?.Trim();
-                if (!string.IsNullOrEmpty(token))
+                var token = Sanitize(raw);
+                if (token.Length > 0)
                     kept.Add(token);
             }
             return string.Join(",", kept);
         }
+
+        /// <summary>What a single token may look like: trimmed, and without the separator. Applied
+        /// by <see cref="Join"/> to everything it writes, and available to callers that hold a token
+        /// BEFORE it reaches Join — a text row, say, whose displayed value should already match what
+        /// will be stored rather than showing a comma that silently vanishes on save. One rule, two
+        /// moments of use; the rule itself lives only here.</summary>
+        public static string Sanitize(string token) => token == null ? "" : token.Replace(",", "").Trim();
     }
 }
