@@ -2,6 +2,8 @@
 
 - Status: accepted
 - Date: 2026-08-23
+- Supersedes [ADR-003](003-list-widget-editing.md) **in part** — see
+  § "Relationship to ADR-003"
 
 ## Context and Problem Statement
 
@@ -162,9 +164,34 @@ button nor frames.
 
 ## More Information
 
-- **Builds on** ADR-002 (`002-list-widget-drill-in.md`) and ADR-003
-  (`003-list-widget-editing.md`): the drill-in and its editing model. This ADR
-  changes where the rows come from, not how a row commits.
+- **Builds on** ADR-002 (`002-list-widget-drill-in.md`): the drill-in itself.
+
+### Relationship to ADR-003
+
+ADR-003 chose "uniform editable text row" — every token row on
+`RadicalMenuOptionTextInput`, **plus one permanent trailing blank '+ Add' row**,
+with edit, add and remove all travelling the same text-commit path. This ADR keeps
+the first half and replaces the second, so read the two together as follows:
+
+| Aspect | Still ADR-003 | Now this ADR |
+|---|---|---|
+| What a token row is | `RadicalMenuOptionTextInput` | unchanged |
+| When an edit commits | the `activeInputField` transition, never `OnDeselected` | unchanged |
+| Removing an entry | clear the text, confirm | unchanged |
+| **Adding an entry** | type into a trailing blank row | press `ListAddRow`, a plain `RadicalMenuOption` |
+| Where rows come from | derived from the stored value | the screen's own row list |
+
+ADR-003 rejected exactly this shape as its Option 2 ("a separate non-text '+ Add'
+row"), and that rejection was sound **on its premise**: while rows were a
+projection of the stored value, typing into one was the only way to make the
+source grow, so a non-text add row would have needed a parallel path into the
+value for no gain. The premise expired with the inversion above, and the
+cost/benefit flipped with it — see § Decision Outcome for what the shared
+component was actually costing.
+
+Not adopted from ADR-003's Option 2: the explicit per-row delete affordance. It
+remains on the roadmap, and it is the reason the frame spans the field rather than
+the whole row — the button it needs goes beside it.
 - The field frame shipped in the same pass — `field_border` / `field_focus` in the
   `ui_chrome` atlas — and is what makes the *absence* of a frame a usable signal
   for the add button. `docs/ck/ui-framework.md` records the CK-level trap that
