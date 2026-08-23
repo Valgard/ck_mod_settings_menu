@@ -57,13 +57,42 @@ namespace ModSettingsMenu.UI
         // Index into ListDetailScreen's row list. Always valid for a bound row — the add button is
         // a different type entirely (ListAddRow), so -1 no longer means "this is the button" but
         // "this row was never bound", which is a fault worth a log line rather than a silent skip.
-        // The screen writes this row's committed text back at this index; every OTHER row's
-        // text is read from that list and never off the screen, which is what keeps
-        // RadicalMenuOptionTextInput.Update's per-frame width trim (it shortens any text
-        // wider than maxWidth, on every active row, edited or not) from reaching the owning
-        // mod's config file.
+        // The screen writes this row's committed text back at this index; every OTHER row's text is
+        // read from that list and never off the screen. That closes one half of the width-trim
+        // hazard described at CommittedText below — the untouched neighbours. CommittedText closes
+        // the other half, this row itself.
         private int _rowIndex = -1;
         public int RowIndex => _rowIndex;
+
+        // The token this row was seeded with, and whether a keystroke has changed the text since.
+        //
+        // These exist because the base class SHORTENS the row's text behind our back:
+        // RadicalMenuOptionTextInput.Update trims anything wider than maxWidth, on every active row,
+        // whether or not it is being edited. Committing GetInputText() would therefore write that
+        // shortening into the owning mod's config file — a value silently truncated by nothing more
+        // than looking at it. A text comparison cannot catch this, because a trimmed value and a
+        // value the user backspaced look identical.
+        //
+        // The TIMING can tell them apart: while this row holds activeInputField, a text change is
+        // the user's; outside that window the only thing that changes the text is the trim.
+        private string _seededText = "";
+        private string _textLastFrame = "";
+        private bool _edited;
+
+        /// <summary>Seeds the row's text and marks it unedited. Use instead of SetInputText, so the
+        /// row remembers what the stored value actually said.</summary>
+        public void SeedText(string token)
+        {
+            _seededText = token ?? "";
+            _textLastFrame = _seededText;
+            _edited = false;
+            SetInputText(_seededText);
+        }
+
+        /// <summary>What this row may contribute to the stored value: its own text once the user has
+        /// typed, otherwise the token it was seeded with — never a shortening the user did not ask
+        /// for.</summary>
+        public string CommittedText => _edited ? GetInputText() : _seededText;
 
         // Sets this row's identity and behaviour in one call, right after Instantiate
         // (ListDetailScreen.AddItem) — the same commit-point every other field poke used to happen
@@ -156,9 +185,14 @@ namespace ModSettingsMenu.UI
         // silently overwritten back to the prefab default on the very next keystroke for exactly
         // this reason. So the field flip IS the right mechanism here (not a redundant one) — it's
         // just insufficient by itself for the very first frame, which OnSelected() below covers
-        // explicitly. No revert on end-of-edit is needed: every path that ends an edit already
+        // explicitly. No revert on end-of-edit is needed for any edit that CHANGES the value: it
         // triggers ListDetailScreen.RebuildRows(), which destroys this (flipped) instance and
         // creates a fresh one starting back at the prefab's own isValueText = false.
+        //
+        // A no-op commit is the exception, and it is deliberate rather than overlooked: activating a
+        // row and leaving it untouched returns early in OnRowTextCommitted, no rebuild follows, and
+        // the row keeps the vivid editing tint until the next real rebuild. Harmless — it marks the
+        // row you were last on — but do not read the sentence above as "always".
         public override void OnActivated()
         {
             // A read-only list's rows are still navigable (GetActiveStateInCurrentScene stays
@@ -258,6 +292,18 @@ namespace ModSettingsMenu.UI
             UpdateClickCollider();
 
             bool isActiveField = Manager.input.activeInputField == (object)this;
+
+            // Distinguish the user's edits from the base class's width trim, which is the whole
+            // point of CommittedText above. A change WHILE this row holds the input field can only
+            // come from a keystroke; the trim also runs outside that window, and the moment it
+            // matters (a value too wide, shortened before anyone touched the row) is precisely
+            // outside it. Note the trim cannot masquerade as typing either: once it has cut the
+            // text down to maxWidth it stops, so it produces no further changes during an edit.
+            string now = GetInputText();
+            if (isActiveField && now != _textLastFrame)
+                _edited = true;
+            _textLastFrame = now;
+
             if (_wasActiveField && !isActiveField)
                 _owner?.OnRowTextCommitted(this);
             _wasActiveField = isActiveField;

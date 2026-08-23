@@ -5,7 +5,7 @@ namespace ModSettingsMenu.Settings
     /// <summary>
     /// Splits a foreign comma-list ConfigEntry's raw string into its component tokens: split(','),
     /// trim, drop empties. The one tokenization rule every reader of a List-kind value agrees on —
-    /// row population (ListDetailScreen.RebuildRows), the no-op-write comparison
+    /// row-list seeding (ListDetailScreen.Populate), the no-op-write comparison
     /// (ListDetailScreen.OnRowTextCommitted), the compact row preview (ListWidget.Preview), and the
     /// discovery-time list-vs-plain heuristic (ForeignConfigDiscovery.HeuristicSaysList) each used to
     /// duplicate this same four-line loop independently. That duplication already caused a real bug
