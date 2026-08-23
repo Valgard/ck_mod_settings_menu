@@ -1,11 +1,13 @@
 {
   "rename": {
     "Menu Box": "itemui_border",
-    "Title": "menu_border",
+    "Menu Title": "menu_border",
     "Scrollbar Box": "progress_border",
     "Scrollbar Selected": "scrollbar_hover",
     "List": "ToggleListView",
-    "Text": "TogglePlainView"
+    "Text": "TogglePlainView",
+    "Edit field box": "field_border",
+    "Edit field Selected": "field_focus"
   },
   "pad": {
     "List": {"w": 16, "h": 16, "anchor": [1, 2]},
@@ -14,14 +16,17 @@
   },
   "borderOverride": [
     {"name": "Menu Box", "w": 32, "h": 32, "border": [3, 3, 3, 3]},
-    {"name": "Title", "w": 32, "h": 32, "border": [13, 14, 13, 14]},
+    {"name": "Menu Title", "w": 32, "h": 32, "border": [13, 14, 13, 14]},
     {"name": "Scrollbar Box", "w": 32, "h": 32, "border": [2, 2, 2, 2]},
-    {"name": "Scrollbar Selected", "w": 4, "h": 8, "border": [0, 3, 0, 3]}
+    {"name": "Scrollbar Selected", "w": 4, "h": 8, "border": [0, 3, 0, 3]},
+    {"name": "Edit field box", "w": 16, "h": 16, "border": [4, 4, 4, 4]},
+    {"name": "Edit field Selected", "w": 12, "h": 12, "border": [3, 3, 3, 3]}
   ],
   "internalIds": {
     "itemui_border": 100001, "menu_border": 100002, "progress_border": 100003,
     "scrollbar_hover": 100004, "ToggleListView": 100005, "TogglePlainView": 100006,
-    "Arrow": 100007, "Caret": 100008
+    "Arrow": 100007, "Caret": 100008,
+    "field_border": 100009, "field_focus": 100010
   },
   "guid": "177805356e56055ae8abd25063004bea"
 }

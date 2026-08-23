@@ -43,3 +43,6 @@ unity/ModSettingsMenu/Editor/LocalizationGenerator.cs.meta
 docs/superpowers/
 # Superpowers subagent-run workspace (ledger, briefs, reports) — never committed
 /.superpowers/
+
+# exclude templates directory
+sources/templates
