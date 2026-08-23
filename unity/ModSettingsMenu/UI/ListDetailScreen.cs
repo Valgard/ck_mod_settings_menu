@@ -315,7 +315,12 @@ namespace ModSettingsMenu.UI
                 // text — see ListDetailItem.RowHeightPx for why. Both types must be asked: the add
                 // button is not a ListDetailItem, and a row left unmeasured keeps the prefab's
                 // renderHeightPixels of 0, which the LinearLayout collapses to nothing.
-                int px = go.GetComponent<ListDetailItem>()?.RowHeightPx ?? go.GetComponent<ListAddRow>()?.RowHeightPx ?? 0;
+                var row = go.GetComponent<ListDetailItem>();
+                // The row has rendered by now, so the base class has already trimmed anything too
+                // wide. Re-baseline the edit detector against what is actually on screen — see
+                // ListDetailItem.RebaselineEditDetector.
+                row?.RebaselineEditDetector();
+                int px = row?.RowHeightPx ?? go.GetComponent<ListAddRow>()?.RowHeightPx ?? 0;
                 var wrap = go.GetComponent<WrapperUIComponent>();
                 if (px > 0 && wrap != null)
                     wrap.renderHeightPixels = px;

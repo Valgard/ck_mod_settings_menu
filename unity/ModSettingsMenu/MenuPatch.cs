@@ -171,5 +171,36 @@ namespace ModSettingsMenu
                 return false;
             return true;
         }
+
+        // Commit a drill-in row BEFORE CK blanks it on a world event, and disarm the blanking.
+        //
+        // UIManager.HideAllInventoryAndCraftingUI ends with, guarded by textInputIsActive:
+        //     Manager.input.activeInputField.SetInputText("");
+        //     Manager.input.activeInputField.Deactivate(commit: false);
+        // Its callers are world events, not menu actions — opening a chest, a cattle pen, a vending
+        // machine, a crafting station, a sign, the map, and PlayerController.FadeOutAndLockPlayer.
+        // In multiplayer the simulation keeps running while a player sits in the options menu, so
+        // another player or a mob can trigger it mid-edit.
+        //
+        // Why this has to be a patch rather than a rule in ListDetailItem: that sequence is
+        // BYTE-FOR-BYTE the shape of the on-screen keyboard's own result handler
+        // (UIManager.TrySetInputText: SetInputText(result) then Deactivate(success), one callback,
+        // no frame between). The row's edit detector must treat that shape as a genuine edit or
+        // every controller entry is silently discarded — and must NOT treat this one as an edit or
+        // the entry is silently deleted. No timing rule can separate them; only the source can, and
+        // only from here.
+        //
+        // Committing first also clears activeInputField, so CK's own `if (textInputIsActive)`
+        // (textInputIsActive => activeInputField != null) finds nothing and the blanking never runs.
+        // The user's edit is preserved rather than merely not-destroyed.
+        [HarmonyPatch(typeof(UIManager), nameof(UIManager.HideAllInventoryAndCraftingUI)), HarmonyPrefix]
+        public static void UIManager_HideAllInventoryAndCraftingUI()
+        {
+            if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row && row.Owner != null)
+            {
+                row.Deactivate(commit: false); // clears activeInputField; does not touch the text
+                row.Owner.OnRowTextCommitted(row);
+            }
+        }
     }
 }

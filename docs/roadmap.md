@@ -357,6 +357,15 @@ and are gone, with nothing in the UI hinting at it. A value too wide for its row
 can therefore be looked at safely and destroyed by editing, which is the worst of
 both. A viewport removes the premise: what you edit is what the value says.
 
+**[ADR-006](adrs/006-list-detection-heuristic.md) widened who can walk into this.**
+Its predecessor rejected any token over 32 characters, which was never intended as
+a safety device but worked as one: only tokens between roughly the row's render
+width and 32 characters could reach the editable screen at all, bounding a mis-edit
+to about ten invisible characters. Any length now qualifies, and `ListKindStore`
+makes the classification stick. That trade was made knowingly — the old rule was
+wrong about what it tested — but it moves this entry from "nice to have" to "the
+mitigation for a hazard we deliberately widened".
+
 ### Open design questions
 
 - **Where does it dock?** The drill-in row and a future `SettingKind.Text` share
