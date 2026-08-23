@@ -1,0 +1,142 @@
+# The list drill-in owns its rows; the stored value is derived from them
+
+- Status: accepted
+- Date: 2026-08-23
+
+## Context and Problem Statement
+
+The drill-in's rows were derived from the stored value: `RebuildRows` read the
+`ConfigEntry`, tokenized it, and produced one row per token. That made the value
+the single source of truth and the rows a pure projection of it — simple, and
+correct for as long as every row corresponded to a token.
+
+It cannot represent a row that is *empty*. An empty token is never written (the
+value would carry consecutive commas into another mod's config file), so it is
+never read back, so the row vanishes at the next rebuild — and a rebuild follows
+every commit. A user who clears an entry to retype it, or wants a blank line to
+fill in next, loses it the moment they touch a neighbouring row.
+
+The same projection also made "add an entry" a strange act: the trailing `+ Add`
+row was a text field that pretended to be an entry, and typing into it was how a
+list grew.
+
+## Decision Drivers
+
+- An entry must be allowed to be blank **while editing**, without that blankness
+  reaching the owning mod's config file.
+- Whatever holds the rows must not weaken `ListTokenizer`'s role as the one
+  agreed tokenization rule — four call sites were unified there precisely because
+  their divergence had already caused a real bug.
+- Adding an entry should be an action, not a disguised text field.
+- The framework writes into **third-party** config files. Any change to the write
+  path is judged first on what it can destroy.
+
+## Considered Options
+
+1. **Keep deriving rows from the stored value** and accept that empty rows cannot
+   exist.
+2. **Persist empty entries** so they survive a rebuild.
+3. **Give the screen its own row list** for the lifetime of one open drill-in and
+   derive the value from it.
+
+## Decision Outcome
+
+**Option 3.** `ListDetailScreen` holds `_rows` while the drill-in is open.
+`Populate` seeds it from the stored value through `ListTokenizer`; `RebuildRows`
+renders it; a commit writes the editing row back at its own `RowIndex` and
+assembles the value from the list, skipping empty entries. An empty row therefore
+exists on screen and nowhere else, and disappears on reopen because it was never
+written — which is exactly what "blank entries are not saved" should mean.
+
+`ListTokenizer` is untouched. Its contract narrows rather than changes: it
+describes how a *stored value* becomes an initial row list, and is no longer a
+statement about what is on screen.
+
+With rows no longer projected from the value, the trailing row no longer needs to
+be an input at all. It became `ListDetailItem.RowKind.AddButton` — the same
+component and prefab template, bound `readOnly` so it can never become
+`activeInputField`, distinguished by carrying no frame and by appending an empty
+row on activation. Reusing the component keeps its text-input machinery around as
+inert ballast; the alternative was authoring a second prefab template in the
+Editor, which costs more than the ballast does.
+
+### Consequences
+
+- **`RebuildRows` must stay a full teardown-and-recreate.** It looks like an
+  obvious candidate for an in-place update now that the row list is stable, but
+  destroying a row is the only thing that resets
+  `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid
+  editing tint and nothing else reverts. A reused row would stay tinted forever.
+- **A latent write-back defect closed itself.** The old assembly walked the screen
+  and read `GetInputText()` from every row. `RadicalMenuOptionTextInput.Update`
+  trims any text wider than `maxWidth` one character per frame, on every active
+  row, edited or not — so a foreign token too wide for the field was shortened on
+  display and could be written back shortened when any *other* row was committed.
+  Assembling from `_rows` means an untouched row contributes the token it was
+  seeded with. This was never observed in the wild and is now unreachable.
+- **A guard retired by construction.** That walk also saw the inactive
+  `ItemTemplate`, whose `pugText` carries a prefab placeholder forever, and needed
+  an `activeSelf` check to keep it from being committed as a phantom token.
+  Nothing walks `menuOptions` any more.
+- **Row state is per open session.** Closing the drill-in discards it. That is the
+  intended lifetime, and it is why an empty row does not survive a reopen.
+
+### Confirmation
+
+Verified in game against the fixture list and a real foreign config: a cleared row
+stays visible while another row is edited; reopening shows a compact list; the add
+button appends a blank row and selects it without raising the on-screen keyboard;
+pressing it repeatedly leaves several blank rows, none of which reaches the config
+file; emptying every row keeps the setting classified as a list (`ListKindStore`)
+rather than collapsing to a read-only `Info` row; a read-only list shows neither
+button nor frames.
+
+## Pros and Cons of the Options
+
+### The screen owns its rows (chosen)
+
+- Good, because an empty row is expressible without inventing a stored
+  representation for it.
+- Good, because the write path stops reading rendered text, which is the only
+  thing that could feed display-side truncation back into a foreign config file.
+- Good, because it makes the add button possible: the button needs no path from
+  screen text into the value.
+- Bad, because there are now two representations of the same list during a
+  session, and `RebuildRows` must be the only thing that reconciles them.
+
+### Deriving rows from the stored value
+
+- Good, because there is exactly one representation and no reconciliation.
+- Bad, because it cannot express a blank row at all — the defect that prompted
+  this ADR.
+- Bad, because it forced the add row to be a text field, since typing into a
+  projection was the only way to grow the source.
+
+### Persisting empty entries
+
+- Good, because blank rows would survive a reopen, which is arguably tidier.
+- Bad, because it writes consecutive commas into a **third-party** mod's config
+  file to represent something that only matters to this menu's UI. The framework
+  does not get to spend another mod's data on its own convenience.
+- Bad, because every reader of that value — including the owning mod — would have
+  to tolerate empty tokens.
+
+## More Information
+
+- **Builds on** ADR-002 (`002-list-widget-drill-in.md`) and ADR-003
+  (`003-list-widget-editing.md`): the drill-in and its editing model. This ADR
+  changes where the rows come from, not how a row commits.
+- The field frame shipped in the same pass — `field_border` / `field_focus` in the
+  `ui_chrome` atlas — and is what makes the *absence* of a frame a usable signal
+  for the add button. `docs/ck/ui-framework.md` records the CK-level trap that
+  came with it: a prefab `PugText.maxWidth` makes the text wrap and thereby
+  disables the text input's own capacity check entirely.
+- Still open in `docs/roadmap.md`: token reorder in the drill-in, a
+  consumer-facing `SectionBuilder.List`, `Shake()` feedback for silently discarded
+  input, and horizontal scrolling in a text field.
+- The raw design spec this distils, with the alternatives as they were weighed at
+  the time:
+
+~~~
+git show "$(git rev-list -1 HEAD -- docs/specs/2026-08-22-drill-in-row-model-design.md)^:docs/specs/2026-08-22-drill-in-row-model-design.md"
+~~~
