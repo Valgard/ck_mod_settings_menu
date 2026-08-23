@@ -178,11 +178,11 @@ ships independently of this one.
 
 ## Token reorder in the List drill-in
 
-The drill-in that `list-widget-editing` shipped (ADR-003) lets a user add, edit
-and remove tokens, but their **insertion order is fixed** — no drag, no up/down,
-no keyboard reorder. Fine for an exclude-set, where order carries no meaning;
-wrong for a genuine priority list, where add/edit/remove alone means reordering
-by retyping every token.
+The drill-in that `list-widget-editing` shipped (ADR-003) lets a user add and
+edit tokens, but their **insertion order is fixed** — no drag, no up/down, no
+keyboard reorder. Fine for an exclude-set, where order carries no meaning;
+wrong for a genuine priority list, where editing alone means reordering by
+retyping every token.
 
 **Buildable on its own.** The editable drill-in already exists and already runs
 against discovered foreign configs, so reorder is a change to `ListDetailScreen`
@@ -191,6 +191,60 @@ and needs no consumer-facing declaration API to be useful. It sits beside
 already-shipped consumer motivates both — auto-rail-bridges' bridge build order
 is exactly a priority list — and a declaration API designed without reorder in
 mind would have to be revisited.
+
+## Per-row delete button in the List drill-in
+
+**There is no way to delete a list entry.** The drill-in offers edit and add;
+removal is the one operation with no control at all. Promised as a later step
+when the row model was reworked (2026-08-22, "später kommt noch ein Delete
+Button an jede Zeile") and left out of that slice on purpose — ADR-005 records
+it as not adopted, and both it and ADR-003 already claim it "remains on the
+roadmap", which until now it did not.
+
+**What happens instead today is not a substitute, and it used to look like
+one.** Clearing a row's text takes the token out of the stored value —
+`OnRowTextCommitted` derives the value through `ListTokenizer.Join`, which skips
+empties. But since ADR-005 the row itself **stays on screen** for the rest of the
+session, because the screen owns its row list and an empty row is a legitimate
+working state there. So the gesture that used to double as "delete" (the row
+vanished on the next commit) no longer gives that feedback: the entry is gone
+from the file while the row is still sitting there, and the list only looks
+right again after closing and reopening. Whichever way a user reads that, one
+half of it is wrong.
+
+**One of the three costs ADR-003 rejected the feature over is already paid.** It
+weighed an explicit remove affordance as "three new pieces where the uniform
+model needs one": a remove action bound to a new controller input, a self-rolled
+hint object, and a separate non-text add-row class. The third shipped with
+ADR-005 as `ListAddRow`, so what is left is the input binding and its hint — and
+the section-reset work (ADR-004) has since demonstrated the cheaper half of that
+on a dormant vanilla action plus `GetHelpButtonsToShow`.
+
+**The geometry is deliberately prepared.** The field frame spans the *field*, not
+the row, precisely so a button can sit beside it — CK's own idiom, where a text
+input's trailing affordance is a **sibling** of the field rather than a child of
+it (the same multi-control row the masked-value and dropdown items depend on;
+see § "Explicitly out of scope" on the dual-range slider for the vanilla
+evidence). Nothing in the current prefab has to move to make room.
+
+### Open design questions
+
+- **Button per row, or one action on the selected row?** A visible per-row
+  button costs a second navigable element inside a row — CK's rows are
+  single-focus, so controller navigation has to reach it somehow. A hint-bar
+  action on the selected row (the ADR-004 shape) costs no row geometry at all
+  and no per-row sprite, but is invisible to a mouse-only user. The prepared
+  geometry assumes the first; the cheaper precedent argues the second. Decide
+  before touching the prefab.
+- **Confirmation, or none?** ADR-003's own con against the current model was
+  that "an accidental clear-and-confirm removes a token with no dedicated 'are
+  you sure' step". A delete button is easier to hit deliberately *and* easier to
+  hit accidentally. The section reset asks; a single token may not warrant it.
+- **What happens to an empty row?** With a delete control present, an empty row
+  becomes purely a working state — but then nothing ever removes one except
+  closing the screen. Whether delete should also be the way to drop an empty row
+  (and whether the add button should refuse to append a second empty one) is the
+  same question from the other side.
 
 ## Text input for plain string settings (`SettingKind.Text`)
 
