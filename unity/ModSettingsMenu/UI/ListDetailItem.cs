@@ -161,23 +161,33 @@ namespace ModSettingsMenu.UI
             base.OnLeftClicked(mod1, mod2);
         }
 
-        // Full row width instead of the base RadicalMenuOption behavior (text-rendered width only):
-        // a text-width collider shrinks with every deleted character. If the mouse sits stationary
-        // near the end of the text, backspacing can shrink the collider out from under it, and CK's
-        // hover system reacts as if the mouse left the row entirely (see the Update() note below).
-        // 25 matches maxWidth on this same row's text input further down the prefab (the widest a
-        // token is ever allowed to render), so the collider always covers the full possible text —
-        // not a guessed constant.
+        // A fixed row width instead of the base RadicalMenuOption behavior (text-rendered width
+        // only): a text-width collider shrinks with every deleted character. If the mouse sits
+        // stationary near the end of the text, backspacing can shrink the collider out from under
+        // it, and CK's hover system reacts as if the mouse left the row entirely (see the Update()
+        // note below). So the hit area must be an upper bound that does not move while typing.
+        //
+        // DERIVED from the frame, never copied: the frame is what the player sees and aims at, and
+        // reading its size means an Editor resize needs no code change. This used to be a literal
+        // matching the prefab's maxWidth, and that copy silently went stale the moment the frame and
+        // maxWidth moved to a different width — the exact failure mode a derivation cannot have.
+        //
+        // The frame sprite's pivot is centred, so its localPosition IS the collider centre; the
+        // fallback keeps the old text-relative arithmetic for a row whose frame reference is unset,
+        // where x=0 is the text's left edge. A read-only row does NOT take that path: its renderer
+        // is merely disabled, so size and transform still read correctly.
         protected override void UpdateClickCollider()
         {
             base.UpdateClickCollider();
             if (clickCollider == null)
                 return;
-            const float RowContentWidth = 25f;
+            bool framed = fieldBorder != null;
+            float width = framed ? fieldBorder.size.x : maxWidth;
+            float centre = framed ? fieldBorder.transform.localPosition.x : maxWidth / 2f;
             var size = clickCollider.size;
             var center = clickCollider.center;
-            size.x = RowContentWidth;
-            center.x = RowContentWidth / 2f; // text starts at local x=0 and grows rightward
+            size.x = width;
+            center.x = centre;
             clickCollider.size = size;
             clickCollider.center = center;
         }
