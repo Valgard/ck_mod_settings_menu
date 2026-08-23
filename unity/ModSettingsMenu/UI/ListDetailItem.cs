@@ -35,13 +35,32 @@ namespace ModSettingsMenu.UI
         private ListDetailScreen _owner;
         public ListDetailScreen Owner => _owner;
 
-        // True only for the permanent trailing blank row ("+ Add"). Every other row is a real token.
-        private bool _isAddRow;
-        public bool IsAddRow => _isAddRow;
+        /// <summary>What a row IS, replacing the old "is this the add row" flag. The button
+        /// reuses this same component and prefab template on purpose: a second template would
+        /// have to be authored in the Editor, and readOnly already provably keeps a row from
+        /// ever becoming activeInputField. The text-input machinery it inherits is inert
+        /// ballast.</summary>
+        public enum RowKind
+        {
+            Token,
+            AddButton,
+        }
+
+        private RowKind _kind = RowKind.Token;
+        public RowKind Kind => _kind;
+
+        // Index into ListDetailScreen's row list, or -1 for a row that maps to no entry.
+        // The screen writes this row's committed text back at this index; every OTHER row's
+        // text is read from that list and never off the screen, which is what keeps
+        // RadicalMenuOptionTextInput.Update's per-frame width trim (it shortens any text
+        // wider than maxWidth, on every active row, edited or not) from reaching the owning
+        // mod's config file.
+        private int _rowIndex = -1;
+        public int RowIndex => _rowIndex;
 
         // Sets this row's identity and behaviour in one call, right after Instantiate
-        // (ListDetailScreen.AddItem) — the same commit-point every other field poke used to happen at
-        // individually.
+        // (ListDetailScreen.AddItem for a token row, AddButton for the button) — the same
+        // commit-point every other field poke used to happen at individually.
         //
         // readOnly is set here too but deliberately NOT declared as a field on this class:
         // RadicalMenuOptionTextInput (our base class) already has its own public bool readOnly — a
@@ -52,25 +71,30 @@ namespace ModSettingsMenu.UI
         // Writing the inherited field directly means CK's own read path and ours are guaranteed to
         // agree — true for a genuine read-only list (SettingDef.ReadOnly): view/scroll/navigate like
         // any other row, but OnActivated below never enters edit mode.
-        public void Bind(ListDetailScreen owner, bool isAddRow, bool readOnly)
+        public void Bind(ListDetailScreen owner, RowKind kind, int rowIndex, bool readOnly)
         {
             _owner = owner;
-            _isAddRow = isAddRow;
+            _kind = kind;
+            _rowIndex = rowIndex;
             this.readOnly = readOnly;
             // A frame promises "you can type here". A read-only list's rows stay navigable for
             // reading but can never become activeInputField (OnActivated returns before
             // base.OnActivated below), so they get no frame — the third place this class draws
             // that same line, after "no add row" and "no edit mode".
             //
+            // No frame on the button either: its lack of one is exactly what distinguishes a
+            // button from a field, now that a field has one at all.
+            //
             // .enabled, never SetActive: the base class owns selectedMarker's active state and
             // toggles it on every select/deselect, so competing for that flag is a race it wins on
             // the next selection change. Switching the renderer instead leaves that mechanism
             // untouched and simply gives it nothing to draw.
+            bool framed = kind == RowKind.Token && !readOnly;
             if (fieldBorder != null)
-                fieldBorder.enabled = !readOnly;
+                fieldBorder.enabled = framed;
             var focus = selectedMarker != null ? selectedMarker.GetComponent<SpriteRenderer>() : null;
             if (focus != null)
-                focus.enabled = !readOnly;
+                focus.enabled = framed;
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
@@ -128,6 +152,13 @@ namespace ModSettingsMenu.UI
         // creates a fresh one starting back at the prefab's own isValueText = false.
         public override void OnActivated()
         {
+            // MUST precede the readOnly guard below: the button is bound readOnly so it can
+            // never become activeInputField, and that guard would otherwise swallow its press.
+            if (_kind == RowKind.AddButton)
+            {
+                _owner?.AddEmptyRow();
+                return;
+            }
             // A read-only list's rows are still navigable (GetActiveStateInCurrentScene stays
             // ACTIVE) so the player can view/scroll every token, but activating one must not enter
             // edit mode — base.OnActivated() is what calls Manager.input.SetActiveInputField(this);

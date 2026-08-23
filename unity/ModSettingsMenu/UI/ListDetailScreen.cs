@@ -9,7 +9,7 @@ namespace ModSettingsMenu.UI
     /// title plus one navigable row per token, scrollable, each row a live text-input field
     /// (add/edit/remove a token, committed on Enter/Escape/click-away — see ListDetailItem).
     /// A genuinely read-only SettingDef (SettingDef.ReadOnly) still shows every row navigable for
-    /// viewing, just without the trailing add-row and without ever entering edit mode. Controller/
+    /// viewing, just without the trailing add button and without ever entering edit mode. Controller/
     /// keyboard navigation walks the rows and scroll-follow reaches the bottom (the overflow fix
     /// that motivated this screen over a single truncated Info preview).
     ///
@@ -29,8 +29,19 @@ namespace ModSettingsMenu.UI
         // Activate() nulls right after)
         private bool _readOnly;
 
+        // The rows this open session owns. While the drill-in is open THESE are the truth,
+        // not the stored value: an empty row has to survive an edit to a different row, and
+        // it can only do that by existing somewhere the stored value does not reach (the
+        // value never carries an empty token — see the assembly in OnRowTextCommitted).
+        // Populate seeds it, RebuildRows renders it, commit derives the value from it.
+        // ListTokenizer is unchanged and still drops empties: it now describes how a stored
+        // value becomes an initial row list, not what is on screen.
+        private readonly List<string> _rows = new List<string>();
+
+        // A rebuild's explicit selection target, or -1 to keep the previous slot (clamped).
+        private int _pendingSelect = -1;
+
         private bool _rebuildPending; // set by OnRowTextCommitted, consumed by Update — see design note
-        private bool _lastCommitWasAddRow; // which row triggered the pending rebuild (focus-follow target)
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
 
@@ -126,6 +137,9 @@ namespace ModSettingsMenu.UI
                     shadow.GetComponent<PugText>().RenderPlain(label);
             }
 
+            _rows.Clear();
+            _rows.AddRange(ListTokenizer.Tokenize(Value()));
+
             RebuildRows();
 
             // ListDetailScreen is a singleton reused for every list — selectedIndex survives across
@@ -147,12 +161,18 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Destroys every current row — real tokens, plus the trailing add-row for an editable list
+        // Destroys every current row — real tokens, plus the trailing add button for an editable list
         // (a read-only list has none, see the !_readOnly guard below) — and rebuilds them fresh from
-        // _activeDef's live value. The SAME rebuild-from-canonical-value path serves the initial open
-        // (Populate) and every post-edit refresh (OnRowTextCommitted, via the deferred Update path) —
-        // there is no separate incremental add/remove/edit logic, just "re-derive everything from the
-        // value that was just persisted."
+        // _rows, this open session's own row list (Populate seeds it from the stored value; commit
+        // writes the edited row back into it). The SAME rebuild-from-_rows path serves the initial
+        // open (Populate) and every post-edit refresh (OnRowTextCommitted, via the deferred Update
+        // path) — there is no separate incremental add/remove/edit logic, just "re-render every row
+        // the session currently holds."
+        //
+        // The full teardown-and-recreate must NOT be optimised into an in-place update of the
+        // existing rows: destroying a row is what resets PugTextEffectMenuOption.isValueText, which
+        // ListDetailItem.OnActivated flips to true (the vivid editing colour) and nothing else ever
+        // reverts — a reused row would stay stuck in the "actively editing" tint forever.
         private void RebuildRows()
         {
             // Clear the previous rows. Detach BEFORE Destroy (deferred to end-of-frame), else a rebuild
@@ -174,26 +194,27 @@ namespace ModSettingsMenu.UI
             }
             menuOptions.Clear();
 
-            // One row per non-empty token...
-            foreach (var token in ListTokenizer.Tokenize(Value()))
-                AddItem(token, isAddRow: false);
-            // ...plus one permanent trailing blank row for adding a new token — a read-only list has
-            // nothing to add, so it gets no add-row at all, not just an inert one.
+            // One row per entry — including empty ones, which is the whole point: they are
+            // invisible to the stored value but must stay on screen until the drill-in closes.
+            for (int i = 0; i < _rows.Count; i++)
+                AddItem(_rows[i], i);
+            // ...plus one permanent trailing button for adding a new token — a read-only list has
+            // nothing to add, so it gets no add button at all, not just an inert one.
             if (!_readOnly)
-                AddItem("", isAddRow: true);
+                AddButton();
         }
 
         // Clone the (inactive) item template into the container, seed its text, register it as a
         // navigable menu option. The template being inactive makes Instantiate(_, parent) produce an
         // inactive clone (no mid-clone OnEnable/NRE); SetActive(true) then activates it cleanly.
-        private void AddItem(string token, bool isAddRow)
+        private void AddItem(string token, int rowIndex)
         {
             var row = Object.Instantiate(box.itemTemplate, box.itemContainer);
             row.SetActive(true);
             var item = row.GetComponent<ListDetailItem>();
             if (item == null)
                 return;
-            item.Bind(this, isAddRow, _readOnly);
+            item.Bind(this, ListDetailItem.RowKind.Token, rowIndex, _readOnly);
             if (item.pugText != null)
                 item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
             // SettingWidget.SetText and the hintText line below; must be
@@ -206,10 +227,47 @@ namespace ModSettingsMenu.UI
                 // literal placeholder ("Hint Text") as a failed loc-term lookup ("missing: Hint Text")
                 item.hintText.SetText("");
             }
-            if (isAddRow)
-                item.hintString = Loc.T("ModSettingsMenu-UI/ListAddHint", "+ Add");
             item.SetParentMenu(this);
             menuOptions.Add(item);
+        }
+
+        // The trailing button that appends an empty row. Same prefab, same component — see
+        // ListDetailItem.RowKind. readOnly: true is what keeps it out of edit mode; the kind
+        // check in OnActivated runs first, so the press itself still works.
+        private void AddButton()
+        {
+            var row = Object.Instantiate(box.itemTemplate, box.itemContainer);
+            row.SetActive(true);
+            var item = row.GetComponent<ListDetailItem>();
+            if (item == null)
+                return;
+            item.Bind(this, ListDetailItem.RowKind.AddButton, rowIndex: -1, readOnly: true);
+            if (item.pugText != null)
+                item.pugText.localize = false; // cloned PugText inherits localize=true
+            // The caption belongs in pugText, not hintString: the base class renders hintText
+            // only while pugText is empty, so a caption placed there is a placeholder that
+            // vanishes the moment anything writes the field.
+            item.SetInputText(Loc.T("ModSettingsMenu-UI/ListAddButton", "+ Add"));
+            if (item.hintText != null)
+            {
+                item.hintText.localize = false;
+                item.hintText.SetText("");
+            }
+            item.SetParentMenu(this);
+            menuOptions.Add(item);
+        }
+
+        // Called from the button's OnActivated, i.e. from inside a row's own callback — so the
+        // rebuild is DEFERRED through _rebuildPending exactly like a commit is. Rebuilding here
+        // would destroy the very row whose callback is still on the stack.
+        internal void AddEmptyRow()
+        {
+            _rows.Add("");
+            _rebuildPending = true;
+            // The new row lands last in _rows, and the button follows it — so this index is the
+            // new row, not the button. Selected but NOT activated: entering edit mode here would
+            // raise the on-screen keyboard on a controller unasked.
+            _pendingSelect = _rows.Count - 1;
         }
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -288,10 +346,11 @@ namespace ModSettingsMenu.UI
         // Called from two places, neither of them OnDeselected (that fires on mere mouse hover, which
         // is exactly why the trigger moved away from it — see ListDetailItem.OnDeselected's own
         // comment): ListDetailItem.Update()'s own activeInputField-transition check, and this screen's
-        // own Deactivate() as a close-time safety net. Reads every row's live text (trimmed, commas
-        // stripped so a typed comma can't desync the stored split/join), and re-persists the whole
-        // list ONLY if it actually changed — skips a no-op write (and the rebuild it would otherwise
-        // trigger) on a plain activate-then-deactivate that never touched the text. The rebuild itself
+        // own Deactivate() as a close-time safety net. Reads the COMMITTING row's live text (trimmed,
+        // commas stripped so a typed comma can't desync the stored split/join) back into _rows,
+        // assembles the whole list from _rows, and re-persists it ONLY if it actually changed — skips
+        // a no-op write (and the rebuild it would otherwise trigger) on a plain
+        // activate-then-deactivate that never touched the text. The rebuild itself
         // is deferred to _rebuildPending/Update() rather than run synchronously here — this method is
         // most often reached from inside `row`'s own Update() (via ListDetailItem.Update() above),
         // and RebuildRows() destroys every current row, `row` included; deferring one frame keeps this
@@ -300,24 +359,34 @@ namespace ModSettingsMenu.UI
         {
             if (_activeDef?.Entry == null)
                 return;
+            // Only the committing row can have changed — it is the only one that could hold
+            // activeInputField. Write it back at its own index, then derive the value from the
+            // list. Reading the OTHER rows off screen (as this used to) is what let the base
+            // class's per-frame width trim escape into a third-party mod's config file.
+            //
+            // Dropping that menuOptions walk also retires the guard it needed: the walk saw the
+            // inactive itemTemplate too (RadicalMenu's own option scan includes it — see
+            // ListDetailItem.GetActiveStateInCurrentScene's comment), whose pugText carries the
+            // prefab-authored "List Entry" placeholder forever, since only clones ever get
+            // SetInputText; an activeSelf check kept that placeholder from being committed as a
+            // phantom token. Nothing walks menuOptions any more, so the template is unreachable
+            // from here by construction rather than by a check.
+            int index = row.RowIndex;
+            if (index < 0 || index >= _rows.Count)
+                return;
+            _rows[index] = row.GetInputText().Trim().Replace(",", "");
+
             var tokens = new List<string>();
-            foreach (var opt in menuOptions)
+            foreach (var text in _rows)
             {
-                // RadicalMenu's own includeInactive option scan also registers the itemTemplate
-                // itself (see ListDetailItem.GetActiveStateInCurrentScene's comment) — its pugText
-                // still carries the prefab-authored "List Entry" placeholder forever, since only
-                // clones ever get SetInputText. Skip it exactly like navigation already does, via
-                // the same active check, or its placeholder text gets committed as a phantom token.
-                if (!(opt is ListDetailItem item) || !item.gameObject.activeSelf)
-                    continue;
-                var text = item.GetInputText().Trim().Replace(",", "");
                 if (text.Length > 0)
                     tokens.Add(text);
             }
             string joined = string.Join(",", tokens);
-            // Compare against the STORED value tokenized the same way (Split/Trim/drop-empty, exactly
-            // RebuildRows's own rule) rather than the raw string — Value() may carry authoring
-            // formatting (e.g. "Alpha, Beta, Gamma" with a space after each comma) that joined never
+            // Compare against the STORED value tokenized the same way (Split/Trim/drop-empty via
+            // ListTokenizer — the rule Populate seeded _rows with and the loop above re-applies)
+            // rather than the raw string — Value() may carry authoring formatting
+            // (e.g. "Alpha, Beta, Gamma" with a space after each comma) that joined never
             // reproduces, so a raw comparison never matched and every mere open+close (no real edit at
             // all) wrote and rebuilt regardless, defeating the whole point of this no-op guard.
             var existingTokens = ListTokenizer.Tokenize(Value());
@@ -331,7 +400,6 @@ namespace ModSettingsMenu.UI
             if (_activeDef.RequiresRestart)
                 ModSettingsScreen.RestartPending = true;
             _rebuildPending = true;
-            _lastCommitWasAddRow = row.IsAddRow;
         }
 
         private void Update()
@@ -340,7 +408,8 @@ namespace ModSettingsMenu.UI
                 return;
             _rebuildPending = false;
             int previousIndex = selectedIndex;
-            bool wasAddRow = _lastCommitWasAddRow;
+            int explicitTarget = _pendingSelect;
+            _pendingSelect = -1;
             RebuildRows();
             // The initial open (Activate) renders AFTER RebuildRows for the same reason: a LinearLayout
             // only measures active children, so each row's height must be (re)computed here too, or the
@@ -348,12 +417,13 @@ namespace ModSettingsMenu.UI
             RenderContent();
             selectedIndex = -1; // stale index from before the rebuild — reset so SelectOptionIndex's
             // no-op guard and range check don't see a wrong/out-of-range value
-            // After adding a token (the add-row had content), navigate onto the fresh blank add-row
-            // that follows it — one Enter fully exits edit mode either way; adding another token still
-            // needs an explicit activate on this now-selected row. Any other edit/removal just keeps
-            // the same numeric slot (clamped).
-            int target = wasAddRow ? menuOptions.Count - 1 : Mathf.Clamp(previousIndex, 0, menuOptions.Count - 1);
-            SelectOptionIndex(target);
+            // A caller that knows where the selection must land says so via _pendingSelect — today
+            // that is AddEmptyRow, aiming at the row the add button just appended, since the numeric
+            // slot the button itself occupies would land on the button again. Everything else leaves
+            // it at -1, meaning "keep the same numeric slot" (clamped), which is what every
+            // edit/removal wants anyway.
+            int target = explicitTarget >= 0 ? explicitTarget : previousIndex;
+            SelectOptionIndex(Mathf.Clamp(target, 0, menuOptions.Count - 1));
         }
     }
 }
