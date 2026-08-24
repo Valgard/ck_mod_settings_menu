@@ -217,8 +217,17 @@ differently there (see § "Locked settings").
 
 **Consequence for sequencing:** this couples back to § "Per-row delete button".
 Once the row carries buttons, delete and ↑/↓ are three affordances beside the
-same field, and the row width has to carry all three or none. Design the
-geometry once, for the full set; the code can still land in two steps.
+same field, and the row width has to carry all three or none. The geometry for
+all three is settled there (2026-08-24) — 24 × 24 px buttons with 16 × 16 px
+glyphs, the row down to 16.625 units — and the arrows reuse the existing `Arrow`
+sprite rotated by ±90°. The code can still land in two steps; the prefab work
+cannot.
+
+**The navigation path is already in place** (2026-08-24): the drill-in was moved
+to `useUIElementsForNavigation` with a chain built per rebuild, verified in game.
+What the buttons still need is only the in-row half of that chain — `left`/
+`rightUIElements` between field and buttons — and that half lives in the prefab,
+because siblings of one template keep their references through `Instantiate`.
 
 **Rejected, and why it is worth remembering:** the grab mode needs no prefab
 change at all if built on `SelectNextIndex`/`SelectPrevIndex` overrides (both
@@ -270,15 +279,55 @@ it (the same multi-control row the masked-value and dropdown items depend on;
 see § "Explicitly out of scope" on the dual-range slider for the vanilla
 evidence). Nothing in the current prefab has to move to make room.
 
+### Geometry, decided 2026-08-24 — shared with the reorder buttons
+
+A visible per-row button, not a hint-bar action on the selected row: the
+hint-bar shape (ADR-004's) costs no geometry but is invisible to a mouse user,
+and deletion is precisely the operation the mouse has no other way to reach.
+Controller reachability came first and is done — the drill-in now runs on CK's
+UIElement navigation path.
+
+The measurements below are the full set (delete plus the two reorder arrows),
+because the row width has to carry all three or none. Everything derives from
+`spritePixelsToUnits: 16` in the atlas — **1 unit = 16 px**, `filterMode: 0`, so
+every position must land on a whole pixel.
+
+| | |
+|---|---|
+| Row today | 22 × 1.5 units = **352 × 24 px** |
+| Button | **24 × 24 px**, the full row height, so it sits flush with the field frame |
+| Icon inside it | **16 × 16 px** — `field_border` is 16×16 with `border: [4,4,4,4]`, so 4 px of frame all round |
+| Three buttons + 1 px gaps | 74 px |
+| Gap to the field frame | 12 px (CK's own spacing in `SaveSlot.prefab`) |
+| Total taken from the row | **86 px = 5.375 units** |
+| Row becomes | **16.625 units** |
+| `ListDetailItem.maxWidth` 21 → | **~15.5** |
+
+Chrome comes from the sprites already in `ui_chrome`: `field_border` as the
+resting frame, `field_focus` (12×12, border 3) as the selection marker — the
+same pair the row itself uses, and the same resting/selected split CK's own
+save-slot button has (`background` / `selectBackground`). The arrows can reuse
+the existing `Arrow` sprite rotated by ±90°, which is lossless under point
+filtering; only the delete glyph is new. A new sprite needs its `pad` entry and
+a pinned `internalIds` number in `sources/msm_ui_chrome.json` — next free is
+`100011` — or the next cut re-derives the id and orphans the prefab reference.
+
+> **This makes § "Horizontal scrolling in a text field" a prerequisite rather
+> than a follow-up.** `maxWidth` drops by a quarter, so the edit trap documented
+> there gets *easier* to hit — a mid-state with the buttons but no viewport would
+> be worse than today. With a viewport the narrower row is a matter of how much
+> text is visible, not of what survives an edit. Build the viewport first, or
+> both together; that section's own open questions (the second mask over the same
+> sprites, caret-follow) are unchanged and are the riskier half.
+
+CK's own delete button is 16×16 inside a 32 px row, i.e. deliberately smaller
+than the row — the one vanilla argument for a smaller button here. It was
+weighed against a flush 24 px one and lost on legibility: at 16×16 the frame
+leaves an 8×8 glyph, which is half of what `ToggleListView` / `TogglePlainView`
+already use in this very atlas.
+
 ### Open design questions
 
-- **Button per row, or one action on the selected row?** A visible per-row
-  button costs a second navigable element inside a row — CK's rows are
-  single-focus, so controller navigation has to reach it somehow. A hint-bar
-  action on the selected row (the ADR-004 shape) costs no row geometry at all
-  and no per-row sprite, but is invisible to a mouse-only user. The prepared
-  geometry assumes the first; the cheaper precedent argues the second. Decide
-  before touching the prefab.
 - **Confirmation, or none?** ADR-003's own con against the current model was
   that "an accidental clear-and-confirm removes a token with no dedicated 'are
   you sure' step". A delete button is easier to hit deliberately *and* easier to
@@ -383,6 +432,13 @@ A text row today cannot show more than fits: `maxWidth` is the field's
 **capacity**, not a viewport. Raised 2026-08-22 while designing the drill-in
 field frame, and verified against the decompiled `Pug.Other` (game 1.2.1.5 —
 class and member names are stable, line numbers are not).
+
+> **Promoted to a prerequisite on 2026-08-24.** The per-row button geometry
+> decided that day takes 5.375 units off the row, dropping `maxWidth` from 21 to
+> about 15.5 — so the edit trap below stops being a rare case and becomes an
+> ordinary one. Shipping the buttons without a viewport would leave MSM worse
+> than it is now. Either this lands first, or both land together; it no longer
+> waits behind them.
 
 `RadicalMenuOptionTextInput` enforces the limit in two places, and neither
 scrolls:
