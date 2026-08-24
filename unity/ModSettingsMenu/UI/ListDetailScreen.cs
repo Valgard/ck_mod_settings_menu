@@ -266,6 +266,62 @@ namespace ModSettingsMenu.UI
                 box.addRow.SetParentMenu(this);
                 menuOptions.Add(box.addRow);
             }
+
+            ChainRowsForUIElementNavigation();
+        }
+
+        // Link each row to its vertical neighbours. Only the UIElement navigation path reads these
+        // (RadicalMenu.useUIElementsForNavigation -> SelectIndexInDirection -> GetAdjacentUIElement),
+        // and on that path an empty list means no navigation at all rather than a fallback — so this
+        // has to run on every rebuild, for rows that exist only from now on.
+        //
+        // This is CK's own arrangement for a dynamically built list, not an invention: what sits
+        // INSIDE a row is wired in the prefab (sibling fileIDs survive Instantiate), what sits
+        // BETWEEN rows is assigned here, because row N cannot know row N+1 before either exists.
+        // ChooseCharacterMenu does exactly this for its save slots, SelectWorldMenu for its worlds.
+        //
+        // The chain is CYCLIC: the first row's top neighbour is the last one, the last row's bottom
+        // neighbour is the first. That keeps the wrap-around this screen has always had — the index
+        // path gets it free from `(i + 1) % Count`, and losing it on the UIElement path was a
+        // regression, not a design change (reported from a play session).
+        //
+        // Wrapping through the chain rather than through an override of the navigation methods is
+        // what makes it correct rather than merely present: CK's own GetClosestUIElementInList still
+        // applies, so a wrap target that is scrolled out of view is accepted via
+        // UIElementsSharesScrollWindow, and OnSelectedOptionChanged scrolls to it like any other
+        // step. An override would have had to reproduce all of that by hand.
+        //
+        // It is also what vanilla does. CreateWorldMenu and WorldSettingsMenu both carry a chain
+        // that is cyclic in BOTH directions, wired in the prefab — CK wraps wherever the screen is a
+        // real vertical pick-list, and leaves it open on forms (Join Game) and short button rows
+        // (Pause Menu). What it cannot do in a prefab is a list whose length is unknown until it
+        // opens, which is why the code-side precedents (ChooseCharacterMenu, SelectWorldMenu) chain
+        // linearly and stop: they are wiring rows that do not exist yet, not declining to wrap.
+        // Doing the ring here is therefore the same convention, expressed the only way a dynamic
+        // list can express it.
+        private void ChainRowsForUIElementNavigation()
+        {
+            int last = menuOptions.Count - 1;
+            for (int i = 0; i <= last; i++)
+            {
+                var option = menuOptions[i];
+                if (option == null)
+                    continue;
+                // Fresh lists rather than Clear()+Add: a row is a clone of the template, so it may
+                // carry whatever the template's own lists hold, and reusing that instance would
+                // quietly share it between rows.
+                //
+                // A single row gets empty lists rather than a cycle onto itself: the wrap would
+                // resolve to the row already selected, which is a no-op with a selection SFX.
+                if (last == 0)
+                {
+                    option.topUIElements = new List<UIelement>();
+                    option.bottomUIElements = new List<UIelement>();
+                    continue;
+                }
+                option.topUIElements = new List<UIelement> { menuOptions[i > 0 ? i - 1 : last] };
+                option.bottomUIElements = new List<UIelement> { menuOptions[i < last ? i + 1 : 0] };
+            }
         }
 
         // Clone the (inactive) item template into the container, seed its text, register it as a
@@ -343,6 +399,41 @@ namespace ModSettingsMenu.UI
                     wrap.renderHeightPixels = px;
             }
             _layout.RenderUIComponent(force: true); // re-lay out with the measured heights
+        }
+
+        // Enter the list on the first arrow key when nothing is selected yet. Both overrides exist
+        // only to restore what the index path gave for free and the UIElement path does not.
+        //
+        // RadicalMenu.SelectNextIndex computes `(selectedIndex + 1) % Count`, and with no selection
+        // that is `(-1 + 1) % Count` = 0 — the first row, without anyone having to ask for it. The
+        // UIElement path instead goes through SelectIndexInDirection, which handles the empty
+        // selection only for a controller:
+        //
+        //     if (selectedMenuOption == null && !Manager.input.SystemPrefersKeyboardAndMouse())
+        //         return SelectOptionIndex(DefaultOptionIndex);
+        //
+        // With a mouse attached, CK assumes the selection follows the pointer and returns false —
+        // so opening this screen from the keyboard left the arrow keys dead until the mouse had
+        // touched a row once. Reported from a play session; CK's own list menus share the gap.
+        //
+        // Deliberately NOT solved by selecting a row in Activate(): that would force a highlight on
+        // a mouse user who never asked for one, which is exactly the behaviour CK avoids here. The
+        // entry stays lazy — it happens on the first arrow key and no earlier.
+        //
+        // The entry point follows the direction of the key: down enters at the top, up enters at the
+        // BOTTOM. That is what the wrap-around implies — pressing up from nothing is the same
+        // gesture as pressing up from the first row, and both should land on the last one. (The
+        // index path's own answer here is neither: `(-1 - 1 + Count) % Count` lands on the
+        // second-to-last row, an arithmetic accident nobody would ask for.)
+        public override bool SelectNextIndex() => EnterListIfNothingSelected(0) || base.SelectNextIndex();
+
+        public override bool SelectPrevIndex() => EnterListIfNothingSelected(menuOptions.Count - 1) || base.SelectPrevIndex();
+
+        private bool EnterListIfNothingSelected(int index)
+        {
+            if (menuOptions.Count == 0 || GetSelectedMenuOption() != null)
+                return false;
+            return SelectOptionIndex(index);
         }
 
         // Scroll the viewport so the selected row follows keyboard / controller navigation (the base

@@ -801,7 +801,7 @@ MonoBehaviour:
   backClosesMenu: 1
   popsOtherActiveMenus: 1
   playSoundOnActivate: 0
-  useUIElementsForNavigation: 0
+  useUIElementsForNavigation: 1
   shouldRenderDescendants: 0
   backNeverClosesMenu: 0
   menuOptions: []
