@@ -61,7 +61,10 @@ export LOC_OUT="$PWD/unity/$MOD_NAME/Localization/Generated"
 # safe "everything off" state, even if a previous build was run with a flag on. Uncomment only
 # for a single local build session while iterating, e.g.:
 #   MOD_DEV_FLAGS=TestFixtures ../utils/build.sh
-# "TestFixtures" enables ModSettingsMenuMod.EarlyInit's four disposable foreign-config list rows
-# (Short/Long/LongReadOnly/ShortRestart) for exercising the list-widget drill-in without a real
-# foreign mod installed.
+# "TestFixtures" enables ModSettingsMenuMod.EarlyInit's disposable entries under a fake foreign
+# section ("TestListFixtures"), for exercising the list-widget drill-in without a real foreign mod
+# installed. They cover a short list, a long one, a read-only one, a restart-required one, a token
+# wider than a row can render, and prose that must NOT be taken for a list. EarlyInit is the
+# current set — deliberately neither counted nor enumerated here, because this comment already
+# went stale once by naming exactly four of them.
 # export MOD_DEV_FLAGS="TestFixtures"
