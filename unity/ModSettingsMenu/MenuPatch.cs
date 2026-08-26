@@ -274,9 +274,16 @@ namespace ModSettingsMenu
             if (string.IsNullOrEmpty(s))
                 return false;
 
-            // Insert AT the caret instead of always at the text end. currentCharIndex is private on
-            // the base class, so the caret position is recovered from the blinker via
-            // TextFieldViewport.CaretIndex rather than read directly. MoveCharMarker below is
+            // Insert at the caret — which is what vanilla AppendString already does
+            // (Pug.Other:343442). This prefix replaced the whole method in order to drop its width
+            // rejection, so it has to carry the insertion point over too; an earlier draft appended
+            // at the end and was wrong for exactly that reason. The actual trade sits elsewhere and
+            // is worth naming, because it is where this can still go wrong: vanilla reads its own
+            // private currentCharIndex, while this reconstructs the index from the caret's POSITION
+            // (TextFieldViewport.CaretIndex), the sandbox forbidding reflection. An authoritative
+            // source swapped for a derived one — exact only while PugText's glyph count and the
+            // string's character count agree, which every glyphless character breaks.
+            // MoveCharMarker below is
             // relative (Pug.Other:343455): the caret was at `at`, the text just grew by s.Length
             // there, so a +s.Length relative move lands on the right side of what was typed —
             // whether or not `at` was the end of the string.
