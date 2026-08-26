@@ -268,5 +268,67 @@ namespace ModSettingsMenu
             row.MoveCharMarker(s.Length);
             return false;
         }
+
+        // Cursor navigation (Home/End, Ctrl+Arrow word jumps) for a drill-in row, as a POSTFIX on
+        // MenuManager.HandleTypingInput rather than a poll inside ListDetailItem.Update(). That
+        // private method handles the raw arrow keys itself, with NO Ctrl check (Pug.Other:269655-
+        // 269666):
+        //
+        //   else if (IsKeyDown(KeyCode.LeftArrow))  { activeInputField.MoveCharMarker(-1); }
+        //   else if (IsKeyDown(KeyCode.RightArrow)) { activeInputField.MoveCharMarker(1); }
+        //
+        // It runs every frame for whatever holds activeInputField, from a DIFFERENT MonoBehaviour
+        // than ours — so one physical Ctrl+Left keypress fires both vanilla's single-character move
+        // AND a word jump, and MoveCharMarker is non-virtual and reached only through an interface,
+        // so a row cannot intercept vanilla's own call to shortcut it. Which one wins would then
+        // depend on Unity's script execution order between two unrelated MonoBehaviours — traced on
+        // "abc def   ", Ctrl+Left from the end: MenuManager first shifts −1, then a word jump
+        // re-derived from the (already shifted) caret lands correctly on 4; ListDetailItem first
+        // jumps to 4, then vanilla's trailing −1 fires and lands on 3, inside the space run. A
+        // postfix removes the race rather than hoping to win it: it always runs AFTER vanilla's own
+        // arrow handling for the frame, so a word-jump target is computed from the caret's FINAL
+        // position and cannot be undone by a later ±1.
+        //
+        // Home/End live here too, even though vanilla never touches those keycodes (zero hits in the
+        // decompile) and so has no ordering hazard of its own — splitting the polling across two
+        // mechanisms (a postfix here, a separate poll in ListDetailItem.Update there) would be worse
+        // than one method covering all of it.
+        [HarmonyPatch(typeof(MenuManager), "HandleTypingInput"), HarmonyPostfix]
+        public static void MenuManager_HandleTypingInput()
+        {
+            if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem row)
+                return;
+            // Controller text arrives through the on-screen keyboard in one callback, with the caret
+            // already at the end — keyboard/mouse only, deliberately.
+            if (!Manager.input.SystemPrefersKeyboardAndMouse())
+                return;
+
+            // Home/End need no index at all: MoveCharMarker is relative AND clamped (Pug.Other:
+            // 343455), so a full-length move in either direction lands exactly on the end.
+            int length = row.pugText.GetTextLength();
+            if (Input.GetKeyDown(KeyCode.Home))
+            {
+                row.MoveCharMarker(-length);
+                return;
+            }
+            if (Input.GetKeyDown(KeyCode.End))
+            {
+                row.MoveCharMarker(length);
+                return;
+            }
+            if (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl))
+                return;
+
+            int direction =
+                Input.GetKeyDown(KeyCode.LeftArrow) ? -1
+                : Input.GetKeyDown(KeyCode.RightArrow) ? 1
+                : 0;
+            if (direction == 0)
+                return;
+            // Word jumps do need an index, recovered from the caret's position the same way
+            // AppendString above recovers the insert point.
+            int current = row.Viewport.CaretIndexFromLocalX(row.Viewport.CaretLocalX);
+            row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current);
+        }
     }
 }
