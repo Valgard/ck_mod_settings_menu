@@ -110,16 +110,17 @@ namespace ModSettingsMenu.UI
         // roughly ten characters — the caret then sits far short of the edge with a large blank gap
         // behind it. A small fixed margin keeps that gap proportional to a character, not to the
         // field.
-        private const float CaretMarginUnits = 1f;
-
-        // Glyphs are point-filtered pixel art at 16 pixels per unit. An offset that is not a whole
-        // number of pixels puts every glyph between texel cells, and individual pixel rows kick into
-        // the neighbouring one — letters visibly come apart while scrolling (the same class of
-        // distortion as the memory `project_corekeeper_sprite_ongrid_distortion`). Quantising the
-        // OFFSET (not the caret, not the text position independently) keeps each glyph's own
-        // sub-pixel placement intact, because the whole field shifts by a whole number of pixels
-        // rather than being snapped onto the grid itself.
-        private const float PixelsPerUnit = 16f;
+        //
+        // NOT a round number, and that is deliberate, not sloppy: glyphs are point-filtered pixel art
+        // at 16 px/unit, _fieldWidth (21) is itself a whole number of pixels, and every caret position
+        // (from localCharacterEndPositions) is too — so with a margin of exactly 1, ApplyOffset's
+        // offset (fieldWidth - margin - caret) would land EXACTLY on a texel boundary for every caret
+        // position once scrolling engages. A point-filtered sprite sitting exactly on that boundary
+        // rasterises ambiguously per axis, and individual pixel rows tip into the neighbouring cell —
+        // letters visibly come apart (see the project's sprite-on-grid-distortion note). The old
+        // proportional margin (4.2) avoided this by accident, only because it happened not to be a
+        // whole number; 1.005 makes that avoidance deliberate and keeps it small.
+        private const float CaretMarginUnits = 1.005f;
 
         // Ported from ChatWindow.AdjustInputFieldPosition (Pug.Other:317599), which is CK's own
         // horizontal scroll. Vanilla follows the text END because chat only appends — its
@@ -146,10 +147,6 @@ namespace ModSettingsMenu.UI
                 float caret = CaretLocalX;
                 offset = -1f * Mathf.Max(0f, caret - _fieldWidth + CaretMarginUnits);
             }
-            // Quantise BEFORE delta is computed, so the blinker below moves by the same
-            // whole-pixel amount and stays consistent with the text — the within-frame invariant
-            // established above must survive this too.
-            offset = Mathf.Round(offset * PixelsPerUnit) / PixelsPerUnit;
 
             var t = _text.transform;
             float delta = offset - t.localPosition.x;
