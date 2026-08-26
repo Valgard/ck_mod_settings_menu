@@ -53,27 +53,54 @@ namespace ModSettingsMenu.UI
         /// <summary>The caret's character index, recovered from the blinker's position because the
         /// base class keeps currentCharIndex private. localCharacterEndPositions is public and is
         /// the same list CK's own Update uses to place that blinker.</summary>
-        public int CaretIndex
+        public int CaretIndex => CaretIndexFromLocalX(CaretLocalX);
+
+        /// <summary>Recovers a character index from a position in text-local space. CaretIndex is
+        /// this asked about the caret itself; a mouse click asks about the pointer.</summary>
+        public int CaretIndexFromLocalX(float localX)
         {
-            get
+            var ends = _text != null ? _text.localCharacterEndPositions : null;
+            if (ends == null || ends.Count == 0)
+                return 0;
+            // The blinker sits at dimensions.xMin + 1/32 plus the previous character's end, so the
+            // same two terms come off again before comparing.
+            float target = localX - _text.dimensions.xMin - 1f / 32f;
+            int best = 0;
+            float bestDelta = Mathf.Abs(target);
+            for (int i = 0; i < ends.Count; i++)
             {
-                var ends = _text != null ? _text.localCharacterEndPositions : null;
-                if (ends == null || ends.Count == 0)
-                    return 0;
-                float target = CaretLocalX - _text.dimensions.xMin - 1f / 32f;
-                int best = 0;
-                float bestDelta = Mathf.Abs(target);
-                for (int i = 0; i < ends.Count; i++)
+                float delta = Mathf.Abs(ends[i].x - target);
+                if (delta < bestDelta)
                 {
-                    float delta = Mathf.Abs(ends[i].x - target);
-                    if (delta < bestDelta)
-                    {
-                        bestDelta = delta;
-                        best = i + 1;
-                    }
+                    bestDelta = delta;
+                    best = i + 1;
                 }
-                return best;
             }
+            return best;
+        }
+
+        /// <summary>Word boundaries either side of an index, for Ctrl+Arrow.</summary>
+        public int WordBoundary(int fromIndex, int direction)
+        {
+            string s = _text != null ? _text.GetText() : "";
+            if (string.IsNullOrEmpty(s))
+                return 0;
+            int i = Mathf.Clamp(fromIndex, 0, s.Length);
+            if (direction < 0)
+            {
+                while (i > 0 && s[i - 1] == ' ')
+                    i--;
+                while (i > 0 && s[i - 1] != ' ')
+                    i--;
+            }
+            else
+            {
+                while (i < s.Length && s[i] != ' ')
+                    i++;
+                while (i < s.Length && s[i] == ' ')
+                    i++;
+            }
+            return i;
         }
 
         // How far short of the right clip edge the caret is kept while typing — just enough that it
