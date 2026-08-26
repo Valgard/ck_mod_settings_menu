@@ -37,11 +37,13 @@ namespace ModSettingsMenu.UI
             _fieldOriginX = t.localPosition.x - _fieldWidth / 2f;
         }
 
-        /// <summary>Call once per frame from the owning row's Update.</summary>
-        public void Tick()
+        /// <summary>Call once per frame from the owning row's Update. <paramref name="isActive"/> is
+        /// whether THIS row currently holds Manager.input.activeInputField — see ApplyOffset for why
+        /// that matters.</summary>
+        public void Tick(bool isActive)
         {
             FitMaskToViewport();
-            ApplyOffset();
+            ApplyOffset(isActive);
         }
 
         /// <summary>The caret's x in text-local space — independent of the offset applied below,
@@ -74,23 +76,40 @@ namespace ModSettingsMenu.UI
             }
         }
 
+        // How far short of the right clip edge the caret is kept while typing — just enough that it
+        // is not flush against the mask. A PROPORTIONAL margin (an earlier version used
+        // _fieldWidth/5f, taken uncritically from ChatWindow.AdjustInputFieldPosition's own
+        // maskWidth/16f ratio) is wrong here: at this field's 21-unit width a fifth is ~4.2 units,
+        // roughly ten characters — the caret then sits far short of the edge with a large blank gap
+        // behind it. A small fixed margin keeps that gap proportional to a character, not to the
+        // field.
+        private const float CaretMarginUnits = 1f;
+
         // Ported from ChatWindow.AdjustInputFieldPosition (Pug.Other:317599), which is CK's own
         // horizontal scroll. Vanilla follows the text END because chat only appends — its
         // MoveCharMarker has an empty body. A row's caret can sit anywhere, so this follows the
-        // caret instead.
+        // caret instead — but ONLY for the row actually being edited.
         //
         // currentCharIndex is private on the base class (Pug.Other:343320), but Update writes the
-        // caret's world x into the public blinker every frame (Pug.Other:343386-343388). The
-        // viewport needs the position, not the index, so no access DLL is required.
-        private void ApplyOffset()
+        // caret's world x into the public blinker every frame (Pug.Other:343386-343388), for EVERY
+        // row, not just the one being edited: SetInputText (called by SeedText for every row on open)
+        // always leaves currentCharIndex at the text's end (Pug.Other:343536), and nothing moves it
+        // again until that row is actually typed into. Following CaretLocalX unconditionally would
+        // therefore scroll every untouched row to the END of its text — a list of long tokens shown
+        // mid-word instead of from the start. isActive gates that: an inactive row is pinned at
+        // offset 0 (hard cut at the mask edge, text from the beginning), which is what a resting row
+        // is supposed to show.
+        private void ApplyOffset(bool isActive)
         {
-            if (_text == null || _blinker == null)
+            if (_text == null)
                 return;
 
-            float caret = CaretLocalX;
-            // Keep a margin so the caret is never flush against the edge while typing.
-            float margin = _fieldWidth / 5f;
-            float offset = -1f * Mathf.Max(0f, caret - _fieldWidth + margin);
+            float offset = 0f;
+            if (isActive && _blinker != null)
+            {
+                float caret = CaretLocalX;
+                offset = -1f * Mathf.Max(0f, caret - _fieldWidth + CaretMarginUnits);
+            }
 
             var t = _text.transform;
             if (!Mathf.Approximately(t.localPosition.x, offset))
