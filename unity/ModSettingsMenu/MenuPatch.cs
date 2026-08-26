@@ -289,7 +289,7 @@ namespace ModSettingsMenu
 
         // Cursor navigation (Home/End, Ctrl+Arrow word jumps) for a drill-in row, as a POSTFIX on
         // MenuManager.HandleTypingInput rather than a poll inside ListDetailItem.Update(). That
-        // private method handles the raw arrow keys itself, with NO Ctrl check (Pug.Other:269655-
+        // private method handles the raw arrow keys itself, with NO Ctrl check (Pug.Other:269659-
         // 269666):
         //
         //   else if (IsKeyDown(KeyCode.LeftArrow))  { activeInputField.MoveCharMarker(-1); }
@@ -349,23 +349,23 @@ namespace ModSettingsMenu
             // inside this same call (Pug.Other:269659-269666). That stale value is the right base
             // for WordBoundary, but the wrong base for a relative move: MoveCharMarker will apply
             // our delta on top of an index vanilla has already nudged by `direction` — UNLESS
-            // vanilla's own clamp (Pug.Other:343457) absorbed the shift, which happens exactly when
+            // vanilla's own clamp (Pug.Other:343458) absorbed the shift, which happens exactly when
             // the caret was already sitting at that end. `current` is that pre-shift index, so it is
             // the right value to test: subtract the shift only where there was one, or a Ctrl+Left
             // at index 0 would push the caret forward instead of leaving it put.
             //
             // "Shifted, or clamped away — no third case" is not a guess: vanilla's arrow branch is
             // reached only when Backspace, Delete, Return and the menu back button are all up — its
-            // else-if chain (Pug.Other:269626-269666) tests those first. Without that, `current`
+            // else-if chain (Pug.Other:269628-269666) tests those first. Without that, `current`
             // could not stand in for "did vanilla move" at all.
             //
             // One case escapes it: IsKeyDown counts a held key via a repeat timer, so a Backspace
             // being auto-repeated in the same frame as our arrow keydown sends vanilla down the
-            // Backspace branch instead (Pug.Other:269693-269701) — it never reaches MoveCharMarker,
+            // Backspace branch instead (Pug.Other:269628-269631) — it never reaches MoveCharMarker,
             // so no shift happens at all, and this compensation then over-corrects by one. Not
             // handled: it would cost a second guard for a two-key combination nobody performs
             // deliberately, and the damage is a misplaced caret, not lost text.
-            int current = row.Viewport.CaretIndexFromLocalX(row.Viewport.CaretLocalX);
+            int current = row.Viewport.CaretIndex;
             int vanillaShift = (direction < 0 ? current > 0 : current < length) ? direction : 0;
             row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current - vanillaShift);
         }
