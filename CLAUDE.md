@@ -229,37 +229,39 @@ compact row plus a pushed detail screen:
   back at its own `RowIndex` and derives the value from the list, skipping empty
   entries. That inversion is what lets a row sit there **blank** while you edit its
   neighbours — the stored value never carries an empty token, so a row derived from it
-  could not exist. Two things together keep the base class's per-frame width trim out of
-  a foreign config file: an untouched row contributes what it was seeded with rather
-  than what is on screen, and the committing row hands back `CommittedText`, which is
-  the seeded token unless a keystroke actually changed it (a text comparison could not
-  tell a trimmed value from a backspaced one; the timing can). Each open bumps
-  `RowGeneration`, and a row takes that stamp **from the owner it binds to** — the
-  screen is a singleton reused for every setting, so without it a row outliving its
-  session could commit its stale index against the next list; doomed rows are
-  additionally disabled before being detached, so they cannot fire at all. The trailing
-  add button is **`ListAddRow`**, a plain `RadicalMenuOption` and deliberately not a
-  `ListDetailItem`: `OnRowTextCommitted` therefore cannot receive it, which is what let
-  both of its guards become loud. It is a live object inside `itemContainer` (there is
-  only ever one), keeps a resting frame and focus marker like CK's own `joinButton`, and
-  takes its caption straight from the prefab — a `PugText` holding the loc term with
-  `localize` + `renderOnStart` resolves and renders itself, so no code sets it. A
-  genuinely read-only `SettingDef` (`SettingDef.ReadOnly`) still shows every row
-  navigable for viewing, just without the trailing add button, without frames, and
-  without ever entering edit mode. Same three-step open as `ModSettingsScreen` (Populate
-  → `base.Activate` → RenderContent) for the LinearLayout-height reason. `_pending` (the
-  setting to show) is seeded on the singleton instance by `Open` before `PushMenu`
-  resolves it, and cleared after consume. Both row types implement **`IListRow`**
-  (`RowHeightPx`) so the container's measuring loop asks an interface instead of naming
-  each class — the `ISectionRow` precedent one screen up, for the same
-  single-inheritance reason: the two sit at different points of CK's own hierarchy, and
-  a row that goes unmeasured silently collapses to `renderHeightPixels: 0`.
-  `ListDetailItem.GetActiveStateInCurrentScene` gates on `activeSelf` so the inactive
-  row template isn't itself navigable. A row's edit commits when it stops being
-  `Manager.input.activeInputField` (Enter/Escape/click a different row) or when the
-  screen itself closes (`Deactivate`'s own safety net) — never on mere mouse hover,
-  which CK's own `OnDeselected` also fires on. Rebuilds must stay full
-  teardown-and-recreate: destroying a row is the only thing that resets
+  could not exist. Two things together used to keep the base class's per-frame width
+  trim out of a foreign config file — moot since `ListDetailItem.maxWidth` is `0` (the
+  field mask defines the visible window now, not a capacity that discards characters;
+  see the drill-in-row-geometry bullet below), kept as redundancy rather than a live
+  safeguard: an untouched row contributes what it was seeded with rather than what is on
+  screen, and the committing row hands back `CommittedText`, which is the seeded token
+  unless a keystroke actually changed it (a text comparison could not tell a trimmed
+  value from a backspaced one; the timing can). Each open bumps `RowGeneration`, and a
+  row takes that stamp **from the owner it binds to** — the screen is a singleton reused
+  for every setting, so without it a row outliving its session could commit its stale
+  index against the next list; doomed rows are additionally disabled before being
+  detached, so they cannot fire at all. The trailing add button is **`ListAddRow`**, a
+  plain `RadicalMenuOption` and deliberately not a `ListDetailItem`:
+  `OnRowTextCommitted` therefore cannot receive it, which is what let both of its guards
+  become loud. It is a live object inside `itemContainer` (there is only ever one),
+  keeps a resting frame and focus marker like CK's own `joinButton`, and takes its
+  caption straight from the prefab — a `PugText` holding the loc term with `localize` +
+  `renderOnStart` resolves and renders itself, so no code sets it. A genuinely read-only
+  `SettingDef` (`SettingDef.ReadOnly`) still shows every row navigable for viewing, just
+  without the trailing add button, without frames, and without ever entering edit mode.
+  Same three-step open as `ModSettingsScreen` (Populate → `base.Activate` →
+  RenderContent) for the LinearLayout-height reason. `_pending` (the setting to show) is
+  seeded on the singleton instance by `Open` before `PushMenu` resolves it, and cleared
+  after consume. Both row types implement **`IListRow`** (`RowHeightPx`) so the
+  container's measuring loop asks an interface instead of naming each class — the
+  `ISectionRow` precedent one screen up, for the same single-inheritance reason: the two
+  sit at different points of CK's own hierarchy, and a row that goes unmeasured silently
+  collapses to `renderHeightPixels: 0`. `ListDetailItem.GetActiveStateInCurrentScene`
+  gates on `activeSelf` so the inactive row template isn't itself navigable. A row's
+  edit commits when it stops being `Manager.input.activeInputField` (Enter/Escape/click
+  a different row) or when the screen itself closes (`Deactivate`'s own safety net) —
+  never on mere mouse hover, which CK's own `OnDeselected` also fires on. Rebuilds must
+  stay full teardown-and-recreate: destroying a row is the only thing that resets
   `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid editing
   tint and nothing else reverts.
 - **`ListKindStore`** (`Settings`, persisted via `API.ConfigFilesystem` like
