@@ -112,6 +112,15 @@ namespace ModSettingsMenu.UI
         // field.
         private const float CaretMarginUnits = 1f;
 
+        // Glyphs are point-filtered pixel art at 16 pixels per unit. An offset that is not a whole
+        // number of pixels puts every glyph between texel cells, and individual pixel rows kick into
+        // the neighbouring one — letters visibly come apart while scrolling (the same class of
+        // distortion as the memory `project_corekeeper_sprite_ongrid_distortion`). Quantising the
+        // OFFSET (not the caret, not the text position independently) keeps each glyph's own
+        // sub-pixel placement intact, because the whole field shifts by a whole number of pixels
+        // rather than being snapped onto the grid itself.
+        private const float PixelsPerUnit = 16f;
+
         // Ported from ChatWindow.AdjustInputFieldPosition (Pug.Other:317599), which is CK's own
         // horizontal scroll. Vanilla follows the text END because chat only appends — its
         // MoveCharMarker has an empty body. A row's caret can sit anywhere, so this follows the
@@ -137,6 +146,10 @@ namespace ModSettingsMenu.UI
                 float caret = CaretLocalX;
                 offset = -1f * Mathf.Max(0f, caret - _fieldWidth + CaretMarginUnits);
             }
+            // Quantise BEFORE delta is computed, so the blinker below moves by the same
+            // whole-pixel amount and stays consistent with the text — the within-frame invariant
+            // established above must survive this too.
+            offset = Mathf.Round(offset * PixelsPerUnit) / PixelsPerUnit;
 
             var t = _text.transform;
             float delta = offset - t.localPosition.x;
