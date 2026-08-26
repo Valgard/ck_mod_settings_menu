@@ -334,7 +334,13 @@ namespace ModSettingsMenu
                 row.MoveCharMarker(length);
                 return;
             }
-            if (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl))
+            // Ctrl is the Windows word-jump convention; Alt is the macOS one (Ctrl+Arrow is a
+            // desktop-switch shortcut there, so the game never sees it). This machine runs a
+            // Windows build under CrossOver, so either physical keyboard convention is plausible —
+            // accept both rather than picking one.
+            bool wordModifier =
+                Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+            if (!wordModifier)
                 return;
 
             int direction =
