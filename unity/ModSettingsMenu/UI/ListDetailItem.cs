@@ -341,9 +341,9 @@ namespace ModSettingsMenu.UI
         // maxWidth moved to a different width — the exact failure mode a derivation cannot have.
         //
         // The frame sprite's pivot is centred, so its localPosition IS the collider centre; the
-        // fallback keeps the old text-relative arithmetic for a row whose frame reference is unset,
-        // where x=0 is the text's left edge. A read-only row does NOT take that path: its renderer
-        // is merely disabled, so size and transform still read correctly.
+        // fallback below derives from the field mask instead when a row has no frame reference. A
+        // read-only row does NOT take either fallback path: its renderer is merely disabled, so size
+        // and transform still read correctly.
         protected override void UpdateClickCollider()
         {
             base.UpdateClickCollider();
@@ -362,14 +362,26 @@ namespace ModSettingsMenu.UI
                 ModSettingsScreen.FitColliderToFrame(clickCollider, fieldBorder);
                 return;
             }
-            // No frame wired: fall back to the capacity width, which at least spans the field the
-            // player can type into. Height stays whatever the base measured.
-            var size = clickCollider.size;
-            var center = clickCollider.center;
-            size.x = maxWidth;
-            center.x = maxWidth / 2f;
-            clickCollider.size = size;
-            clickCollider.center = center;
+            // No frame wired: fall back to the field mask's width, not maxWidth — maxWidth is 0 now
+            // that the field mask defines the row's visible/typeable window (see the class-level note
+            // above), so sizing from it here would collapse this fallback to a zero-width collider,
+            // silently unhittable, the opposite of what this comment used to promise. The mask's own
+            // transform gives both size and centre directly, mirroring FitColliderToFrame's
+            // convention (its pivot is centred too, same as the frame's). Height stays whatever the
+            // base measured.
+            //
+            // If fieldMask is unwired as well, Bind() has already logged that fault loudly (see
+            // there) — this method does not repeat the warning, it just leaves the collider at
+            // whatever the base class measured from rendered text rather than guessing further.
+            if (fieldMask != null)
+            {
+                var size = clickCollider.size;
+                var center = clickCollider.center;
+                size.x = fieldMask.transform.localScale.x;
+                center.x = fieldMask.transform.localPosition.x;
+                clickCollider.size = size;
+                clickCollider.center = center;
+            }
         }
 
         // RadicalMenuOptionTextInput.Update() overrides RadicalMenuOption.Update() WITHOUT calling
