@@ -1,0 +1,21 @@
+[h1]Mod Settings Menu[/h1]
+
+Mod Settings Menu gives Core Keeper mods a shared, in-game settings screen. Other mods register their own options here, and they appear as a tidy panel under Options → Mod settings — no config files to hand-edit, no separate menu per mod.
+
+[b]If you installed this because another mod needs it:[/b] there is nothing to configure in Mod Settings Menu itself. Each dependent mod adds its own section, labelled with that mod's name, and every setting saves automatically and is restored on the next launch.
+
+[b]If you're a mod author:[/b] Mod Settings Menu is a framework other mods build against, not just a UI you install. Adding a settings section to your own mod takes about five lines of code — declare toggles, sliders, choices or steppers in your mod's Init, then read the live values wherever you need them. The framework renders the menu and persists every value for you; several of this author's other Core Keeper mods already use it as their settings backend, from talent-curve tweaks to HUD toggles. Full API documentation lives in the source repository.
+
+[b]Multiplayer:[/b] install the mod on both the client and the server.
+
+[h2]Requirements[/h2]
+
+[list]
+[*] CoreLib (required)
+[/list]
+
+Steam does not prompt for required items the way mod.io does — subscribe to CoreLib as well, or the mod will not load.
+
+[hr][/hr]
+
+Built with the official Pugstorm Core Keeper Mod SDK. Personal-use, non-commercial (Core Keeper EULA). Not affiliated with or endorsed by Pugstorm.
