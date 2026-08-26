@@ -369,9 +369,12 @@ traps, each verified in-game. Some carry fuller detail (with the code paths) in
   22×1.5; the click collider *and* the row's layout height are both derived from that
   renderer at runtime (`UpdateClickCollider`, and `RowHeightPx` via the shared
   `ModSettingsScreen.FrameHeightPx`), so an Editor resize needs no code change and a
-  copied literal cannot go stale — one already did. The single literal left is
-  `ListDetailItem.maxWidth: 21`, half a unit narrower on each side so the text keeps air
-  inside the frame. Deriving the height from the *text* instead is doubly wrong: the
+  copied literal cannot go stale — one already did. `ListDetailItem.maxWidth` is now
+  `0`: the visible window is defined by the row's own `FieldMask` (21 units from
+  row-local 0), not by a capacity that discards characters. The frame is 22 units
+  centred at 10.5 and therefore spans `[-0.5, 21.5]`, so a mask sized from the frame
+  would let text run past it — the mask keeps the half unit of air the old `maxWidth`
+  used to provide. Deriving the height from the *text* instead is doubly wrong: the
   frame is taller than its text-measured slot (which used to overhang into the viewport
   mask at the first and last row, where `gapBetweenItems: 5` cannot absorb it — hence
   `paddingStart`/`paddingEnd` are now `0`, the padding that compensated for it being
