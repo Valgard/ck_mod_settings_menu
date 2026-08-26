@@ -216,26 +216,56 @@ namespace ModSettingsMenu
         [HarmonyPatch(typeof(RadicalMenuOptionTextInput), nameof(RadicalMenuOptionTextInput.AppendString)), HarmonyPrefix]
         public static bool RadicalMenuOptionTextInput_AppendString(RadicalMenuOptionTextInput __instance, string s)
         {
-            if (__instance is not ModSettingsMenu.UI.ListDetailItem)
+            if (__instance is not ModSettingsMenu.UI.ListDetailItem row)
                 return true;
 
-            // Same filtering the base class does — trim, newline strip, whitelist — minus the width
-            // rejection. Our rows ship an empty characterWhiteList (prefab-verified), so only the trim
-            // and newline rules can actually change anything here.
+            // Same filtering the base class does — trim, newline strip, whitelist (Pug.Other:343406-
+            // 343429) — minus the width rejection, which is the whole reason this prefix exists (see
+            // the note above). Replicated rather than assumed away: our rows ship an empty
+            // characterWhiteList today (prefab-verified), but that is an unenforced assumption a
+            // future row template could break silently.
             if (__instance.trim)
                 s = s.Trim();
-            if (__instance.dontAllowNewLines)
-                s = s.Replace("\n", "").Replace("\r", "");
+            for (int i = s.Length - 1; i >= 0; i--)
+            {
+                if (__instance.dontAllowNewLines && (s[i] == '\n' || s[i] == '\r'))
+                {
+                    s = s.Remove(i, 1);
+                    continue;
+                }
+                int j;
+                for (
+                    j = 0;
+                    j < __instance.characterWhiteList.Length
+                        && (__instance.ignoreCapitalizationInWhiteList || s[i] != __instance.characterWhiteList[j])
+                        && (
+                            !__instance.ignoreCapitalizationInWhiteList || !(s[i].ToString().ToLower() == __instance.characterWhiteList[j].ToString().ToLower())
+                        );
+                    j++
+                ) { }
+                if (__instance.characterWhiteList.Length > 0 && j == __instance.characterWhiteList.Length)
+                    s = s.Remove(i, 1);
+            }
+
+            // Vanilla clears this unconditionally at the end of AppendString (Pug.Other:343452),
+            // including when filtering left nothing to insert — clear it here too, before the early
+            // return below, so a filtered-to-nothing keystroke doesn't leave it stuck set.
+            __instance.WasAutoActivated = false;
             if (string.IsNullOrEmpty(s))
                 return false;
 
-            var text = __instance.pugText;
-            text.SetText(text.GetText() + s);
+            // Insert AT the caret instead of always at the text end. currentCharIndex is private on
+            // the base class, so the caret position is recovered from the blinker via
+            // TextFieldViewport.CaretIndex rather than read directly. MoveCharMarker below is
+            // relative (Pug.Other:343455): the caret was at `at`, the text just grew by s.Length
+            // there, so a +s.Length relative move lands on the right side of what was typed —
+            // whether or not `at` was the end of the string.
+            var text = row.pugText;
+            string current = text.GetText();
+            int at = Mathf.Clamp(row.Viewport.CaretIndex, 0, current.Length);
+            text.SetText(current.Insert(at, s));
             text.Render(rewindEffectAnims: false);
-            // currentCharIndex is private on the base class, so the caret is moved through the public
-            // clamped API rather than assigned directly: MoveCharMarker is relative (Pug.Other:343455).
-            __instance.MoveCharMarker(s.Length);
-            __instance.WasAutoActivated = false;
+            row.MoveCharMarker(s.Length);
             return false;
         }
     }
