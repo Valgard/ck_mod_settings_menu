@@ -185,7 +185,7 @@ namespace ModSettingsMenu.UI
             // edge. screenMask is looked up by name because ListDetailScreen owns it, not this row.
             var screenMask = _owner != null ? _owner.transform.Find("ViewportMask")?.GetComponent<SpriteMask>() : null;
             if (fieldMask != null)
-                _viewport.Bind(pugText, fieldMask, screenMask);
+                _viewport.Bind(pugText, fieldMask, screenMask, characterMarkBlinker);
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
@@ -347,6 +347,11 @@ namespace ModSettingsMenu.UI
         // Keeps this row's field mask inside the list viewport as it scrolls. See TextFieldViewport
         // for why this is a standalone helper rather than logic inlined here.
         private readonly TextFieldViewport _viewport = new TextFieldViewport();
+
+        // Exposes the viewport's caret-index recovery to MenuPatch's AppendString prefix, which
+        // needs to insert at the caret rather than always at the text end. internal, not public: the
+        // only consumer outside this class lives in this same mod assembly.
+        internal TextFieldViewport Viewport => _viewport;
 
         protected override void Update()
         {
