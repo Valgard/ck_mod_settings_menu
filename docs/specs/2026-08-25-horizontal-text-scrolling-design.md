@@ -69,12 +69,19 @@ What this mod adds:
   both layer fields and the range are serialized rather than assembled at
   runtime. Reuse the sprite the existing `ViewportMask` references, and note its
   `.meta` requirement (`spritePixelsToUnits: 1`).
-- **Range headroom is required, not stylistic.** The lower bound is exclusive; a
-  range starting on the glyph order excludes the glyphs and everything vanishes.
-  Any positive amount works — the spike used 100. Pick it so the band stays clear
-  of other renderers in the row: the frames sit on `0`, the glyphs on `9999`, and
-  `CharacterMarkBlinker` shares the glyph order, so a band of `[9899, max]` holds
-  the text and the caret and nothing else.
+- **The bands must abut, not overlap.** The lower bound is exclusive, so the
+  field mask starts at `9998` — the same value the viewport ends on, which
+  belongs to the viewport and to nothing else. That leaves the glyphs (`9999`)
+  and `CharacterMarkBlinker`, which shares their order, to the field mask, and
+  nothing else falls in either band's way: the row frames sit on `0`.
+  A band starting on `9999` would exclude the glyphs from **both** masks and the
+  text disappears entirely — the failure the spike hit three times.
+
+  The spike measured `9999` (fails) and `9899` (works); `9998` follows from the
+  bound being exclusive rather than from a separate measurement. It is used
+  because it abuts the viewport exactly and needs no arbitrary gap to explain.
+  If the text is invisible after the prefab change, that inference is what to
+  suspect first — widening to `9899` is the fallback, and it is measured.
 
 **The only runtime geometry** is re-fitting each row mask, every frame, to the
 intersection of its field rectangle with the viewport bounds. Without it the mask
