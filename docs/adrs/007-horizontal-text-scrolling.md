@@ -56,11 +56,15 @@ non-virtual interface member that cannot be redirected at all.
   was also the only cap on the keyboard path; without a replacement, a paste
   writes unbounded text into another mod's config. The on-screen keyboard's own
   limit serves as the value.
-- **The caret is read from the blinker, not from an index.** `currentCharIndex`
-  is private and the sandbox forbids reflection, but the game writes the caret's
-  position into a public component every frame. The offset needs a position
-  anyway; the character index is recovered from the same source when an insertion
-  or a word jump needs one. No access assembly is required.
+- **The caret is read from the blinker, not from an index — by choice, not by
+  necessity.** The offset needs a *position* regardless, and the game writes the
+  caret's into a public component every frame, so deriving the character index
+  from that same source keeps one source of truth instead of two. It is not the
+  only route: `currentCharIndex` is private, but `API.Reflection` reaches private
+  members legally inside the sandbox (`docs/ck/sandbox.md` § "Reaching a private
+  member"), and reading it would be authoritative where this is derived. The
+  trade is paid for in the next consequence — and unpaid, it was a real defect
+  rather than a theoretical one.
 - **Anything that reads that caret must account for when the game last wrote
   it.** It is refreshed once per frame, so code running inside another
   component's update — a Harmony patch on the game's own input handling — sees
