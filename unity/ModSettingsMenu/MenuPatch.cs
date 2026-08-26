@@ -279,8 +279,10 @@ namespace ModSettingsMenu
             // rejection, so it has to carry the insertion point over too; an earlier draft appended
             // at the end and was wrong for exactly that reason. The actual trade sits elsewhere and
             // is worth naming, because it is where this can still go wrong: vanilla reads its own
-            // private currentCharIndex, while this reconstructs the index from the caret's POSITION,
-            // the sandbox forbidding reflection. An authoritative source swapped for a derived one —
+            // private currentCharIndex, while this reconstructs the index from the caret's POSITION.
+            // Not because reflection is out of reach — API.Reflection gets at a private member inside
+            // the sandbox — but because the offset needs that position anyway, so one source serves
+            // both. An authoritative source swapped for a derived one —
             // exact only while PugText's glyph count and the string's character count agree, which
             // every glyphless character breaks. TryCaretIndex is that agreement, checked rather than
             // assumed (TextFieldViewport.IndexSpaceIsSound has the mechanisms).
