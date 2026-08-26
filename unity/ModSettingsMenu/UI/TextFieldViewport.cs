@@ -5,7 +5,8 @@ namespace ModSettingsMenu.UI
     /// <summary>
     /// Horizontal viewport for one text row: keeps the row's field mask inside the list viewport
     /// and offsets the text so the caret stays visible. Standalone rather than part of
-    /// ListDetailItem, because SettingKind.Text is a second consumer of the same behaviour.
+    /// ListDetailItem, because the planned SettingKind.Text row will need the same behaviour. That
+    /// row does not exist yet (docs/roadmap.md), so the split is a forward bet, not a second caller.
     /// </summary>
     internal sealed class TextFieldViewport
     {
