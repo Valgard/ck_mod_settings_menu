@@ -818,11 +818,41 @@ handler, so only the call's *source* can separate "the player just typed this" f
 - **`Shake()` is inherited and unused.** `RadicalMenuOptionTextInput` ships shake
   feedback (0.4 s, 20/s, already configured on the row template) for exactly the
   case where it silently discards input, and the drill-in has two such cases: a
-  typed comma is stripped at commit, and a value wider than `maxWidth` is refused
-  keystroke by keystroke. Both vanish without a word today. **Not the field flip
+  typed comma is stripped at commit, and a row whose text already fills the
+  255-character cap refuses every keystroke (`room == 0` in the `AppendString`
+  prefix). The second case used to be vanilla's width rejection; horizontal
+  scrolling removed that one and moved the same silence to a different, much
+  rarer threshold — reachable since ADR-006 let long identifiers through as list
+  tokens. Both vanish without a word today. **Not the field flip
   it looks like:** the comma strip happens at commit, and every commit path
   destroys and rebuilds the row, so a shake started there would animate an object
   that disappears in the same frame — the feedback has to move to the moment of
   typing. `ShakeAndClear` despite its name clears only its own coroutine handle,
   not the text. Carried over 2026-08-23 from the drill-in-frame work, which
   shipped the rest of that section.
+- **Holding a word-jump key crawls after the first jump.** Vanilla's arrow branch
+  repeats on a cooldown (`MenuManager.IsKeyDown` is `GetKeyDown(k) || (GetKey(k)
+  && cooldown elapsed)`), while the word-jump postfix triggers on
+  `Input.GetKeyDown` alone — so holding the key jumps one word and then crawls
+  character by character at the repeat rate. Not a one-line change: that cooldown
+  is private and the sandbox forbids reflection, so the postfix needs a repeat
+  timer of its own carrying the same constants. Switching it to `GetKey` instead
+  would fire every frame while vanilla still moves only on its own ticks, which
+  breaks the `vanillaShift` compensation on every frame in between. Cursor
+  position only — no text is lost. Found by the review gate 2026-08-26.
+- **The click collider's fallback reads a transform that moves every frame.**
+  `UpdateClickCollider` falls back to the field mask's `localScale`/
+  `localPosition` when `fieldBorder` is missing, but `FitMaskToViewport` rewrites
+  exactly those two values each frame to the mask's intersection with the list
+  viewport. The hit area would then shrink with the row instead of being the
+  fixed upper bound its own comment promises. `TextFieldViewport` already caches
+  the authored geometry (`_fieldWidth`, `_fieldOriginX`) precisely because the
+  live transform stops being a witness to it after the first frame — the row
+  should ask there. Dead today: the branch runs only on a mis-wired prefab. Found
+  by the review gate 2026-08-26.
+- **`maxScroll` and the caret reader disagree about `dimensions.xMin`.**
+  `CaretIndexFromLocalX` subtracts it, matching vanilla's own blinker formula;
+  `ApplyOffset`'s end-of-text clamp does not. The two agree while the row's text
+  is left-aligned, which it is — change that and the clamp silently stops short
+  of the text end or overshoots it. `_text.dimensions.xMin + _text.dimensions.width
+  - _fieldWidth` holds either way. Found by the review gate 2026-08-26.
