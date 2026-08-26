@@ -335,6 +335,18 @@ namespace ModSettingsMenu
             // the caret was already sitting at that end. `current` is that pre-shift index, so it is
             // the right value to test: subtract the shift only where there was one, or a Ctrl+Left
             // at index 0 would push the caret forward instead of leaving it put.
+            //
+            // "Shifted, or clamped away — no third case" is not a guess: vanilla's arrow branch is
+            // reached only when Backspace, Delete, Return and the menu back button are all up — its
+            // else-if chain (Pug.Other:269626-269666) tests those first. Without that, `current`
+            // could not stand in for "did vanilla move" at all.
+            //
+            // One case escapes it: IsKeyDown counts a held key via a repeat timer, so a Backspace
+            // being auto-repeated in the same frame as our arrow keydown sends vanilla down the
+            // Backspace branch instead (Pug.Other:269693-269701) — it never reaches MoveCharMarker,
+            // so no shift happens at all, and this compensation then over-corrects by one. Not
+            // handled: it would cost a second guard for a two-key combination nobody performs
+            // deliberately, and the damage is a misplaced caret, not lost text.
             int current = row.Viewport.CaretIndexFromLocalX(row.Viewport.CaretLocalX);
             int vanillaShift = (direction < 0 ? current > 0 : current < length) ? direction : 0;
             row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current - vanillaShift);
