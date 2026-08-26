@@ -68,14 +68,34 @@ non-virtual interface member that cannot be redirected at all.
 - The guards that used to keep the per-frame trim out of a config file still
   work but no longer guard anything. They are kept as redundancy, and the prose
   around them says so rather than describing a live mechanism.
+- **The viewport has to hold state, and the obvious stateless form is wrong.**
+  Deriving the offset from the caret alone is simple, cannot drift, and is
+  trivially verifiable — which is why it was built that way first. It also pins
+  the caret one character inside the right edge whenever the text is scrolled at
+  all, so jumping backwards into a long value reveals nothing of what follows the
+  caret: the very case this exists for. The offset is therefore carried across
+  frames and moved only when the caret leaves the visible window, at either edge.
+  The carried value is read back from the text transform rather than kept in a
+  field of its own, so it cannot quietly disagree with what is on screen after a
+  rebuild.
 
 ### Confirmation
 
-Verified in game against a fixture whose token is the same 57-character
-identifier the original hazard was measured with: the whole token is reachable
-by moving the caret, an edit round-trips through commit and reopen without loss,
-unfocused rows rest at their text start, and scrolling the list leaves nothing
-outside it.
+Verified in game against fixtures written for it — a token of the same 57
+characters the original hazard was measured with, and a list whose entries
+contain spaces, so word jumps have boundaries to find. The whole token is
+reachable by moving the caret; an edit round-trips through commit and reopen
+without loss; the view holds still while the caret stays inside it and follows
+only when it leaves; text ends flush against the field edge rather than short of
+it; unfocused rows rest at their text start; and scrolling the list leaves
+nothing outside it.
+
+Glyph rendering is the one property looking could not settle, because its failure
+is a single pixel row tipping into the neighbouring cell — visible, but not
+reliably reproducible on demand. Every offset the code can produce was enumerated
+instead, across all five branches, and none falls on the pixel grid; the closest
+approach is five thousandths of a unit. The in-game check then confirmed what the
+enumeration predicted.
 
 ## More Information
 
