@@ -77,11 +77,10 @@ What this mod adds:
   A band starting on `9999` would exclude the glyphs from **both** masks and the
   text disappears entirely — the failure the spike hit three times.
 
-  The spike measured `9999` (fails) and `9899` (works); `9998` follows from the
-  bound being exclusive rather than from a separate measurement. It is used
-  because it abuts the viewport exactly and needs no arbitrary gap to explain.
-  If the text is invisible after the prefab change, that inference is what to
-  suspect first — widening to `9899` is the fallback, and it is measured.
+  Measured, not inferred: a band starting on `9999` leaves the text invisible,
+  one starting on `9998` clips it correctly. (The spike had only measured `9999`
+  against `9899`, from which `9998` was an inference; the prefab change confirmed
+  it directly.)
 
 **The only runtime geometry** is re-fitting each row mask, every frame, to the
 intersection of its field rectangle with the viewport bounds. Without it the mask
