@@ -312,13 +312,10 @@ filtering; only the delete glyph is new. A new sprite needs its `pad` entry and
 a pinned `internalIds` number in `sources/msm_ui_chrome.json` — next free is
 `100011` — or the next cut re-derives the id and orphans the prefab reference.
 
-> **This makes § "Horizontal scrolling in a text field" a prerequisite rather
-> than a follow-up.** `maxWidth` drops by a quarter, so the edit trap documented
-> there gets *easier* to hit — a mid-state with the buttons but no viewport would
-> be worse than today. With a viewport the narrower row is a matter of how much
-> text is visible, not of what survives an edit. Build the viewport first, or
-> both together; that section's own open questions (the second mask over the same
-> sprites, caret-follow) are unchanged and are the riskier half.
+> **The viewport this used to wait for now exists** ([ADR-007](adrs/007-horizontal-text-scrolling.md)).
+> The row keeps its full value regardless of how much of it is visible, so
+> narrowing the row is a question of how much text shows at once, not of what
+> survives an edit. That removes the reason this item was blocked.
 
 CK's own delete button is 16×16 inside a 32 px row, i.e. deliberately smaller
 than the row — the one vanilla argument for a smaller button here. It was
@@ -326,7 +323,7 @@ weighed against a flush 24 px one and lost on legibility: at 16×16 the frame
 leaves an 8×8 glyph, which is half of what `ToggleListView` / `TogglePlainView`
 already use in this very atlas.
 
-### Open design questions
+### Open design questions — the delete button
 
 - **Confirmation, or none?** ADR-003's own con against the current model was
   that "an accidental clear-and-confirm removes a token with no dedicated 'are
@@ -409,7 +406,7 @@ inferred, and whether a masked value should be excluded from any future
 config-export/diagnostics output — a secret that a status row prints defeats
 the mask.
 
-### Open design questions
+### Open design questions — the text widget
 
 - **API shape.** `.Text(out SettingHandle<string> h, string key, string def)`
   is the obvious signature. Whether it also takes validation (a
@@ -426,112 +423,6 @@ the mask.
   character; marking it restart-dirty on every keystroke would be wrong. The
   dirty flag should be set on commit, not on change.
 
-## Horizontal scrolling in a text field — and the truncation it currently hides
-
-A text row today cannot show more than fits: `maxWidth` is the field's
-**capacity**, not a viewport. Raised 2026-08-22 while designing the drill-in
-field frame, and verified against the decompiled `Pug.Other` (game 1.2.1.5 —
-class and member names are stable, line numbers are not).
-
-> **Promoted to a prerequisite on 2026-08-24.** The per-row button geometry
-> decided that day takes 5.375 units off the row, dropping `maxWidth` from 21 to
-> about 15.5 — so the edit trap below stops being a rare case and becomes an
-> ordinary one. Shipping the buttons without a viewport would leave MSM worse
-> than it is now. Either this lands first, or both land together; it no longer
-> waits behind them.
-
-`RadicalMenuOptionTextInput` enforces the limit in two places, and neither
-scrolls:
-
-- **`AppendString` rejects outright.** After inserting, it re-measures and, if
-  the text now exceeds `maxWidth`, restores the previous string and rewinds
-  `currentCharIndex`. The keystroke is discarded with no feedback at all.
-- **`Update` trims from the end, every frame.** A `while` loop strips one
-  trailing character at a time until the text fits. It is not gated on the field
-  being focused or edited — `Update` runs for every active row.
-
-There is no offset, no clipped window, no scroll state.
-`localCharacterEndPositions` exists only to place the caret. Turning the limit
-off (`maxWidth = 0`) is therefore the only way any scrolling could work, since
-otherwise that per-frame loop would fight it — but then the clipping has to be
-built by hand: a mask plus a text-transform offset that follows the caret.
-
-> **Correction (2026-08-23):** both bullets above were derived from the decompile
-> without checking them against the prefab, and **neither fired in the shipped
-> drill-in**. The row's `Label` PugText carried `maxWidth: 20`, so `PugText.Render`
-> wrapped the text instead — and because both checks compare
-> `pugText.dimensions.width`, a wrapped text can never exceed the limit. Typing
-> past the capacity grew the row *downward* across three lines and out of its
-> frame, silently. Fixed by setting the PugText's own `maxWidth` to `0`, which is
-> what CK does on every one of its text fields; the mechanism and the
-> capacity-versus-wrapping distinction now live in `docs/ck/ui-framework.md`
-> § "A text row in a menu".
->
-> Consequence for this entry: it describes the state that fix *establishes*.
-> The refusal, the per-frame trim and the config-file path below are real from
-> 2026-08-23 onward — they were not before, which is why nobody had seen them.
-
-### The truncation no longer reaches the owning mod's config file
-
-**Closed on 2026-08-23** — kept here because the reasoning explains why the
-remaining scrolling work is a comfort feature rather than a data-safety one.
-
-The hazard was that a foreign token wider than the field gets trimmed *on
-display* and could then be written back in that shortened form. Two changes close
-it, and neither needs a viewport:
-
-- The value is assembled from the screen's own row list, so **untouched rows**
-  contribute the token they were seeded with, whatever their row happens to show.
-- The committing row hands back `ListDetailItem.CommittedText`, which is the
-  seeded token unless a keystroke actually changed the text. A text comparison
-  could not have decided that — a trimmed value and a backspaced one look
-  identical — but the timing can: while a row holds `activeInputField`, a change
-  is the user's; outside that window only the trim runs.
-
-**It was never reachable before that pass anyway.** The row's own `PugText`
-carried a `maxWidth`, so an over-long value wrapped instead of overflowing and
-neither the capacity check nor the trim ever fired. Clearing that limit in the
-same change is what armed both — the fix and the exposure arrived together.
-
-**The limit is a rendered width, not a character count.** Both checks measure
-`pugText.dimensions.width`, and `PugFont` kerns per glyph pair, so how many
-characters fit depends on which characters they are. One data point exists from
-the wrapping bug above — with the PugText limit at `20`, a line held roughly 44
-**digits** — but digits are uniform and item names are not, so that number does
-not carry over.
-
-**What remains open is not comfort — it is a silent trap on edit**, and this
-entry is the fix for it. Measured 2026-08-23 with a 57-character token: viewing it
-is safe (the guard above returns the seeded value), but the moment the user types
-one character, their input wins by design — and their input is built on the
-**shortened** text they can see. Appending `l` to a row displaying
-`…VariantL` produced `…VariantLl`; the four characters `arge` were never on screen
-and are gone, with nothing in the UI hinting at it. A value too wide for its row
-can therefore be looked at safely and destroyed by editing, which is the worst of
-both. A viewport removes the premise: what you edit is what the value says.
-
-**[ADR-006](adrs/006-list-detection-heuristic.md) widened who can walk into this.**
-Its predecessor rejected any token over 32 characters, which was never intended as
-a safety device but worked as one: only tokens between roughly the row's render
-width and 32 characters could reach the editable screen at all, bounding a mis-edit
-to about ten invisible characters. Any length now qualifies, and `ListKindStore`
-makes the classification stick. That trade was made knowingly — the old rule was
-wrong about what it tested — but it moves this entry from "nice to have" to "the
-mitigation for a hazard we deliberately widened".
-
-### Open design questions
-
-- **Where does it dock?** The drill-in row and a future `SettingKind.Text` share
-  the component, so a viewport built for one should serve both — but the drill-in
-  already scrolls *vertically* inside a mask, and a second mask on the same
-  sprites hits the same custom-range conflict § "Dropdown lists" describes.
-- **Caret-follow or overflow indicator?** A field that scrolls with the caret is
-  the familiar behaviour; a static field with an ellipsis is far cheaper and may
-  be enough for values that are read more often than edited.
-- **Does rejection still need feedback?** With `maxWidth = 0` an overlong entry
-  is no longer rejected, so `Shake()` becomes unnecessary here — but only here.
-  The comma strip still discards input silently.
-
 ## Dropdown lists — CK's `DropdownUIElement`
 
 An **expanding dropdown** instead of `←/→` step-through, for a `Choice` whose
@@ -546,7 +437,7 @@ The motivating limit: `SettingWidget` drives `Choice` through
 key presses with no overview of what else exists. Fine for `Low/Medium/High`,
 poor for a language list, item category, or any enum with real breadth.
 
-### What CK gives for free
+### What CK gives for free — dropdowns
 
 Three classes, all in `Pug.Other`, **all generic** — they contain no join-menu
 logic whatsoever:
@@ -650,7 +541,7 @@ natural prerequisite in the second docking place above (a suggestion list on a
 text row presumes the text row looks like a field). Sequence: frame → `Text` →
 dropdown.
 
-### Open design questions
+### Open design questions — dropdowns
 
 - **New kind or presentation flag?** A `SettingKind.Dropdown` duplicates
   `Choice`'s value handling; a flag on `Choice` (`.AsDropdown()`, or automatic
@@ -697,7 +588,7 @@ ColorHealth`). Four colours × their components are all plain rows. The value
 type is a `record HsvColor` whose `Rgba` goes through `Color.HSVToRGB` — and
 C# 9 records with `with` expressions evidently pass the Roslyn sandbox.
 
-### Open design questions
+### Open design questions — colour
 
 - **One setting or four?** A `SettingKind.Color` that internally renders four
   rows conflicts with `ModSection.Settings` being a flat ordered list of rows;
@@ -790,7 +681,7 @@ Surfaced 2026-08-13 from the user's own in-game observation; the mechanism was
 then verified against the decompiled `Pug.Other` (game 1.2.1.5 — class and
 member names are stable, the line numbers are not).
 
-### What CK gives for free
+### What CK gives for free — locked settings
 
 `OptionActiveState { INACTIVE, ACTIVE, GRAYED_OUT }`, returned per row by the
 **virtual** `RadicalMenuOption.GetActiveStateInCurrentScene()`. From that single
@@ -849,7 +740,7 @@ question (see § Planned widgets #2) stays their own. The read-only-list
 precedent already goes the other way on purpose — `ListDetailItem` keeps a
 read-only list's rows `ACTIVE` so they remain navigable for *reading*.
 
-### Open design questions
+### Open design questions — locked settings
 
 - **API shape.** A static `.Locked()` marker on the last-declared setting (like
   `RequiresRestart`) cannot express V-Sync-style dependencies; a
