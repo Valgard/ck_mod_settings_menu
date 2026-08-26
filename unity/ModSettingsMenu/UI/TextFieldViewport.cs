@@ -120,7 +120,7 @@ namespace ModSettingsMenu.UI
         // currentCharIndex is private on the base class (Pug.Other:343320), but Update writes the
         // caret's world x into the public blinker every frame (Pug.Other:343386-343388), for EVERY
         // row, not just the one being edited: SetInputText (called by SeedText for every row on open)
-        // always leaves currentCharIndex at the text's end (Pug.Other:343536), and nothing moves it
+        // always leaves currentCharIndex at the text's end (Pug.Other:343539), and nothing moves it
         // again until that row is actually typed into. Following CaretLocalX unconditionally would
         // therefore scroll every untouched row to the END of its text — a list of long tokens shown
         // mid-word instead of from the start. isActive gates that: an inactive row is pinned at
