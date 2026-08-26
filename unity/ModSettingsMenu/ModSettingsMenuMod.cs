@@ -82,24 +82,32 @@ namespace ModSettingsMenu
                     new ConfigDescription("A restart-required copy of Short, to check the list RequiresRestart path."),
                     new ConfigScope(ConfigAccessLevel.Client, requireReload: true)
                 );
-                // A token WIDER than the row can render, which no other fixture provides. The base
-                // class trims any active row past maxWidth on sight, so this one shows up already
-                // shortened — and committing that shortening would truncate the value in what, for a
-                // real mod, is its own config file. Guarded by ListDetailItem.CommittedText; this
-                // entry is how you check that the guard actually holds.
+                // A token WIDER than the row can render, which no other fixture provides. This used to
+                // test a truncation guard: the base class trimmed any active row past maxWidth on
+                // sight, so this token would show up already shortened, and committing that shortening
+                // would have truncated the value in what, for a real mod, is its own config file. That
+                // trim no longer runs (ListDetailItem.maxWidth is 0 — the row now scrolls the text
+                // horizontally within the field mask instead of cutting it, see TextFieldViewport), so
+                // this entry no longer exercises that guard directly. It still exercises the
+                // horizontal scroll against a token wider than the field, and ListDetailItem.
+                // CommittedText remains the reason an untouched long token is never rewritten even
+                // though nothing forces it to be short any more.
                 //
                 // A long identifier, of the kind HeuristicSaysList used to refuse on its old
-                // 32-character limit — it doubles as a check that such a value now reaches the
-                // drill-in as an editable list rather than a read-only Info row.
+                // 32-character limit — it doubles as a check that such a value reaches the drill-in as
+                // an editable list rather than a read-only Info row.
                 //
-                // Neighbours on both sides so both halves of the truncation guard are visible at
-                // once: the untouched ones must survive because the value is assembled from the row
-                // list, and the long one must survive because no keystroke ever changed it.
+                // Neighbours on both sides so both halves of the (now largely historical) truncation
+                // guard are visible at once: the untouched ones must survive because the value is
+                // assembled from the row list, and the long one must survive intact now that scrolling,
+                // not trimming, is what keeps it on screen.
                 testFile.Bind(
                     "Settings",
                     "Overlong",
                     "Before, AncientGuardianStatueFragmentPolishedObsidianVariantLarge, After",
-                    new ConfigDescription("A token far wider than the row can render, to check that display-side truncation is not written back."),
+                    new ConfigDescription(
+                        "A token far wider than the row can render, to check it scrolls horizontally instead of being truncated, and that an untouched long token is never rewritten."
+                    ),
                     clientScope
                 );
                 // Prose that happens to contain a comma — the case the length limit was meant to

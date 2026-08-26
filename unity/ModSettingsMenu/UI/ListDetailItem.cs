@@ -65,35 +65,43 @@ namespace ModSettingsMenu.UI
         // a different type entirely (ListAddRow), so -1 no longer means "this is the button" but
         // "this row was never bound", which is a fault worth a log line rather than a silent skip.
         // The screen writes this row's committed text back at this index; every OTHER row's text is
-        // read from that list and never off the screen. That closes one half of the width-trim
-        // hazard described at CommittedText below — the untouched neighbours. CommittedText closes
-        // the other half, this row itself.
+        // read from that list and never off the screen. That closed one half of the (now historical
+        // — see below) width-trim hazard described at CommittedText below — the untouched
+        // neighbours. CommittedText closes the other half, this row itself.
         private int _rowIndex = -1;
         public int RowIndex => _rowIndex;
 
         // The token this row was seeded with, and whether a keystroke has changed the text since.
         //
-        // These exist because the base class SHORTENS the row's text behind our back:
-        // RadicalMenuOptionTextInput.Update trims anything wider than maxWidth, on every active row,
-        // whether or not it is being edited. Committing GetInputText() would therefore write that
-        // shortening into the owning mod's config file — a value silently truncated by nothing more
-        // than looking at it. A text comparison cannot catch this, because a trimmed value and a
-        // value the user backspaced look identical.
+        // These existed because the base class used to SHORTEN the row's text behind our back:
+        // RadicalMenuOptionTextInput.Update's `while (maxWidth > 0f && …)` trim (Pug.Other:343398)
+        // fired on every active row, whether or not it was being edited, whenever maxWidth was
+        // positive. It no longer applies: ListDetailItem.maxWidth is 0 since the field mask took
+        // over defining the row's visible window (see UpdateClickCollider's comment below), and the
+        // trim's own guard clause switches off cleanly at that value. The fields and the guard logic
+        // below remain — as redundancy against a mechanism that no longer runs, not as an active
+        // safeguard — because the reasoning still explains why they are shaped the way they are, and
+        // dropping them would only save a few fields.
         //
-        // The TIMING can tell them apart: while this row holds activeInputField, a text change is
-        // the user's; outside that window the only thing that changes the text is the trim.
+        // Committing GetInputText() would have written that shortening into the owning mod's config
+        // file — a value silently truncated by nothing more than looking at it. A text comparison
+        // could not have caught this, because a trimmed value and a value the user backspaced look
+        // identical.
         //
-        // _textLastFrame is what makes that EDGE-triggered rather than level-triggered, and it is
-        // not redundant. Comparing the live text against _seededText instead would misfire on the
-        // very case this exists for: a token wider than the row is trimmed down over several frames
-        // BEFORE anyone touches it, so on the first active frame the live text already differs from
-        // the seed — the row would be marked edited without a single keystroke, and the trim would
-        // land in the config file after all.
+        // The TIMING told them apart: while this row holds activeInputField, a text change is the
+        // user's; outside that window the only thing that could change the text was the trim.
+        //
+        // _textLastFrame is what made that EDGE-triggered rather than level-triggered, and it was
+        // not redundant. Comparing the live text against _seededText instead would have misfired on
+        // the very case this existed for: a token wider than the row was trimmed down over several
+        // frames BEFORE anyone touched it, so on the first active frame the live text already
+        // differed from the seed — the row would have been marked edited without a single keystroke,
+        // and the trim would have landed in the config file after all.
         //
         // Seed only through SeedText, never through the inherited SetInputText: the latter leaves
-        // _seededText behind and reopens exactly that hole. (Shadowing SetInputText to redirect it
-        // would be worse — the base class calls it while typing, which would clear _edited on every
-        // keystroke.)
+        // _seededText behind and would reopen exactly that hole. (Shadowing SetInputText to redirect
+        // it would be worse — the base class calls it while typing, which would clear _edited on
+        // every keystroke.)
         private string _seededText = "";
         private string _textLastFrame = "";
         private bool _edited;
@@ -108,16 +116,17 @@ namespace ModSettingsMenu.UI
             SetInputText(_seededText);
         }
 
-        // Re-baseline the edit detector against what is actually on screen, after the base class has
-        // had a chance to trim it. Called once per row from RenderContent, i.e. after the layout
-        // pass that follows seeding.
+        // Re-baseline the edit detector against what is actually on screen, after the base class
+        // would have had a chance to trim it — moot since maxWidth: 0 (see the note above), so this
+        // call is now redundancy rather than the load-bearing step it originally was. Called once per
+        // row from RenderContent, i.e. after the layout pass that follows seeding.
         //
-        // Without this, the first frame after seeding compares the (already trimmed) live text
-        // against the untrimmed seed and would set _edited from the trim alone. That is harmless
-        // only because a row cannot own activeInputField on its creation frame — a fact that
-        // AddEmptyRow's "selected but NOT activated" choice currently guarantees. Making the
-        // baseline explicit means that choice stays a UX decision instead of quietly becoming
-        // load-bearing for data integrity.
+        // Without this, the first frame after seeding would have compared the (already trimmed) live
+        // text against the untrimmed seed and set _edited from the trim alone. That was harmless only
+        // because a row cannot own activeInputField on its creation frame — a fact that AddEmptyRow's
+        // "selected but NOT activated" choice guarantees. Making the baseline explicit meant that
+        // choice stayed a UX decision instead of quietly becoming load-bearing for data integrity —
+        // moot today, kept for the same reason the fields above are kept.
         internal void RebaselineEditDetector() => _textLastFrame = GetInputText();
 
         /// <summary>What this row may contribute to the stored value: its own text once the user has
@@ -424,12 +433,14 @@ namespace ModSettingsMenu.UI
             bool isActiveField = Manager.input.activeInputField == (object)this;
             _viewport.Tick(isActiveField);
 
-            // Distinguish the user's edits from the base class's width trim, which is the whole
-            // point of CommittedText above. A change WHILE this row holds the input field can only
-            // come from a keystroke; the trim also runs outside that window, and the moment it
-            // matters (a value too wide, shortened before anyone touched the row) is precisely
-            // outside it. Note the trim cannot masquerade as typing either: once it has cut the
-            // text down to maxWidth it stops, so it produces no further changes during an edit.
+            // Distinguish the user's edits from the base class's width trim — no longer applies since
+            // maxWidth: 0 (see the class-level note near _seededText above), so this distinction is
+            // now redundancy rather than the load-bearing check it originally was. Kept for the
+            // reasoning: a change WHILE this row holds the input field can only come from a keystroke;
+            // the trim, when it ran, also ran outside that window, and the moment it mattered (a value
+            // too wide, shortened before anyone touched the row) was precisely outside it. The trim
+            // could not masquerade as typing either: once it had cut the text down to maxWidth it
+            // stopped, so it produced no further changes during an edit.
             string now = GetInputText();
             // `|| _wasActiveField` covers the on-screen keyboard, and without it the drill-in is
             // read-only on a controller while looking editable. CK's OSK result handler
@@ -439,8 +450,9 @@ namespace ModSettingsMenu.UI
             // the frame it does, ownership is already gone. Checking the PREVIOUS frame's ownership
             // catches exactly that landing frame.
             //
-            // It does not readmit the width trim: an untouched row has both flags false, so the trim
-            // still cannot mark a row edited. And it cannot be fixed on this class instead — CK
+            // It would not have readmitted the width trim either, back when maxWidth was nonzero: an
+            // untouched row has both flags false, so even a live trim could not have marked a row
+            // edited. It could not have been intercepted from this class instead, either — CK
             // calls SetInputText and Deactivate through InputManager.TextInputInterface, and
             // RadicalMenuOptionTextInput implements both non-virtually, so a shadowing member here
             // would never be dispatched.
