@@ -112,8 +112,28 @@ namespace ModSettingsMenu.UI
             }
 
             var t = _text.transform;
-            if (!Mathf.Approximately(t.localPosition.x, offset))
-                t.localPosition = new Vector3(offset, t.localPosition.y, t.localPosition.z);
+            float delta = offset - t.localPosition.x;
+            if (Mathf.Approximately(delta, 0f))
+                return;
+            t.localPosition = new Vector3(offset, t.localPosition.y, t.localPosition.z);
+
+            // Keep the blinker in step WITHIN this frame. base.Update() (Pug.Other:343386-343388)
+            // placed it from the text's position as it stood at the START of the frame — i.e. before
+            // the move above — and CaretLocalX is exactly the difference between the blinker and the
+            // text transform, so without this it reads wrong by `delta` until the next base.Update().
+            // Hand-typing leaves several frames between keystrokes for that next Update to catch up;
+            // a held arrow key at the OS repeat rate, in a field already scrolled past its width, can
+            // land a MenuManager.HandleTypingInput read (Pug.Other:269535-269555) inside that window
+            // and insert at the wrong index — the same class of bug the caret-insert rewrite closed.
+            //
+            // This is a WITHIN-FRAME correction, not an accumulating one: base.Update() overwrites
+            // the blinker's position ABSOLUTELY from currentCharIndex every frame, before this method
+            // ever runs, so next frame discards this nudge and recomputes fresh — it cannot drift.
+            if (_blinker != null)
+            {
+                var b = _blinker.transform;
+                b.position = new Vector3(b.position.x + delta, b.position.y, b.position.z);
+            }
         }
 
         // The field mask is a child of the row, so it scrolls out of the list with it and would
