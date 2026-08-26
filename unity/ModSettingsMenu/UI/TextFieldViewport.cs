@@ -122,6 +122,15 @@ namespace ModSettingsMenu.UI
         // whole number; 1.005 makes that avoidance deliberate and keeps it small.
         private const float CaretMarginUnits = 1.005f;
 
+        // Same off-grid reasoning as CaretMarginUnits, applied to the OTHER place ApplyOffset can
+        // land the offset: the end-of-text scroll clamp below. _text.dimensions.width is derived
+        // from the same whole-pixel glyph metrics as localCharacterEndPositions, so an UNNUDGED
+        // "scroll until the text's own right edge meets the field's" (textWidth - _fieldWidth, both
+        // whole numbers of pixels) would land exactly on a texel boundary — the fragmentation bug
+        // again, just concentrated at the one caret position instead of spread across the field.
+        // Same fix, same already-verified-imperceptible magnitude, applied to the other clamp.
+        private const float EndOfTextNudge = 0.005f;
+
         // Ported from ChatWindow.AdjustInputFieldPosition (Pug.Other:317599), which is CK's own
         // horizontal scroll. Vanilla follows the text END because chat only appends — its
         // MoveCharMarker has an empty body. A row's caret can sit anywhere, so this follows the
@@ -145,7 +154,16 @@ namespace ModSettingsMenu.UI
             if (isActive && _blinker != null)
             {
                 float caret = CaretLocalX;
-                offset = -1f * Mathf.Max(0f, caret - _fieldWidth + CaretMarginUnits);
+                // rawScroll is how far left the caret-follow above WANTS to scroll; unclamped, it
+                // keeps growing for as long as the caret does, well past the point where there is
+                // any more text to reveal. maxScroll is how far there actually IS to scroll — once
+                // the text's own right edge has met the field's, scrolling further only exposes
+                // blank space behind it. Clamping to the smaller of the two lets the text's content
+                // reach the edge at the end, instead of leaving a permanent CaretMarginUnits-wide gap
+                // behind the last character.
+                float rawScroll = Mathf.Max(0f, caret - _fieldWidth + CaretMarginUnits);
+                float maxScroll = Mathf.Max(0f, _text.dimensions.width - _fieldWidth + EndOfTextNudge);
+                offset = -1f * Mathf.Min(rawScroll, maxScroll);
             }
 
             var t = _text.transform;
