@@ -357,9 +357,14 @@ namespace ModSettingsMenu.UI
         {
             base.Update();
             UpdateClickCollider();
-            _viewport.Tick();
 
+            // Computed before Tick, not after: the viewport needs to know whether THIS row is the
+            // one being edited to decide between following the caret and resting at the text start
+            // (see TextFieldViewport.ApplyOffset) — an untouched row's own currentCharIndex sits at
+            // its text's end (SetInputText's doing), so without this an unfocused row would scroll
+            // to its end instead of showing from the beginning.
             bool isActiveField = Manager.input.activeInputField == (object)this;
+            _viewport.Tick(isActiveField);
 
             // Distinguish the user's edits from the base class's width trim, which is the whole
             // point of CommittedText above. A change WHILE this row holds the input field can only
