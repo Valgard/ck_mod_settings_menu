@@ -254,14 +254,32 @@ namespace ModSettingsMenu
             if (string.IsNullOrEmpty(s))
                 return false;
 
+            var text = row.pugText;
+            string current = text.GetText();
+
+            // Cap the TOTAL length against MaxCharactersForOnScreenKeyboard (255, serialized on the
+            // row's prefab) — the number is not invented here, it is the same field the on-screen-
+            // keyboard path already enforces (Manager.platform.platformImpl.GetControllerTextInput
+            // is handed this exact property, Pug.Other:269617). Vanilla's own width rejection is what
+            // this whole prefix removed (see the note above AppendString), and removing it without
+            // replacing it left the keyboard path uncapped while the OSK path stayed capped at 255 —
+            // an accidental Ctrl+V then writes an unbounded paste whole into a foreign mod's
+            // config.cfg. Truncate the APPENDED string to what still fits, rather than rejecting the
+            // whole keystroke: a silent full-width rejection is the exact failure this prefix exists
+            // to eliminate (vanilla's own `if (dimensions.width > maxWidth)` rollback, Pug.Other:
+            // 343446), and it would be one for a paste too.
+            int room = Mathf.Max(0, __instance.MaxCharactersForOnScreenKeyboard - current.Length);
+            if (s.Length > room)
+                s = s.Substring(0, room);
+            if (string.IsNullOrEmpty(s))
+                return false;
+
             // Insert AT the caret instead of always at the text end. currentCharIndex is private on
             // the base class, so the caret position is recovered from the blinker via
             // TextFieldViewport.CaretIndex rather than read directly. MoveCharMarker below is
             // relative (Pug.Other:343455): the caret was at `at`, the text just grew by s.Length
             // there, so a +s.Length relative move lands on the right side of what was typed —
             // whether or not `at` was the end of the string.
-            var text = row.pugText;
-            string current = text.GetText();
             int at = Mathf.Clamp(row.Viewport.CaretIndex, 0, current.Length);
             text.SetText(current.Insert(at, s));
             text.Render(rewindEffectAnims: false);
