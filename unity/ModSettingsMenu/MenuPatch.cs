@@ -202,5 +202,41 @@ namespace ModSettingsMenu
                 row.Owner.OnRowTextCommitted(row);
             }
         }
+
+        // RadicalMenuOptionTextInput enforces maxWidth in two places, and only one is gated on it.
+        // Update's per-frame trim (Pug.Other:343398) is `while (maxWidth > 0f && …)` and switches off
+        // cleanly at 0. AppendString's reject (Pug.Other:343446) is a bare
+        // `if (pugText.dimensions.width > maxWidth)` — at maxWidth 0 that is true for every non-empty
+        // string. Our drill-in rows run at maxWidth 0 on purpose (the field is meant to hold more text
+        // than it shows, not less), which without this prefix means every keystroke gets appended,
+        // found "too wide", and rolled back — the field refuses all input.
+        //
+        // Only ListDetailItem rows are redirected; every other text field in the game (character name,
+        // chat, …) keeps vanilla's width-capped behaviour untouched.
+        [HarmonyPatch(typeof(RadicalMenuOptionTextInput), nameof(RadicalMenuOptionTextInput.AppendString)), HarmonyPrefix]
+        public static bool RadicalMenuOptionTextInput_AppendString(RadicalMenuOptionTextInput __instance, string s)
+        {
+            if (__instance is not ModSettingsMenu.UI.ListDetailItem)
+                return true;
+
+            // Same filtering the base class does — trim, newline strip, whitelist — minus the width
+            // rejection. Our rows ship an empty characterWhiteList (prefab-verified), so only the trim
+            // and newline rules can actually change anything here.
+            if (__instance.trim)
+                s = s.Trim();
+            if (__instance.dontAllowNewLines)
+                s = s.Replace("\n", "").Replace("\r", "");
+            if (string.IsNullOrEmpty(s))
+                return false;
+
+            var text = __instance.pugText;
+            text.SetText(text.GetText() + s);
+            text.Render(rewindEffectAnims: false);
+            // currentCharIndex is private on the base class, so the caret is moved through the public
+            // clamped API rather than assigned directly: MoveCharMarker is relative (Pug.Other:343455).
+            __instance.MoveCharMarker(s.Length);
+            __instance.WasAutoActivated = false;
+            return false;
+        }
     }
 }
