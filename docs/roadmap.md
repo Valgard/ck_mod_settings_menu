@@ -830,6 +830,19 @@ handler, so only the call's *source* can separate "the player just typed this" f
   typing. `ShakeAndClear` despite its name clears only its own coroutine handle,
   not the text. Carried over 2026-08-23 from the drill-in-frame work, which
   shipped the rest of that section.
+- **Read `currentCharIndex` through `API.Reflection` instead of reconstructing
+  it.** The drill-in derives the caret's character index from the blinker's
+  position, which is exact only while `PugText`'s glyph count matches the
+  string's — and `TextFieldViewport.IndexSpaceIsSound` exists for no other reason
+  than to catch the four ways it does not. The counter itself turns out to be
+  reachable: `API.Reflection`'s `GetMembersChecked` / `GetValueChecked` get at a
+  private member legally inside the Roslyn sandbox (`docs/ck/sandbox.md`
+  § "Reaching a private member"), which the design took for impossible. Reading
+  it makes the index authoritative and the soundness check unnecessary. Not free:
+  three callers plus the guard, `API.Reflection` is used nowhere in this repo yet,
+  and it would run on every keystroke — measure before committing to it. The
+  blinker's position stays either way, because the scroll offset needs it. Found
+  2026-08-27, after the feature shipped.
 - **Holding a word-jump key crawls after the first jump.** Vanilla's arrow branch
   repeats on a cooldown (`MenuManager.IsKeyDown` is `GetKeyDown(k) || (GetKey(k)
   && cooldown elapsed)`), while the word-jump postfix triggers on
