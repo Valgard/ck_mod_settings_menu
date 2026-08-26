@@ -150,23 +150,53 @@ namespace ModSettingsMenu.UI
             if (_text == null)
                 return;
 
+            var t = _text.transform;
+
             float offset = 0f;
             if (isActive && _blinker != null)
             {
                 float caret = CaretLocalX;
-                // rawScroll is how far left the caret-follow above WANTS to scroll; unclamped, it
-                // keeps growing for as long as the caret does, well past the point where there is
-                // any more text to reveal. maxScroll is how far there actually IS to scroll — once
-                // the text's own right edge has met the field's, scrolling further only exposes
-                // blank space behind it. Clamping to the smaller of the two lets the text's content
-                // reach the edge at the end, instead of leaving a permanent CaretMarginUnits-wide gap
-                // behind the last character.
-                float rawScroll = Mathf.Max(0f, caret - _fieldWidth + CaretMarginUnits);
+
+                // A viewport is STATEFUL, and that is the whole of this method's design. Deriving the
+                // offset as a pure function of the caret — what this did until now — pins the caret to
+                // exactly _fieldWidth - CaretMarginUnits, roughly one character from the right edge,
+                // for every caret position once scrolling engages at all: correct while typing, wrong
+                // for every other way the caret moves. A word jump backwards into the middle of a long
+                // token (Alt+Left, the reason word navigation exists here) then showed the caret hard
+                // against the right edge with none of the text that FOLLOWS it visible, which is the
+                // opposite of what "jump back to look at that" is for.
+                //
+                // The state is read back off the transform this method writes, deliberately, rather
+                // than mirrored into a field: the transform is the only thing on screen, so a second
+                // copy could only ever disagree with it — after a rebind, a rebuild, or the isActive
+                // reset above, all of which change the offset without going through this branch.
+                float scroll = -t.localPosition.x;
+                float caretInField = caret - scroll;
+
+                // Hold while the caret is inside the window, move only far enough to bring it back in
+                // when it leaves. Both branches place the caret CaretMarginUnits inside the edge it
+                // crossed, so a caret that keeps travelling in one direction keeps the window sliding
+                // by exactly its own steps, and a reversal costs no motion at all until it reaches the
+                // far margin. The left branch additionally keeps the odd margin for the same reason
+                // the right one does, not for symmetry's sake: caret positions are whole pixels, so a
+                // `caret - 1` there would land this offset EXACTLY on a 1/16 texel boundary and
+                // fragment the point-filtered glyphs (see CaretMarginUnits). The .005 is what carries
+                // this second code path off the grid too — verified by enumerating both branches and
+                // both clamps across the field's whole realistic range.
+                if (caretInField > _fieldWidth - CaretMarginUnits)
+                    scroll = caret - _fieldWidth + CaretMarginUnits;
+                else if (caretInField < CaretMarginUnits)
+                    scroll = caret - CaretMarginUnits;
+
+                // Clamped every frame, not just when a branch fired: the held scroll can fall out of
+                // range without the caret moving at all, when the text behind it shrinks under a
+                // backspace. maxScroll is how far there actually IS to scroll — once the text's own
+                // right edge has met the field's, scrolling further only exposes blank space behind
+                // it — and the lower bound stops the left branch from scrolling before the text start.
                 float maxScroll = Mathf.Max(0f, _text.dimensions.width - _fieldWidth + EndOfTextNudge);
-                offset = -1f * Mathf.Min(rawScroll, maxScroll);
+                offset = -1f * Mathf.Clamp(scroll, 0f, maxScroll);
             }
 
-            var t = _text.transform;
             float delta = offset - t.localPosition.x;
             if (Mathf.Approximately(delta, 0f))
                 return;
