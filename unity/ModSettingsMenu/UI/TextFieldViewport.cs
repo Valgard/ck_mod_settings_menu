@@ -12,6 +12,7 @@ namespace ModSettingsMenu.UI
         private PugText _text;
         private SpriteMask _fieldMask;
         private SpriteMask _viewportMask;
+        private CharacterMarkBlinker _blinker;
         private float _fieldWidth;
         private float _fieldHeight;
         private float _fieldOriginX;
@@ -24,11 +25,12 @@ namespace ModSettingsMenu.UI
         //
         // Read once, here: re-fitting moves the mask every frame, so its live transform stops being
         // a witness to its authored geometry after the first Tick.
-        public void Bind(PugText text, SpriteMask fieldMask, SpriteMask viewportMask)
+        public void Bind(PugText text, SpriteMask fieldMask, SpriteMask viewportMask, CharacterMarkBlinker blinker)
         {
             _text = text;
             _fieldMask = fieldMask;
             _viewportMask = viewportMask;
+            _blinker = blinker;
             var t = fieldMask.transform;
             _fieldWidth = t.localScale.x;
             _fieldHeight = t.localScale.y;
@@ -39,6 +41,60 @@ namespace ModSettingsMenu.UI
         public void Tick()
         {
             FitMaskToViewport();
+            ApplyOffset();
+        }
+
+        /// <summary>The caret's x in text-local space — independent of the offset applied below,
+        /// which is what keeps the calculation non-circular.</summary>
+        public float CaretLocalX => _blinker != null && _text != null ? _blinker.transform.position.x - _text.transform.position.x : 0f;
+
+        /// <summary>The caret's character index, recovered from the blinker's position because the
+        /// base class keeps currentCharIndex private. localCharacterEndPositions is public and is
+        /// the same list CK's own Update uses to place that blinker.</summary>
+        public int CaretIndex
+        {
+            get
+            {
+                var ends = _text != null ? _text.localCharacterEndPositions : null;
+                if (ends == null || ends.Count == 0)
+                    return 0;
+                float target = CaretLocalX - _text.dimensions.xMin - 1f / 32f;
+                int best = 0;
+                float bestDelta = Mathf.Abs(target);
+                for (int i = 0; i < ends.Count; i++)
+                {
+                    float delta = Mathf.Abs(ends[i].x - target);
+                    if (delta < bestDelta)
+                    {
+                        bestDelta = delta;
+                        best = i + 1;
+                    }
+                }
+                return best;
+            }
+        }
+
+        // Ported from ChatWindow.AdjustInputFieldPosition (Pug.Other:317599), which is CK's own
+        // horizontal scroll. Vanilla follows the text END because chat only appends — its
+        // MoveCharMarker has an empty body. A row's caret can sit anywhere, so this follows the
+        // caret instead.
+        //
+        // currentCharIndex is private on the base class (Pug.Other:343320), but Update writes the
+        // caret's world x into the public blinker every frame (Pug.Other:343386-343388). The
+        // viewport needs the position, not the index, so no access DLL is required.
+        private void ApplyOffset()
+        {
+            if (_text == null || _blinker == null)
+                return;
+
+            float caret = CaretLocalX;
+            // Keep a margin so the caret is never flush against the edge while typing.
+            float margin = _fieldWidth / 5f;
+            float offset = -1f * Mathf.Max(0f, caret - _fieldWidth + margin);
+
+            var t = _text.transform;
+            if (!Mathf.Approximately(t.localPosition.x, offset))
+                t.localPosition = new Vector3(offset, t.localPosition.y, t.localPosition.z);
         }
 
         // The field mask is a child of the row, so it scrolls out of the list with it and would
