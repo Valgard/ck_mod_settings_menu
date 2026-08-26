@@ -45,6 +45,13 @@ export CK_MODIO_TYPE="Visual|Library|Quality of Life"
 # spaces. Read by utils/discord_post.py; Discord allows at most five.
 export CK_DISCORD_TAGS="Utilities|Misc / Other"
 
+# Images and clips for the post, beyond the logo — PIPE-separated, in the order
+# they should appear. A relative path becomes an attachment, an http(s) URL
+# becomes its own follow-up message (the only route for a clip past Discord's
+# upload ceiling). Empty is legitimate here, unlike CK_DISCORD_TAGS: it means
+# the mod has nothing to show beyond its logo.
+export CK_DISCORD_MEDIA="sources/core_keeper_mod_settings_menu_main_menu.png|sources/core_keeper_mod_settings_menu_settings_menu.png|sources/core_keeper_mod_settings_menu_mod_settings1.png|sources/core_keeper_mod_settings_menu_mod_settings2.png"
+
 # --- Localisation (read by utils/CLIBuildHelper.cs -> LocalizationGenerator.GenerateFromEnv) ---
 # LOC_YAML lives OUTSIDE unity/ so the ModBuilder doesn't pack the source yaml.
 # LOC_TABLE is the shared CK language-address table, inherited from the parent.
