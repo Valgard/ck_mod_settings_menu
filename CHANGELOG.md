@@ -27,6 +27,13 @@ entry is the version published to mod.io; its body is the modfile changelog.
   stay blank while you work on the others — blank entries are simply not saved.
   A read-only list (server-locked or view-only) still shows every entry, just
   without an edit affordance and without the add button.
+- **Fixed: editing a long list entry silently discarded part of it.** An entry
+  wider than its row was cut down to what fitted on screen, and typing in it
+  saved that shortened text back — the rest was gone, with nothing to indicate
+  it had ever been there. Entries now scroll sideways instead: the whole value
+  stays intact however long it is, the view follows the cursor as you move
+  through it, and you can jump to the start or end of the line, move a word at
+  a time, or click straight to the spot you want to edit.
 - **A setting you cannot change still looks like itself.** A read-only value
   used to collapse into a plain text row; it now keeps its native widget — a
   locked toggle still reads as on/off, a locked slider still shows its
