@@ -121,6 +121,18 @@ namespace ModSettingsMenu
                     new ConfigDescription("Prose with a comma, to check it is not mistaken for a list."),
                     clientScope
                 );
+                // Word jumps need spaces, and none can be typed into a row (trim: 1 drops a lone
+                // space, matching vanilla). A value loaded from a config may well contain them,
+                // which is the case Ctrl/Alt+Arrow actually serves — so exercise it from here.
+                // Two words per token deliberately: HeuristicSaysList refuses anything longer,
+                // and a three-word token would arrive as a read-only Info row instead.
+                testFile.Bind(
+                    "Settings",
+                    "WithSpaces",
+                    "Item One, Item Two, Big Chest",
+                    new ConfigDescription("Tokens containing spaces, to exercise word jumps."),
+                    clientScope
+                );
             }
         }
 
