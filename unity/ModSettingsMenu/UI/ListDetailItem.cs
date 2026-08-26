@@ -183,9 +183,31 @@ namespace ModSettingsMenu.UI
             // The row's own horizontal clip, fitted against the list's viewport mask every frame
             // (Update -> _viewport.Tick) so it scrolls out cleanly instead of clipping past the list
             // edge. screenMask is looked up by name because ListDetailScreen owns it, not this row.
+            //
+            // Both references are logged loudly when missing rather than left to degrade silently.
+            // An unwired fieldMask leaves _viewport unbound, so CaretIndexFromLocalX (which needs
+            // _text) keeps returning 0 — every keystroke then inserts at the front instead of the
+            // caret, writing text backwards into a foreign mod's config. An unwired/renamed
+            // ViewportMask leaves screenMask null, so TextFieldViewport.FitMaskToViewport returns
+            // early every frame and the row's own mask never re-fits — it keeps whatever clip the
+            // prefab authored, clipping outside the list as it scrolls.
             var screenMask = _owner != null ? _owner.transform.Find("ViewportMask")?.GetComponent<SpriteMask>() : null;
-            if (fieldMask != null)
-                _viewport.Bind(pugText, fieldMask, screenMask, characterMarkBlinker);
+            if (fieldMask == null)
+            {
+                Debug.LogWarning(
+                    "[ModSettingsMenu] ListDetailItem.fieldMask is unwired on this row's prefab — the horizontal "
+                        + "viewport never binds, so typing inserts at index 0 instead of the caret."
+                );
+                return;
+            }
+            if (screenMask == null)
+            {
+                Debug.LogWarning(
+                    "[ModSettingsMenu] ListDetailScreen has no 'ViewportMask' SpriteMask (renamed or removed?) — "
+                        + "the row's field mask can't fit itself to the list viewport and will keep clipping outside it."
+                );
+            }
+            _viewport.Bind(pugText, fieldMask, screenMask, characterMarkBlinker);
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
