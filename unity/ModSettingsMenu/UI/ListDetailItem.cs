@@ -32,6 +32,11 @@ namespace ModSettingsMenu.UI
         [SerializeField]
         private SpriteRenderer fieldBorder;
 
+        // The row's own horizontal clip, authored in the prefab beside the frame. Serialized for
+        // the same reason fieldBorder is: it is a prefab reference, not a runtime identity.
+        [SerializeField]
+        private SpriteMask fieldMask;
+
         // Owning screen and row identity — private + Bind(), not raw public fields, matching
         // SettingWidget.Bind/ListWidget.Bind's established idiom elsewhere in this framework.
         private ListDetailScreen _owner;
@@ -174,6 +179,13 @@ namespace ModSettingsMenu.UI
             var focus = selectedMarker != null ? selectedMarker.GetComponent<SpriteRenderer>() : null;
             if (focus != null)
                 focus.enabled = !readOnly;
+
+            // The row's own horizontal clip, fitted against the list's viewport mask every frame
+            // (Update -> _viewport.Tick) so it scrolls out cleanly instead of clipping past the list
+            // edge. screenMask is looked up by name because ListDetailScreen owns it, not this row.
+            var screenMask = _owner != null ? _owner.transform.Find("ViewportMask")?.GetComponent<SpriteMask>() : null;
+            if (fieldMask != null)
+                _viewport.Bind(pugText, fieldMask, screenMask);
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
@@ -332,10 +344,15 @@ namespace ModSettingsMenu.UI
         // once, on that transition, instead of on every hover-driven OnDeselected.
         private bool _wasActiveField;
 
+        // Keeps this row's field mask inside the list viewport as it scrolls. See TextFieldViewport
+        // for why this is a standalone helper rather than logic inlined here.
+        private readonly TextFieldViewport _viewport = new TextFieldViewport();
+
         protected override void Update()
         {
             base.Update();
             UpdateClickCollider();
+            _viewport.Tick();
 
             bool isActiveField = Manager.input.activeInputField == (object)this;
 

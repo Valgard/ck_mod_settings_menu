@@ -1658,6 +1658,7 @@ MonoBehaviour:
   shakeMagnitude: 0.0625
   shakesPerSecond: 20
   fieldBorder: {fileID: 4990003840830125330}
+  fieldMask: {fileID: 1961510083745616896}
 --- !u!1 &675010273461154613
 GameObject:
   m_ObjectHideFlags: 0
