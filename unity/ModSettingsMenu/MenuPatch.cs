@@ -279,18 +279,38 @@ namespace ModSettingsMenu
             // rejection, so it has to carry the insertion point over too; an earlier draft appended
             // at the end and was wrong for exactly that reason. The actual trade sits elsewhere and
             // is worth naming, because it is where this can still go wrong: vanilla reads its own
-            // private currentCharIndex, while this reconstructs the index from the caret's POSITION
-            // (TextFieldViewport.CaretIndex), the sandbox forbidding reflection. An authoritative
-            // source swapped for a derived one — exact only while PugText's glyph count and the
-            // string's character count agree, which every glyphless character breaks.
-            // MoveCharMarker below is
-            // relative (Pug.Other:343455): the caret was at `at`, the text just grew by s.Length
-            // there, so a +s.Length relative move lands on the right side of what was typed —
-            // whether or not `at` was the end of the string.
-            int at = Mathf.Clamp(row.Viewport.CaretIndex, 0, current.Length);
+            // private currentCharIndex, while this reconstructs the index from the caret's POSITION,
+            // the sandbox forbidding reflection. An authoritative source swapped for a derived one —
+            // exact only while PugText's glyph count and the string's character count agree, which
+            // every glyphless character breaks. TryCaretIndex is that agreement, checked rather than
+            // assumed (TextFieldViewport.IndexSpaceIsSound has the mechanisms).
+            //
+            // When it cannot vouch for the index, append at the END. That is not a made-up fallback:
+            // it is the shape vanilla's own AppendString takes whenever the caret sits at the end
+            // (Pug.Other:343436-343438), and it is the only insertion point that can never REORDER
+            // what is already there. Inserting at a wrong index does — and the worst wrong index is
+            // the one an empty glyph list produces, 0, where every keystroke lands in front of the
+            // last and "abc" is stored as "cba" in a foreign mod's config file. Nothing is dropped on
+            // either path; only where the typed text lands differs, and that the player can see.
+            //
+            // The 255-cap above applies to both paths on purpose — it is measured against the total
+            // length, which is unaffected by WHERE the text goes in.
+            //
+            // No clamp on `at`: the sound path already bounds it, because soundness is measured
+            // against `current` itself (the viewport is bound to this very PugText), and a clamp is
+            // exactly how an untrusted index turns into index 0 rather than into a refusal.
+            //
+            // MoveCharMarker is relative and clamped (Pug.Other:343455-343458), so the two paths need
+            // different arguments. At the caret: the caret was at `at` and the text grew by s.Length
+            // there, so +s.Length lands on the right side of what was typed. At the end: vanilla's
+            // currentCharIndex is unknown and unreachable here, so a relative step cannot be aimed —
+            // a full-length forward move lets vanilla's own clamp put the caret on the text end,
+            // which is where the insertion happened. Same trick the Home/End handler below uses.
+            bool atCaret = row.Viewport.TryCaretIndex(out int caret);
+            int at = atCaret ? caret : current.Length;
             text.SetText(current.Insert(at, s));
             text.Render(rewindEffectAnims: false);
-            row.MoveCharMarker(s.Length);
+            row.MoveCharMarker(atCaret ? s.Length : text.GetTextLength());
             return false;
         }
 
@@ -378,7 +398,15 @@ namespace ModSettingsMenu
             // so no shift happens at all, and this compensation then over-corrects by one. Not
             // handled: it would cost a second guard for a two-key combination nobody performs
             // deliberately, and the damage is a misplaced caret, not lost text.
-            int current = row.Viewport.CaretIndex;
+            //
+            // No index, no jump. Vanilla's own single-character move has already run for this frame
+            // and stands on its own, so doing nothing here leaves the caret one character from where
+            // it was — a weaker version of what was asked for, and nothing else. The alternative is
+            // worse in kind, not just in degree: WordBoundary would scan the string from a position
+            // the caret is not at, and MoveCharMarker would then apply that distance as a relative
+            // step, so the caret would land somewhere with no relation to any word.
+            if (!row.Viewport.TryCaretIndex(out int current))
+                return;
             int vanillaShift = (direction < 0 ? current > 0 : current < length) ? direction : 0;
             row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current - vanillaShift);
         }

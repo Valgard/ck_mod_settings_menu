@@ -851,7 +851,7 @@ handler, so only the call's *source* can separate "the player just typed this" f
   should ask there. Dead today: the branch runs only on a mis-wired prefab. Found
   by the review gate 2026-08-26.
 - **`maxScroll` and the caret reader disagree about `dimensions.xMin`.**
-  `CaretIndexFromLocalX` subtracts it, matching vanilla's own blinker formula;
+  `TryCaretIndexFromLocalX` subtracts it, matching vanilla's own blinker formula;
   `ApplyOffset`'s end-of-text clamp does not. The two agree while the row's text
   is left-aligned, which it is — change that and the clamp silently stops short
   of the text end or overshoots it. `_text.dimensions.xMin + _text.dimensions.width
