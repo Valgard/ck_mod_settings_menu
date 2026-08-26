@@ -281,6 +281,17 @@ namespace ModSettingsMenu.UI
             if (Manager.input.activeInputField != null && Manager.input.activeInputField != (object)this)
                 return;
             base.OnLeftClicked(mod1, mod2);
+
+            // Only meaningful once this row owns the field; before that the click is what activates
+            // it, and the caret belongs at the end.
+            if (Manager.input.activeInputField == (object)this)
+            {
+                // Via the uiCamera, which MenuPatch already uses as this UI's parent — UIMouse
+                // exposes a pointer Transform but no world-position accessor.
+                var world = Manager.camera.uiCamera.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0f));
+                int target = _viewport.CaretIndexFromLocalX(world.x - pugText.transform.position.x);
+                MoveCharMarker(target - _viewport.CaretIndexFromLocalX(_viewport.CaretLocalX));
+            }
         }
 
         // A fixed row width instead of the base RadicalMenuOption behavior (text-rendered width
@@ -365,6 +376,8 @@ namespace ModSettingsMenu.UI
             // to its end instead of showing from the beginning.
             bool isActiveField = Manager.input.activeInputField == (object)this;
             _viewport.Tick(isActiveField);
+            if (isActiveField)
+                HandleCursorKeys();
 
             // Distinguish the user's edits from the base class's width trim, which is the whole
             // point of CommittedText above. A change WHILE this row holds the input field can only
@@ -397,6 +410,42 @@ namespace ModSettingsMenu.UI
             if (_wasActiveField && !isActiveField)
                 _owner?.OnRowTextCommitted(this);
             _wasActiveField = isActiveField;
+        }
+
+        // Home/End need no index at all: MoveCharMarker is relative AND clamped
+        // (Pug.Other:343455), so a full-length move in either direction lands exactly on the end.
+        // Word jumps and click-to-place do need one, recovered from the caret's position.
+        //
+        // Keyboard/mouse only, deliberately: on a controller all text arrives through the on-screen
+        // keyboard in one callback, with the caret already at the end. The caller already gates this
+        // on isActiveField, so no activeInputField check is repeated here.
+        private void HandleCursorKeys()
+        {
+            if (!Manager.input.SystemPrefersKeyboardAndMouse())
+                return;
+
+            int length = pugText.GetTextLength();
+            if (Input.GetKeyDown(KeyCode.Home))
+            {
+                MoveCharMarker(-length);
+                return;
+            }
+            if (Input.GetKeyDown(KeyCode.End))
+            {
+                MoveCharMarker(length);
+                return;
+            }
+            if (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl))
+                return;
+
+            int direction =
+                Input.GetKeyDown(KeyCode.LeftArrow) ? -1
+                : Input.GetKeyDown(KeyCode.RightArrow) ? 1
+                : 0;
+            if (direction == 0)
+                return;
+            int current = _viewport.CaretIndexFromLocalX(_viewport.CaretLocalX);
+            MoveCharMarker(_viewport.WordBoundary(current, direction) - current);
         }
     }
 }
