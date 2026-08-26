@@ -359,15 +359,15 @@ namespace ModSettingsMenu.UI
             _rows.Add("");
             _rebuildPending = true;
             // The new row lands last in _rows, and the button follows it — so this index is the
-            // new row, not the button. Selected but NOT activated, and that choice is now
-            // LOAD-BEARING twice over: entering edit mode here would raise the on-screen keyboard on
-            // a controller unasked, and it would also let the base class's width trim masquerade as
-            // a keystroke. SeedText baselines the edit detector against the UNTRIMMED token, and
-            // RenderContent re-baselines it against what actually rendered — but only because no row
-            // can be activeInputField on the frame it is created. Auto-activating here would run the
-            // trim inside an active edit window, set _edited from a change the user never made, and
-            // commit the truncation. Reversing this line therefore needs the detector reworked, not
-            // just a controller check.
+            // new row, not the button. Selected but NOT activated, and that choice is LOAD-BEARING
+            // for the on-screen keyboard: entering edit mode here would raise it on a controller
+            // unasked. It used to be load-bearing a second way too — the base class's width trim
+            // (Pug.Other:343398) could have masqueraded as a keystroke if a row were active on its
+            // creation frame, since auto-activating would have run the trim inside an active edit
+            // window and set _edited from a change the user never made — but that trim no longer runs
+            // (ListDetailItem.maxWidth is 0; see its class-level note). SeedText/RenderContent's
+            // baseline-then-rebaseline against the (now hypothetical) trim is redundancy today, not a
+            // second reason this line can't simply be reversed.
             _pendingSelect = _rows.Count - 1;
         }
 
@@ -389,9 +389,10 @@ namespace ModSettingsMenu.UI
                 // exists so a new row kind cannot be forgotten here: a row left unmeasured keeps the
                 // prefab's renderHeightPixels of 0, which the LinearLayout collapses to nothing.
                 var row = go.GetComponent<ListDetailItem>();
-                // The row has rendered by now, so the base class has already trimmed anything too
-                // wide. Re-baseline the edit detector against what is actually on screen — see
-                // ListDetailItem.RebaselineEditDetector.
+                // The row has rendered by now, so the base class would have already trimmed anything
+                // too wide — moot since ListDetailItem.maxWidth is 0 (see its class-level note); this
+                // call is now redundancy rather than a correction. Re-baseline the edit detector
+                // against what is actually on screen anyway — see ListDetailItem.RebaselineEditDetector.
                 row?.RebaselineEditDetector();
                 int px = go.GetComponent<IListRow>()?.RowHeightPx ?? 0;
                 var wrap = go.GetComponent<WrapperUIComponent>();
@@ -486,8 +487,10 @@ namespace ModSettingsMenu.UI
         // Called from two places, neither of them OnDeselected (that fires on mere mouse hover, which
         // is exactly why the trigger moved away from it — see ListDetailItem.OnDeselected's own
         // comment): ListDetailItem.Update()'s own activeInputField-transition check, and this screen's
-        // own Deactivate() as a close-time safety net. Reads the COMMITTING row's live text (trimmed,
-        // commas stripped so a typed comma can't desync the stored split/join) back into _rows,
+        // own Deactivate() as a close-time safety net. Reads the COMMITTING row's live text
+        // (whitespace-trimmed via ListTokenizer.Sanitize, commas stripped so a typed comma can't
+        // desync the stored split/join — unrelated to the base class's own width trim discussed
+        // below, which no longer runs) back into _rows,
         // assembles the whole list from _rows, and re-persists it ONLY if it actually changed — skips
         // a no-op write (and the rebuild it would otherwise trigger) on a plain
         // activate-then-deactivate that never touched the text. The rebuild itself
@@ -503,11 +506,13 @@ namespace ModSettingsMenu.UI
             // activeInputField. Write it back at its own index, then derive the value from the
             // list.
             //
-            // Two things together keep the base class's per-frame width trim out of a third-party
-            // mod's config file: reading the other rows from _rows rather than off screen (they were
-            // never touched, so their stored text stands), and asking this row for CommittedText
-            // rather than GetInputText — which hands back the seeded token unless a keystroke
-            // actually changed it. Either alone leaves half the hazard open.
+            // Two things together used to keep the base class's per-frame width trim out of a
+            // third-party mod's config file — moot since ListDetailItem.maxWidth is 0 (see its
+            // class-level note), kept as redundancy rather than as an active safeguard: reading the
+            // other rows from _rows rather than off screen (they were never touched, so their stored
+            // text stands), and asking this row for CommittedText rather than GetInputText — which
+            // hands back the seeded token unless a keystroke actually changed it. Either alone would
+            // have left half the hazard open.
             //
             // Dropping that menuOptions walk also retires the guard it needed: the walk saw the
             // inactive itemTemplate too (RadicalMenu's own option scan includes it — see
