@@ -313,11 +313,19 @@ namespace ModSettingsMenu.UI
             // caret lands where you clicked from the first click onward, which is the intended UX.
             if (Manager.input.activeInputField == (object)this)
             {
-                // Via the uiCamera, which MenuPatch already uses as this UI's parent — UIMouse
-                // exposes a pointer Transform but no world-position accessor.
-                var world = Manager.camera.uiCamera.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0f));
-                int target = _viewport.CaretIndexFromLocalX(world.x - pugText.transform.position.x);
-                MoveCharMarker(target - _viewport.CaretIndexFromLocalX(_viewport.CaretLocalX));
+                // Manager.ui.mouse.pointer.transform.position IS a world position — this is CK's own
+                // way of reading the mouse for exactly this kind of comparison, not a workaround: CK's
+                // own UIScrollWindow.IsMouseWithinScrollArea (Pug.Other:357471-357476) compares it
+                // directly against a UI element's transform.position, and this screen implements the
+                // very IScrollable interface that method serves. The pointer is set from
+                // PugCamera.TransformMousePosition (PugRP.decompiled.cs:1854-1874), which removes
+                // integer scaling and letterboxing and rounds pixel-perfect; Camera.ScreenToWorldPoint
+                // does none of that. Under PugRP's scaled render target the two values diverge — worse
+                // away from screen centre, and changing with window size — which used to place the
+                // caret on the wrong character.
+                float worldX = Manager.ui.mouse.pointer.transform.position.x;
+                int target = _viewport.CaretIndexFromLocalX(worldX - pugText.transform.position.x);
+                MoveCharMarker(target - _viewport.CaretIndex);
             }
         }
 
