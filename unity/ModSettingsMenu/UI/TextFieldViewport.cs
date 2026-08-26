@@ -53,16 +53,28 @@ namespace ModSettingsMenu.UI
 
         /// <summary>The caret's character index, recovered from the blinker's position because the
         /// base class keeps currentCharIndex private. localCharacterEndPositions is public and is
-        /// the same list CK's own Update uses to place that blinker.</summary>
-        public int CaretIndex => CaretIndexFromLocalX(CaretLocalX);
+        /// the same list CK's own Update uses to place that blinker. False means the recovery is not
+        /// trustworthy right now — see IndexSpaceIsSound.</summary>
+        public bool TryCaretIndex(out int index) => TryCaretIndexFromLocalX(CaretLocalX, out index);
 
-        /// <summary>Recovers a character index from a position in text-local space. CaretIndex is
-        /// this asked about the caret itself; a mouse click asks about the pointer.</summary>
-        public int CaretIndexFromLocalX(float localX)
+        /// <summary>Recovers a character index from a position in text-local space. TryCaretIndex is
+        /// this asked about the caret itself; a mouse click asks about the pointer.
+        ///
+        /// A Try, not a plain int, and that shape is the point: a caller cannot use the value without
+        /// having seen the verdict. The int form this replaced could not stop a caller from using an
+        /// answer it had no business trusting, and every one of them fed it into a Mathf.Clamp —
+        /// which maps anything out of band to 0, the FRONT of the string, i.e. exactly the reversal
+        /// the verdict exists to prevent. A sentinel return would have kept that trap open.</summary>
+        public bool TryCaretIndexFromLocalX(float localX, out int index)
         {
-            var ends = _text != null ? _text.localCharacterEndPositions : null;
-            if (ends == null || ends.Count == 0)
-                return 0;
+            index = 0;
+            if (!IndexSpaceIsSound())
+                return false;
+            // Empty text is sound (see below) and 0 is its answer, but the list may still hold a
+            // PREVIOUS render's entries, so it must not be consulted here.
+            if (_text.GetTextLength() == 0)
+                return true;
+            var ends = _text.localCharacterEndPositions;
             // The blinker sits at dimensions.xMin + 1/32 plus the previous character's end, so the
             // same two terms come off again before comparing.
             float target = localX - _text.dimensions.xMin - 1f / 32f;
@@ -77,10 +89,103 @@ namespace ModSettingsMenu.UI
                     best = i + 1;
                 }
             }
-            return best;
+            index = best;
+            return true;
         }
 
-        /// <summary>Word boundaries either side of an index, for Ctrl+Arrow.</summary>
+        // Whether an index recovered from a glyph position may be used as a STRING index — decided
+        // here and nowhere else, so all three callers answer the question the same way.
+        //
+        // Vanilla never has to ask. RadicalMenuOptionTextInput holds currentCharIndex as a string
+        // index (MoveCharMarker clamps it against pugText.GetTextLength(), Pug.Other:343457-343458)
+        // and indexes localCharacterEndPositions with it directly (Pug.Other:343387). That field is
+        // private and the Roslyn sandbox forbids reflection, so this class reconstructs the index
+        // from the caret's POSITION instead — and a reconstruction rests on an assumption an
+        // authoritative read does not make: that entry k of the glyph list ends character k. This
+        // method is that assumption, written down and testable.
+        //
+        // The test is a count, and it is sufficient because the list can only ever come up SHORT.
+        // TextManager.Render walks the string it was handed and appends exactly one entry at the
+        // bottom of its loop (Pug.Other:350695); every path that leaves the bottom early costs one
+        // entry in silence — a character the font has no glyph for (Pug.Other:350600-350602), a pause
+        // sign (Pug.Other:350579-350581), a colour tag, whose `i += 2` / `i += 10` (Pug.Other:350588,
+        // 350594) swallows several characters for one entry, and the glyph or container pool running
+        // dry mid-string (Pug.Other:350534, 350609). Nothing there can add a second entry for one
+        // character, so equal counts mean every character got its own entry, in order.
+        //
+        // Compared against GetText(), NOT against displayedTextString — deliberately, even though
+        // displayedTextString is literally the string the list was built from (PugText.Render derives
+        // it from textString and then takes font.Render's own formatted result back out into the same
+        // field, Pug.Other:351867 and 351902). The callers insert into and scan GetText(), so the
+        // property they need is that the glyph space matches THAT string, and ProcessText sits
+        // between the two (Pug.Other:351731-351787), where a localisation lookup (351744), a
+        // string.Format over the format fields (351766), a capitalisation switch (351776) and
+        // textSuffix (351784) can each change the length. Testing the middle link would report sound
+        // while the link the callers actually use was broken.
+        //
+        // Empty text is sound, and it needs stating because the two counts do NOT agree there: a
+        // render of an empty string returns before font.Render ever runs (Pug.Other:351862-351866),
+        // and the Clear() just above that (Pug.Other:351855) empties the glyphs, the pooled
+        // transforms and displayedTextString but leaves localCharacterEndPositions untouched
+        // (Pug.Other:351943-351967) — so a field the player has just emptied still carries the
+        // previous render's entries. There is no character to be wrong about: 0 is the only index an
+        // empty string has, and it is the right one.
+        //
+        // What this catches in practice, and why it is worth a guard at all: the row's PugText can
+        // land on TMP's dynamic-font path (PugText.SetFont, Pug.Other:351532), where the list is
+        // filled only under `if (trackDynamicTextCharacterEndPositions)` (Pug.Other:352043) — a flag
+        // the row prefab leaves at 0. The list is then EMPTY while the text is not, every query
+        // answers 0, and each keystroke inserts at the front: "abc" typed left to right is stored as
+        // "cba", in another mod's config file, with no log line and no exception. Only
+        // `item.pugText.localize = false` in ListDetailScreen.AddItem keeps that path shut today
+        // (it makes TextManager.ShouldUseDynamicFont return before it even looks at the language,
+        // Pug.Other:272035-272038), and that line is there for a localisation-term reason that says
+        // nothing about fonts.
+        private bool IndexSpaceIsSound()
+        {
+            // An unbound viewport has no text to measure against. No warning from here: Bind() logs
+            // that specific wiring fault by name, and this would only add a vaguer second line.
+            if (_text == null)
+                return false;
+            int length = _text.GetTextLength();
+            if (length == 0)
+                return true;
+            var ends = _text.localCharacterEndPositions;
+            int count = ends != null ? ends.Count : 0;
+            if (count == length)
+                return true;
+            WarnUnsoundOnce(count, length);
+            return false;
+        }
+
+        // Latched for the session, not per call and not per row. The check above runs on every
+        // keystroke, every word jump and every click, and a row stays unsound for as long as it holds
+        // the text that made it so — an unlatched warning would bury the one line that matters under
+        // thousands of copies of itself, precisely when the log is being read to find it. Spanning
+        // rows is intentional too: a drill-in's rows share one prefab and one font, so fifty rows
+        // would report one fault fifty times.
+        private static bool _warnedUnsound;
+
+        private static void WarnUnsoundOnce(int glyphCount, int textLength)
+        {
+            if (_warnedUnsound)
+                return;
+            _warnedUnsound = true;
+            Debug.LogWarning(
+                "[ModSettingsMenu] Caret index recovery is unavailable: PugText reports "
+                    + glyphCount
+                    + " glyph end positions for "
+                    + textLength
+                    + " characters, so a position cannot be turned into a string index. Typing appends at the end of the row "
+                    + "instead of at the caret; word jumps and click-to-place-caret do nothing. No text is lost or reordered. "
+                    + "Logged once per session."
+            );
+        }
+
+        /// <summary>Word boundaries either side of an index, for Ctrl+Arrow. <paramref
+        /// name="fromIndex"/> must be an index TryCaretIndex vouched for; the clamp below is a bound
+        /// on a trusted value, not a way to make an untrusted one usable — clamping a recovered index
+        /// is what silently turns "no answer" into "the front of the string".</summary>
         public int WordBoundary(int fromIndex, int direction)
         {
             string s = _text != null ? _text.GetText() : "";

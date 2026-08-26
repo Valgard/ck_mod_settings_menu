@@ -194,18 +194,21 @@ namespace ModSettingsMenu.UI
             // edge. screenMask is looked up by name because ListDetailScreen owns it, not this row.
             //
             // Both references are logged loudly when missing rather than left to degrade silently.
-            // An unwired fieldMask leaves _viewport unbound, so CaretIndexFromLocalX (which needs
-            // _text) keeps returning 0 — every keystroke then inserts at the front instead of the
-            // caret, writing text backwards into a foreign mod's config. An unwired/renamed
-            // ViewportMask leaves screenMask null, so TextFieldViewport.FitMaskToViewport returns
-            // early every frame and the row's own mask never re-fits — it keeps whatever clip the
-            // prefab authored, clipping outside the list as it scrolls.
+            // An unwired fieldMask leaves _viewport unbound, and an unbound viewport has no text to
+            // measure a caret index against — so it reports no index at all and every caret-derived
+            // feature falls back (typing appends at the row's end, word jumps and click-to-place
+            // do nothing; see TextFieldViewport.IndexSpaceIsSound). The row still edits and still
+            // stores what was typed, which is why the fault has to be logged to be noticed. An
+            // unwired/renamed ViewportMask leaves screenMask null, so
+            // TextFieldViewport.FitMaskToViewport returns early every frame and the row's own mask
+            // never re-fits — it keeps whatever clip the prefab authored, clipping outside the list
+            // as it scrolls.
             var screenMask = _owner != null ? _owner.transform.Find("ViewportMask")?.GetComponent<SpriteMask>() : null;
             if (fieldMask == null)
             {
                 Debug.LogWarning(
                     "[ModSettingsMenu] ListDetailItem.fieldMask is unwired on this row's prefab — the horizontal "
-                        + "viewport never binds, so typing inserts at index 0 instead of the caret."
+                        + "viewport never binds, so the row cannot scroll and typing appends at the end instead of at the caret."
                 );
                 return;
             }
@@ -333,8 +336,15 @@ namespace ModSettingsMenu.UI
                 // away from screen centre, and changing with window size — which used to place the
                 // caret on the wrong character.
                 float worldX = Manager.ui.mouse.pointer.transform.position.x;
-                int target = _viewport.CaretIndexFromLocalX(worldX - pugText.transform.position.x);
-                MoveCharMarker(target - _viewport.CaretIndex);
+                // Both halves of the move come out of the same recovered index space — where the
+                // click landed, and where the caret already is — so one untrustworthy answer
+                // disqualifies the whole move (TextFieldViewport.IndexSpaceIsSound explains when that
+                // happens). Leaving the caret alone loses nothing: the click has already selected and
+                // activated the row, which is the part that matters, and the only thing forgone is a
+                // convenience. Moving on a bad index would instead put the caret on a character
+                // nobody pointed at, and the player's next keystroke would land there.
+                if (_viewport.TryCaretIndexFromLocalX(worldX - pugText.transform.position.x, out int target) && _viewport.TryCaretIndex(out int caret))
+                    MoveCharMarker(target - caret);
             }
         }
 
