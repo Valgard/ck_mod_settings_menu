@@ -330,15 +330,14 @@ namespace ModSettingsMenu
             // recovered here is the one from BEFORE vanilla's arrow shift, which ran moments ago
             // inside this same call (Pug.Other:269659-269666). That stale value is the right base
             // for WordBoundary, but the wrong base for a relative move: MoveCharMarker will apply
-            // our delta on top of an index vanilla has already nudged by `direction`, so subtract
-            // it once.
-            //
-            // Vanilla is guaranteed to have shifted whenever we see an arrow here: its else-if
-            // chain reaches the arrow branches only when Backspace, Delete, Return and the menu
-            // back button are all up, and none of those can be down while we are reacting to an
-            // arrow keydown.
+            // our delta on top of an index vanilla has already nudged by `direction` — UNLESS
+            // vanilla's own clamp (Pug.Other:343457) absorbed the shift, which happens exactly when
+            // the caret was already sitting at that end. `current` is that pre-shift index, so it is
+            // the right value to test: subtract the shift only where there was one, or a Ctrl+Left
+            // at index 0 would push the caret forward instead of leaving it put.
             int current = row.Viewport.CaretIndexFromLocalX(row.Viewport.CaretLocalX);
-            row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current - direction);
+            int vanillaShift = (direction < 0 ? current > 0 : current < length) ? direction : 0;
+            row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current - vanillaShift);
         }
     }
 }
