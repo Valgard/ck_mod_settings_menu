@@ -325,10 +325,20 @@ namespace ModSettingsMenu
                 : 0;
             if (direction == 0)
                 return;
-            // Word jumps do need an index, recovered from the caret's position the same way
-            // AppendString above recovers the insert point.
+            // The blinker is only repositioned by RadicalMenuOptionTextInput.Update(), once per
+            // frame (Pug.Other:343386-343388), and MoveCharMarker never touches it — so the index
+            // recovered here is the one from BEFORE vanilla's arrow shift, which ran moments ago
+            // inside this same call (Pug.Other:269659-269666). That stale value is the right base
+            // for WordBoundary, but the wrong base for a relative move: MoveCharMarker will apply
+            // our delta on top of an index vanilla has already nudged by `direction`, so subtract
+            // it once.
+            //
+            // Vanilla is guaranteed to have shifted whenever we see an arrow here: its else-if
+            // chain reaches the arrow branches only when Backspace, Delete, Return and the menu
+            // back button are all up, and none of those can be down while we are reacting to an
+            // arrow keydown.
             int current = row.Viewport.CaretIndexFromLocalX(row.Viewport.CaretLocalX);
-            row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current);
+            row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current - direction);
         }
     }
 }
