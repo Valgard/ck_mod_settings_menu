@@ -44,6 +44,11 @@ export CK_MODIO_TYPE="Visual|Library|Quality of Life"
 # #available-mods channel — PIPE-separated, because "Misc / Other" contains
 # spaces. Read by utils/discord_post.py; Discord allows at most five.
 export CK_DISCORD_TAGS="Utilities|Misc / Other"
+# This mod's existing thread in #available-mods. Empty means no thread yet, so
+# a new post is created; set means a new version is announced as a comment.
+# Filled in from the posted thread's URL, not by hand.
+export CK_DISCORD_THREAD=""
+
 
 # Images and clips for the post, beyond the logo — PIPE-separated, in the order
 # they should appear. A relative path becomes an attachment, an http(s) URL
