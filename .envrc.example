@@ -47,7 +47,7 @@ export CK_DISCORD_TAGS="Utilities|Misc / Other"
 # This mod's existing thread in #available-mods. Empty means no thread yet, so
 # a new post is created; set means a new version is announced as a comment.
 # Filled in from the posted thread's URL, not by hand.
-export CK_DISCORD_THREAD=""
+export CK_DISCORD_THREAD="https://discord.com/channels/851842678340845600/1083718088526139443/threads/1542681113452085248"
 
 
 # Images and clips for the post, beyond the logo — PIPE-separated, in the order
