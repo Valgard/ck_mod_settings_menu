@@ -15,7 +15,7 @@ CoreLib. API reference in the repo README.
 
 ## Requirements
 
-**CoreLib** — mod.io offers to install it when you subscribe.
+**CoreLib**, offered when you subscribe.
 
 ## Multiplayer
 
