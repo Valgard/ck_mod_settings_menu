@@ -8,14 +8,6 @@ Mod Settings Menu gives Core Keeper mods a shared, in-game settings screen. Othe
 
 [b]Multiplayer:[/b] install the mod on both the client and the server.
 
-[h2]Requirements[/h2]
-
-[list]
-[*] CoreLib (required)
-[/list]
-
-Steam does not prompt for required items the way mod.io does — subscribe to CoreLib as well, or the mod will not load.
-
 [hr][/hr]
 
 Built with the official Pugstorm Core Keeper Mod SDK. Personal-use, non-commercial (Core Keeper EULA). Not affiliated with or endorsed by Pugstorm.
