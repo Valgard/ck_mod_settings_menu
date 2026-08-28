@@ -39,8 +39,8 @@ namespace ModSettingsMenu.UI
         // value becomes an initial row list, not what is on screen.
         private readonly List<string> _rows = new List<string>();
 
-        // A rebuild's explicit selection target, or -1 to keep the previous slot (clamped).
-        private int _pendingSelect = -1;
+        // A rebuild's explicit selection target, or RowSelection.None to keep the previous slot (clamped).
+        private RowSelection _pendingSelect = RowSelection.None;
 
         // Bumped once per open. This is the ONLY thing in the design that marks a session boundary:
         // the screen is a singleton reused for every list, so `_owner` cannot tell two sessions
@@ -131,7 +131,7 @@ namespace ModSettingsMenu.UI
             _rowGeneration++;
             _rows.Clear();
             _rebuildPending = false; // a stale deferred rebuild from a prior open can't apply here
-            _pendingSelect = -1; // ...and neither can its selection target
+            _pendingSelect = RowSelection.None; // ...and neither can its selection target
             _scroll = GetComponent<UIScrollWindow>();
             if (box == null || box.itemContainer == null || box.itemTemplate == null || box.addRow == null)
             {
@@ -335,6 +335,7 @@ namespace ModSettingsMenu.UI
             if (item == null)
                 return;
             item.Bind(this, rowIndex, _readOnly);
+            item.RefreshButtonStates(_rows.Count);
             if (item.pugText != null)
                 item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
             // SettingWidget.SetText and the hintText line below; must be
@@ -368,7 +369,53 @@ namespace ModSettingsMenu.UI
             // (ListDetailItem.maxWidth is 0; see its class-level note). SeedText/RenderContent's
             // baseline-then-rebaseline against the (now hypothetical) trim is redundancy today, not a
             // second reason this line can't simply be reversed.
-            _pendingSelect = _rows.Count - 1;
+            _pendingSelect = new RowSelection(_rows.Count - 1, null);
+        }
+
+        // Swap a row with its neighbour. Deferred through _rebuildPending exactly as AddEmptyRow is,
+        // and for a stronger version of the same reason: this runs from inside a button's own
+        // OnActivated, and the rebuild destroys the very row that button lives in.
+        //
+        // A cheaper shape exists — re-seed only the two affected rows and leave the focus physically
+        // in place — and is deliberately not taken: every other write path on this screen defers
+        // through _rebuildPending, and a second, shortcutting path would have to swap both rows'
+        // RowIndex bindings by hand. That is the class of special case ADR-005 split the row types
+        // to be rid of.
+        internal void MoveRow(int index, int delta)
+        {
+            int target = index + delta;
+            if (index < 0 || index >= _rows.Count || target < 0 || target >= _rows.Count)
+                return;
+            (_rows[index], _rows[target]) = (_rows[target], _rows[index]);
+            WriteValueFromRows();
+            // Unconditionally, ignoring the return value: swapping two identical tokens leaves the
+            // stored value untouched, and the rows still have to redraw in their new order.
+            _rebuildPending = true;
+            // The selection follows the ROW, and stays on the same button, so a further press keeps
+            // moving the same entry. Landing back on the text field would make moving an entry four
+            // places cost eight inputs instead of four.
+            _pendingSelect = new RowSelection(target, delta < 0 ? ListRowButton.Role.MoveUp : ListRowButton.Role.MoveDown);
+        }
+
+        // A row's button was pressed. The button knows its role and its row and nothing else; the
+        // list lives here. Same division as ListAddRow's `_owner?.AddEmptyRow()`.
+        internal void OnRowButtonActivated(ListDetailItem row, ListRowButton.Role role)
+        {
+            if (row == null || row.Generation != RowGeneration)
+                return;
+            switch (role)
+            {
+                case ListRowButton.Role.MoveUp:
+                    MoveRow(row.RowIndex, -1);
+                    break;
+                case ListRowButton.Role.MoveDown:
+                    MoveRow(row.RowIndex, +1);
+                    break;
+                case ListRowButton.Role.Delete:
+                    // Intentionally inert until Task 6 adds RequestDelete. Pressing ✕ does nothing
+                    // in this intermediate state; it is never shipped in it.
+                    break;
+            }
         }
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -547,27 +594,41 @@ namespace ModSettingsMenu.UI
             // written. The rule itself lives in ListTokenizer; this is only the second place it is
             // applied.
             _rows[index] = ListTokenizer.Sanitize(row.CommittedText);
+            if (!WriteValueFromRows())
+                return;
+            _rebuildPending = true;
+        }
 
-            // Join through ListTokenizer, not by hand: dropping the empties is the same rule Tokenize
-            // applies when reading, and this method compares the two results directly below. A
-            // hand-written loop here would be a second copy of that rule — exactly the divergence
-            // ListTokenizer was introduced to end (see its own comment, commit f9eb96f).
+        // The one place the row list becomes the stored value. Extracted from OnRowTextCommitted so
+        // the reorder and delete paths cannot drift from the edit path — the four call sites
+        // ListTokenizer itself had to unify are the precedent for why that matters here.
+        //
+        // Returns whether the stored value actually changed, so a caller can tell a real write from
+        // a no-op. Callers still decide for themselves whether to rebuild: a reorder of two
+        // identical tokens changes nothing here and must redraw anyway, because the ROWS moved.
+        private bool WriteValueFromRows()
+        {
+            if (_activeDef?.Entry == null)
+                return false;
+            // Join through ListTokenizer, not by hand: dropping the empties is the same rule
+            // Tokenize applies when reading, and the comparison below depends on both sides having
+            // gone through it.
             string joined = ListTokenizer.Join(_rows);
             // Compare against the STORED value tokenized the same way rather than against the raw
-            // string — Value() may carry authoring formatting (e.g. "Alpha, Beta, Gamma" with a
-            // space after each comma) that a join never reproduces, so a raw comparison never
-            // matched and every mere open+close (no real edit at all) wrote and rebuilt regardless,
-            // defeating the whole point of this no-op guard.
+            // string — Value() may carry authoring formatting (e.g. a space after each comma) that a
+            // join never reproduces, so a raw comparison never matched and every mere open+close
+            // wrote and rebuilt regardless.
             if (joined == ListTokenizer.Join(ListTokenizer.Tokenize(Value())))
-                return;
+                return false;
             _activeDef.Entry.BoxedValue = joined;
-            // Mirrors SettingWidget.Adjust's identical line: a restart-required setting that actually
-            // changed marks the menu dirty; leaving ModSettingsScreen (not this drill-in — the flag is
-            // static and consumed by ModSettingsScreen.Deactivate, since the drill-in is only ever
-            // pushed on top of it) then raises CK's restart prompt.
+            // Mirrors SettingWidget.Adjust's identical line. The flag is static and consumed by
+            // ModSettingsScreen.Deactivate, since this drill-in is only ever pushed on top of it.
+            // It lives HERE rather than in OnRowTextCommitted so that every path which changes the
+            // value raises it, not only the typing one — the ShortRestart fixture exists to catch
+            // exactly that gap.
             if (_activeDef.RequiresRestart)
                 ModSettingsScreen.RestartPending = true;
-            _rebuildPending = true;
+            return true;
         }
 
         private void Update()
@@ -576,8 +637,8 @@ namespace ModSettingsMenu.UI
                 return;
             _rebuildPending = false;
             int previousIndex = selectedIndex;
-            int explicitTarget = _pendingSelect;
-            _pendingSelect = -1;
+            RowSelection explicitTarget = _pendingSelect;
+            _pendingSelect = RowSelection.None;
             RebuildRows();
             // The initial open (Activate) renders AFTER RebuildRows for the same reason: a LinearLayout
             // only measures active children, so each row's height must be (re)computed here too, or the
@@ -599,8 +660,10 @@ namespace ModSettingsMenu.UI
             // it reachable without anyone looking at this line.
             if (menuOptions.Count == 0)
                 return;
-            int target = explicitTarget >= 0 ? explicitTarget : previousIndex;
+            int target = explicitTarget.HasRow ? explicitTarget.Row : previousIndex;
             SelectOptionIndex(Mathf.Clamp(target, 0, menuOptions.Count - 1));
+            // The slot inside the row is restored in Task 5 via GetInternalOption; until then the
+            // row itself is selected, which is the pre-existing behaviour.
         }
     }
 }

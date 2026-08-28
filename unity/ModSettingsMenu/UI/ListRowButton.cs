@@ -1,0 +1,115 @@
+using UnityEngine;
+
+namespace ModSettingsMenu.UI
+{
+    /// <summary>
+    /// One icon button inside a list drill-in row: move up, move down, or delete. A sibling of the
+    /// field frame rather than a child of it — CK's own idiom for an affordance beside a text input
+    /// (RadicalMenuOptionTextInput.radicalMenuOptionToggleVisibility is the vanilla case), and the
+    /// reason ADR-005 gave the frame the width of the FIELD instead of the whole row.
+    ///
+    /// ONE type with a role, not three types. That is deliberately the opposite call to ADR-005,
+    /// which split ListAddRow off ListDetailItem — there, three fields (kind, rowIndex, readOnly)
+    /// had to agree with nothing enforcing it, i.e. reconcilable state that can drift. Here a single
+    /// serialized field selects a constant and is reconciled with nothing, while all three buttons
+    /// share frame, focus marker, collider lifecycle and height reporting. Three classes would be
+    /// three copies of the collider overrides below, and keeping THOSE in step is exactly the
+    /// failure ADR-005 set out to make unrepresentable.
+    /// </summary>
+    public sealed class ListRowButton : RadicalMenuOption, IListRow
+    {
+        public enum Role
+        {
+            MoveUp,
+            MoveDown,
+            Delete,
+        }
+
+        [SerializeField]
+        private Role role;
+
+        // The resting frame, and the source of both the layout height and the click area — the same
+        // division of labour ListDetailItem and ListAddRow already use. field_border from ui_chrome.
+        [SerializeField]
+        private SpriteRenderer fieldBorder;
+
+        // The glyph. Held so the greyed-out edge state (Task 4) can tint it; the frame stays lit so
+        // the button remains locatable while disabled.
+        [SerializeField]
+        private SpriteRenderer icon;
+
+        // Shown while this button is the selected element. Re-declared here for the same reason
+        // ListAddRow re-declares it: `selectedMarker` belongs to RadicalMenuOptionTextInput, which
+        // this class does not derive from, and without it a controller user has nothing telling
+        // them where they are.
+        [SerializeField]
+        private GameObject selectedMarker;
+
+        private ListDetailItem _row;
+
+        public Role ButtonRole => role;
+
+        public int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : 0;
+
+        public void Bind(ListDetailItem row)
+        {
+            _row = row;
+            if (selectedMarker != null)
+                selectedMarker.SetActive(false);
+        }
+
+        // ACTIVE only for a live instance, exactly as ListDetailItem and ListAddRow override it: the
+        // inactive template must report INACTIVE or RadicalMenu's includeInactive scan navigates to
+        // it too.
+        public override OptionActiveState GetActiveStateInCurrentScene() => gameObject.activeSelf ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
+
+        public override void OnSelected()
+        {
+            base.OnSelected();
+            if (selectedMarker != null)
+                selectedMarker.SetActive(true);
+            if (_row != null)
+                _row.FocusedSlot = role;
+        }
+
+        public override void OnDeselected(bool playEffect = true)
+        {
+            base.OnDeselected(playEffect);
+            if (selectedMarker != null)
+                selectedMarker.SetActive(false);
+        }
+
+        public override void OnActivated()
+        {
+            base.OnActivated();
+            if (_row != null && _row.Owner != null)
+                _row.Owner.OnRowButtonActivated(_row, role);
+        }
+
+        // CK creates the click collider from RENDERED TEXT: InitClickCollider only makes one when
+        // labelText or valueText is set (Pug.Other ~343161), and it is a `protected` field with no
+        // [SerializeField], so it cannot be authored in the prefab either. A button that is only a
+        // picture therefore has neither — it must make its own.
+        protected override void InitClickCollider()
+        {
+            if (clickCollider != null)
+                return;
+            clickCollider = gameObject.AddComponent<BoxCollider>();
+            clickCollider.isTrigger = true;
+        }
+
+        // Deliberately does NOT call base. The base branch (~343174) picks valueText when labelText
+        // is null, so with BOTH null it dereferences null — today unreachable only because no
+        // collider exists in that case, which the override above has just changed. Sizing from the
+        // frame is also what the two sibling row types do, for the same reason: the frame is what
+        // the player sees and aims at.
+        protected override void UpdateClickCollider()
+        {
+            if (clickCollider == null)
+                return;
+            ModSettingsScreen.FitColliderToFrame(clickCollider, fieldBorder);
+            // base would also do this; skipping base means doing it here.
+            clickCollider.enabled = GetActiveStateInCurrentScene() == OptionActiveState.ACTIVE;
+        }
+    }
+}
