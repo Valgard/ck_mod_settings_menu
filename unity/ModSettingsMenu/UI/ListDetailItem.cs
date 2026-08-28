@@ -42,6 +42,34 @@ namespace ModSettingsMenu.UI
         private ListDetailScreen _owner;
         public ListDetailScreen Owner => _owner;
 
+        // Which control inside this row currently has focus: null for the text field, otherwise the
+        // button's role. Written by ListRowButton.OnSelected and by the row's own selection, read by
+        // the screen when it records where a rebuild must put the selection back.
+        internal ListRowButton.Role? FocusedSlot { get; set; }
+
+        // The row's three in-row buttons, assigned in the prefab. An array rather than three fields
+        // because every use is a loop over them; the role lives on the button itself.
+        [SerializeField]
+        private ListRowButton[] rowButtons;
+
+        // Hand each button its row, and hide them all on a read-only list. Called on every rebuild,
+        // because a row is a fresh clone each time and its buttons start unbound — an unbound button
+        // renders normally and does nothing when pressed.
+        internal void RefreshButtonStates(int rowCount)
+        {
+            if (rowButtons == null)
+                return;
+            foreach (var button in rowButtons)
+            {
+                if (button == null)
+                    continue;
+                button.Bind(this);
+                // `readOnly` without an underscore: it belongs to RadicalMenuOptionTextInput, the
+                // base class, and this row deliberately declares no field of its own for it.
+                button.gameObject.SetActive(!readOnly);
+            }
+        }
+
         // The height this row occupies in the LinearLayout, in layout pixels (16 per world unit).
         //
         // Taken from the FRAME, not from the text. A row is as tall as the frame drawn around it —
@@ -152,6 +180,7 @@ namespace ModSettingsMenu.UI
             _owner = owner;
             _rowIndex = rowIndex;
             _generation = owner != null ? owner.RowGeneration : -1;
+            FocusedSlot = null;
             this.readOnly = readOnly;
             // A fresh row has never been the active input field, whatever the GameObject did in a
             // previous life. Without this reset a row that still held activeInputField when the
