@@ -75,10 +75,18 @@ and controller reach such a row regardless.
 - [ ] Click a greyed-out edge arrow — nothing happens.
 - [ ] Hover across rows while a row's text field is being edited — the edit is
       not stolen or ended by the hover.
-- [ ] Move the pointer around **over a row's text field**: the menu-select sound
-      plays at most once, not on every movement. A repeating sound means
-      something is re-selecting the same row each frame — CK plays that sound on
-      the *attempt*, not on a change, so a no-op selection is audible.
+- [ ] Move the pointer around **over a row's text field**: the menu sound plays
+      at most once, not on every movement. A repeating sound means something is
+      re-selecting the same row each frame — CK plays it on the *attempt*, not
+      on a change, so a no-op selection is audible.
+- [ ] A mouse click on a button plays **no** sound of its own, and that is
+      correct. There is only one menu sound in the game and nothing plays it on
+      a successful activation; `UIMouse`'s click path never reaches the code
+      that would. Vanilla menu options are silent on mouse activation too, so a
+      "missing click sound" here is not a defect to chase. Any sound you do hear
+      around a click came from a *selection* moving, subject to a shared 50 ms
+      cooldown that silently drops calls made too close together — which is why
+      the same click can sound one time and not the next.
 - [ ] With a button focused, hover back onto that row's field: the button gives
       up its focus marker and the field takes it.
 
