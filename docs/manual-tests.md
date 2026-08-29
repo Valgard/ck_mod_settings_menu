@@ -187,7 +187,10 @@ Run these with **both** devices in reach, alternating deliberately.
       with a hold in both places it uses it, and a tapped delete behind a
       "delete" caption reads wrong to anyone who knows the game's own dialogs.
 - [ ] Cancel leaves both the list and the file untouched.
-- [ ] Release the hold early: nothing is deleted.
+- [ ] Release the hold early: nothing is deleted, **and the dialogue stays
+      open** with the bar run back down. Letting go is a pause, not a cancel —
+      dismissing the dialogue on release would make an accidental twitch cost
+      the whole decision.
 - [ ] Confirm removes the entry; the selection lands on the **✕** of the row
       that moved up (on the last row, its predecessor) — so several entries can
       be deleted in succession without walking back to ✕ each time.
