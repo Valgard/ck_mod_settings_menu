@@ -1,30 +1,32 @@
 namespace ModSettingsMenu.UI
 {
     /// <summary>
-    /// Where the selection must land after a rebuild: which row, and which control inside it.
-    ///
-    /// A value type carrying both, rather than two loose fields on the screen, so "row without a
-    /// slot" cannot exist as a half-built intermediate state. The screen destroys and recreates
-    /// every row on each rebuild (see ADR-005 — destroying a row is the only thing that resets
+    /// Which row the selection must land on after a rebuild — an index into _rows, or "none" to
+    /// keep the previous numeric slot (clamped). The screen destroys and recreates every row on
+    /// each rebuild (see ADR-005 — destroying a row is the only thing that resets
     /// PugTextEffectMenuOption.isValueText), so anything meant to survive one has to be carried
-    /// across explicitly. Before the in-row buttons that was a single int.
+    /// across explicitly.
+    ///
+    /// No longer carries which in-row control to land on. That was FocusedSlot's job, and
+    /// FocusedSlot is gone: the in-row buttons are real, independently selectable menu options now
+    /// (ListRowButton no longer opts out of isMenuOption), so a further keyboard/controller step
+    /// finds the same column through neighbour wiring (ListDetailScreen.ChainRowsForUIElementNavigation)
+    /// rather than through anything a rebuild has to remember. A rebuild-time target names a ROW
+    /// and lands on its own field; it does not try to reselect the specific button that triggered
+    /// the rebuild.
     /// </summary>
     internal readonly struct RowSelection
     {
-        /// <summary>Index into menuOptions, or -1 for "keep the same numeric slot, clamped".</summary>
+        /// <summary>Index into _rows, or -1 for "keep the same numeric slot, clamped".</summary>
         public readonly int Row;
 
-        /// <summary>Which in-row control to focus; null means the row's own text field.</summary>
-        public readonly ListRowButton.Role? Slot;
-
-        public RowSelection(int row, ListRowButton.Role? slot)
+        public RowSelection(int row)
         {
             Row = row;
-            Slot = slot;
         }
 
         /// <summary>No explicit target — the rebuild keeps the previous numeric slot.</summary>
-        public static RowSelection None => new RowSelection(-1, null);
+        public static RowSelection None => new RowSelection(-1);
 
         public bool HasRow => Row >= 0;
     }
