@@ -79,12 +79,12 @@ and controller reach such a row regardless.
       at most once, not on every movement. A repeating sound means something is
       re-selecting the same row each frame — CK plays it on the *attempt*, not
       on a change, so a no-op selection is audible.
-- [ ] **Hovering a row button plays the selection sound**, like any other
-      control. It did not before the buttons became real menu options, so this
-      is the cheapest check that the rebuild actually took effect.
-- [ ] **Clicking a row button plays the activation sound** — the lower pitch,
-      the same one Enter produces. Both come from CK now; this mod plays no
-      sound of its own anywhere.
+- [ ] **Hovering a row button plays the selection sound**, like every other
+      control in this menu. A control that stays silent while its neighbours
+      answer reads as broken even when it works.
+- [ ] **Clicking a row button plays the activation sound** — the lower of the
+      two pitches, and the same one Enter on that button produces. Compare the
+      two back to back: they must match.
 - [ ] **A greyed-out edge arrow stays silent** (first row's ↑, last row's ↓).
       It does nothing, so it acknowledges nothing.
 - [ ] Enter on a focused button still sounds exactly once — not twice. CK plays
@@ -98,9 +98,11 @@ and controller reach such a row regardless.
 
 - [ ] Up/down walks the rows and wraps at both ends, including onto and off the
       trailing **Add entry** button.
-- [ ] **After a wrap, the very next press moves.** If it takes two presses, the
-      row is reading a selection state the framework updated on a different
-      path.
+- [ ] **After a wrap, the very next press moves.** Walk off the end onto the
+      Add entry button and straight on into the list, then keep going in the
+      same direction — every press must advance by one. A press that does
+      nothing is easy to dismiss as a missed key, which is exactly why it went
+      unnoticed once already: hold the direction and count the rows.
 - [ ] Right from the text field enters the buttons; left walks back to the
       field.
 - [ ] Right on the **last** button does nothing, and does not jump back to the
@@ -114,11 +116,11 @@ and controller reach such a row regardless.
 
 ### The focused column
 
-The column is no longer remembered anywhere — each control simply names its
-counterpart in the neighbouring row, so ↓ from a ✕ reaches the next ✕ because
-that is what it points at. These checks used to guard against remembered state
-going stale; they stay because the wiring is rebuilt on every change and can be
-rebuilt wrongly.
+Moving between rows must not move the player sideways. Every failure here has
+looked the same from the outside: the selection quietly ends up on a different
+control than the one it was on, so the next keypress does something other than
+what was intended. It never crashes and it is easy to miss when testing one
+press at a time — walk several rows in each case.
 
 - [ ] Standing on a row's ✕, press down twice: the selection lands on the ✕ of
       the next two rows, never in their text fields.
@@ -152,14 +154,12 @@ Run these with **both** devices in reach, alternating deliberately.
 
 - [ ] ↑ on the middle row of `Short` swaps it with the row above; the file
       reflects the new order.
-- [ ] Pressing ↑ repeatedly walks the same entry upward without the selection
-      leaving the arrow. This is the one thing the rebuild does NOT get from
-      wiring — the entry moves to another row, so the landing is named
-      explicitly by the action. Four presses must move one entry four rows.
-- [ ] Walk an entry to the very top: the selection stays on the now-greyed ↑
-      rather than jumping away. A disabled arrow is still selectable on purpose
-      — on this navigation path a greyed neighbour is a dead end, not a skip, so
-      making it unselectable would strand the whole column.
+- [ ] Pressing ↑ four times moves **one entry four rows up**. If the entry
+      stops after the first press and the selection starts travelling instead,
+      reordering has become a two-handed operation — press, steer back, press.
+- [ ] Walk an entry to the very top, so its ↑ greys out: the selection stays on
+      that arrow. From there ↓ and ← must still work — a selection that cannot
+      rest on a dulled control leaves everything below it unreachable.
 - [ ] First row's ↑ and last row's ↓ are visibly dull and do nothing.
 - [ ] In `Long`, walk `Item20` upward past the top of the visible area — the
       view follows the selection.
