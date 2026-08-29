@@ -150,6 +150,26 @@ namespace ModSettingsMenu.UI
                 _row.Owner.OnRowButtonActivated(_row, role);
         }
 
+        // CK's activation receipt (the lower-pitched menu sfx) is played from the input poll, not
+        // from the click: MenuManager.UpdateInputAndApplyToCurrentMenu (Pug.Other:269883), gated on
+        // CanActivateCurrentOption(). That gate is false by the time a click reaches THIS button,
+        // because the hover that brought the pointer here already cleared it: UIMouse
+        // .TrySelectNewElement calls DeselectAnySelectedUIElement (:273433), which unconditionally
+        // sets selectedIndex = -1 (:342844), and the Select() that follows only restores the index
+        // for a real menu option — which this deliberately is not. Enter on the same button still
+        // sounds, since no hover change happens and the index still names the row. So the control
+        // was audible on one input and silent on the other; this makes them agree.
+        //
+        // It belongs on the click path alone. OnActivated is shared with the keyboard route, where
+        // CK has already played the receipt, and a second call there would be dropped only by the
+        // 50 ms sfx cooldown — correct by accident, and silently wrong the day that timing shifts.
+        public override void OnLeftClicked(bool mod1, bool mod2)
+        {
+            if (!_disabled)
+                Manager.menu.AttemptToPlayMenuSfx(SfxID.FIXME_menu_select, 0.6f, 0f, reuse: false);
+            base.OnLeftClicked(mod1, mod2);
+        }
+
         // CK creates the click collider from RENDERED TEXT: InitClickCollider only makes one when
         // labelText or valueText is set (Pug.Other ~343161), and it is a `protected` field with no
         // [SerializeField], so it cannot be authored in the prefab either. A button that is only a
