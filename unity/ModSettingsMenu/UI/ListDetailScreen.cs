@@ -421,10 +421,17 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Records which in-row control last took focus, so the NEXT row entered by a vertical step
-        // can be seeded into the same column (see OnSelectedOptionChanged below). Called from
-        // ListRowButton.OnSelected (a slot) and ListDetailItem.OnSelected (null — the text field),
-        // never written directly by this class.
+        // Records which in-row control last took focus. Written from ListRowButton.OnSelected (a
+        // slot) and ListDetailItem.OnSelected (null — the text field), and read by
+        // OnSelectedOptionChanged below, which writes it onto the row being entered.
+        //
+        // That write is NOT what makes a vertical step keep the column — by the time
+        // OnSelectedOptionChanged runs, the entering row's own OnSelected() has ALREADY consulted
+        // FocusedSlot and acted on it (SelectOptionIndex calls OnSelected() on the target, THEN
+        // OnSelectedOptionChanged() — Pug.Other:342813-342833), so this write always lands one
+        // step too late for the transition it looks like it is preparing. The actual redirect for
+        // the row-to-row case is ListDetailItem.NavigateInternally's fallback branch, which seeds
+        // the target row's OWN FocusedSlot directly, before calling Select() on it.
         internal void NoteFocusedSlot(ListRowButton.Role? slot) => _lastFocusedSlot = slot;
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -499,10 +506,10 @@ namespace ModSettingsMenu.UI
         protected override void OnSelectedOptionChanged()
         {
             base.OnSelectedOptionChanged();
-            // Standing in the ✕ column and pressing down should land on the ✕ below, the expectation
-            // any table sets — and "clear out several entries" is the case these buttons exist for.
-            // The slot lives on the row, so moving it here is what makes it a COLUMN rather than a
-            // per-row accident.
+            // Kept in step with _lastFocusedSlot's own reasoning (see NoteFocusedSlot above): this
+            // write happens after the entering row's OnSelected() already ran, so it cannot steer
+            // THIS transition — only NavigateInternally's own direct seed does that. Left in place
+            // as the value NoteFocusedSlot records is written somewhere; not otherwise load-bearing.
             if (_lastFocusedSlot.HasValue && selectedIndex >= 0 && selectedIndex < menuOptions.Count && menuOptions[selectedIndex] is ListDetailItem entering)
                 entering.FocusedSlot = _lastFocusedSlot;
             if (_scroll == null || box == null || box.itemContainer == null)
