@@ -1,4 +1,3 @@
-using Pug.UnityExtensions;
 using UnityEngine;
 
 namespace ModSettingsMenu.UI
@@ -47,6 +46,11 @@ namespace ModSettingsMenu.UI
         // because every use is a loop over them; the role lives on the button itself.
         [SerializeField]
         private ListRowButton[] rowButtons;
+
+        // Exposed so the screen can register each button as its own menuOptions entry and wire its
+        // vertical neighbours — a button is a real, independently selectable menu option now (see
+        // ListRowButton), not something this row forwards navigation or activation to on its behalf.
+        internal ListRowButton[] RowButtons => rowButtons;
 
         // Hand each button its row, and hide them all on a read-only list. Called on every rebuild,
         // because a row is a fresh clone each time and its buttons start unbound — an unbound button
@@ -266,77 +270,6 @@ namespace ModSettingsMenu.UI
         // template is the list's last prefab sibling). Unchanged from the read-only version.
         public override OptionActiveState GetActiveStateInCurrentScene() => gameObject.activeSelf ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
-        // With handleNavigationInternally set, CK hands this row EVERY direction and returns
-        // whatever we answer — so `false` is not "pass it on", it is "nothing moves". This method
-        // therefore has to serve both axes, unlike vanilla's player list (Pug.Other ~331681),
-        // whose entries are chained to each other and answer both from one lookup.
-        public override bool NavigateInternally(Direction.Id id)
-        {
-            // currentSelectedUIElement is written ONLY by UIelement.Select() (via
-            // UIManager.OnUIElementSelected, Pug.Other:273422). A selection that arrived through
-            // RadicalMenu.SelectOptionIndex instead — the ordinary index path, which is how a wrap
-            // between this list's rows and the add button (handleNavigationInternally: 0) reaches
-            // this row — leaves it pointing at whatever was selected BEFORE, i.e. the add button.
-            // Asking that stale element for its neighbour re-selects this row and burns the key
-            // press, so the user has to press twice after every such wrap. Fall back to this row,
-            // which is the element the framework actually considers selected.
-            var current = Manager.ui.currentSelectedUIElement;
-            if (current == null || (current != this && !current.transform.IsChildOf(transform)))
-                current = this;
-            // No null check on `current` here: the fallback above guarantees it, and `this` cannot
-            // be null in an instance method — a guard for a path that cannot happen would only
-            // invite the next reader to suspect one that isn't there, exactly the class of mistake
-            // that cost every one of this method's four fix rounds.
-            var adjacent = current.GetAdjacentUIElement(id, current.transform.position);
-            if (adjacent != null)
-            {
-                if (adjacent == this && _owner != null)
-                {
-                    // Moving back onto this row's own field from one of its buttons. Select()
-                    // on the row we are already on is a same-index no-op in SelectOptionIndex
-                    // (selectedIndex never left this row while the button had focus), so
-                    // OnSelected() does not re-fire and would never clear the column on its
-                    // own — it would sit there stale on the SCREEN (see Owner.FocusedSlot) and
-                    // redirect the NEXT row entered, whether that next entry comes from a
-                    // further keyboard/controller step or a mouse hover. This is the one
-                    // transition that can leave the field visually/functionally focused without
-                    // OnSelected() running again, so it is the one place this has to be cleared
-                    // outside OnSelected() itself.
-                    _owner.FocusedSlot = null;
-                }
-                adjacent.Select();
-                return true;
-            }
-            // Nothing that way from where focus sits — which is the normal case for up/down while
-            // a BUTTON is focused, since the vertical chain is wired between rows, not buttons.
-            // Fall back to this row's own neighbour so the flag does not turn up/down into a dead
-            // key. ChainRowsForUIElementNavigation builds that chain on every rebuild.
-            //
-            // No seeding needed here any more: the column lives on Owner (the screen), which both
-            // this row and the neighbour share, so there is nothing to carry across the Select()
-            // call below — only one value that already holds. Two earlier attempts kept the column
-            // on the ROW instead (ListDetailItem.FocusedSlot) and each missed a different path into
-            // a row — a screen-level carry read too late from OnSelectedOptionChanged, then this
-            // very branch not seeding what the PRIMARY branch above needed cleared — because every
-            // new path into a row had to separately know to carry per-row state. See
-            // ListDetailScreen.FocusedSlot for the full list of what writes it now.
-            var rowNeighbour = GetAdjacentUIElement(id, transform.position);
-            // Accept any neighbour OUTSIDE this row — the next row, or the trailing add button,
-            // which is a ListAddRow and not a ListDetailItem. What has to be excluded is a target
-            // INSIDE this row: a horizontal miss (right from the last button) otherwise falls
-            // through to the row's own rightUIElements and lands back on its first button, an
-            // accidental wrap the horizontal chain is deliberately left open to avoid. An earlier
-            // `is ListDetailItem` test excluded that case too, but only as a side effect of a type
-            // check it needed for seeding FocusedSlot onto the neighbour — which round 3 removed
-            // along with the seed, leaving the filter behind to block the add button as well.
-            if (rowNeighbour != null && rowNeighbour != this && !rowNeighbour.transform.IsChildOf(transform))
-            {
-                rowNeighbour.Select();
-                return true;
-            }
-            return false;
-        }
-
         // NOT called from here anymore — see Update() below. RadicalMenu.SelectOptionIndex calls
         // OnDeselected() on every navigation-away, INCLUDING mere mouse hover onto a different row
         // (CK's own UIMouse re-derives menu selection from a hover raycast every frame; hovering a
@@ -358,62 +291,11 @@ namespace ModSettingsMenu.UI
         // Mirrors OnDeselected above: suppress the hover-selected marker on THIS row while a
         // DIFFERENT row in this menu is the active input field, so hovering around while typing
         // elsewhere doesn't visually highlight whatever the mouse happens to pass over.
-        //
-        // Also where the current column (Owner.FocusedSlot — a SCREEN-level field, not this row's
-        // own) is actually honoured — the player-list shape (Pug.Other ~331672/331681 override
-        // GetInternalOption and redirect from OnPreSelected; this class redirects from OnSelected
-        // instead, because CK calls OnSelected on the ENTERING option — Pug.Other:342813-342833 —
-        // which is the one guaranteed moment this decision has to be made for this row).
-        // GetInternalOption doesn't work here: SelectOptionIndex asks it of the option being LEFT
-        // and hands the result to the ENTERING option's OnPreSelected, an empty virtual this class
-        // never overrides — that path was tried and found inert.
-        //
-        // The column lives on the SCREEN rather than on this row (or a copy carried between rows)
-        // because it describes the NAVIGATION, not any one row, and every attempt to keep it
-        // per-row missed a path: a screen-level carry read too late (from OnSelectedOptionChanged,
-        // which always fires after OnSelected already decided), then NavigateInternally's row-to-
-        // row fallback seeding a value its own primary branch didn't know to clear. See
-        // ListDetailScreen.FocusedSlot for the full list of what writes it now — one field in one
-        // place is what makes a missed path unrepresentable rather than merely unlikely.
-        //
-        // Selecting the button here does not re-enter this method or SelectOptionIndex: the
-        // button overrides isMenuOption to report false (see ListRowButton), so its own Select()
-        // call takes UIManager.OnUIElementSelected's OTHER branch and calls the button's
-        // OnSelected() directly (Pug.Other:273416-273429) — no recursion.
         public override void OnSelected()
         {
             if (Manager.input.activeInputField != null && Manager.input.activeInputField != (object)this)
                 return;
             base.OnSelected();
-            // Honour the remembered column only off a keyboard/controller selection, never a
-            // mouse one — the same device test ListDetailScreen.OnSelectedOptionChanged already
-            // uses to gate its own scroll-follow. A mouse selection carries its own target: the
-            // pointer is over THIS row's field, which is exactly what the player is asking for, and
-            // redirecting it to a remembered button turns a hover into a fight between the pointer
-            // and stale state. It is not merely wrong, it is UNSTABLE: MenuManager.SelectOption
-            // (Pug.Other:269846) plays the menu-select sound on every ATTEMPT to select an option,
-            // not only on a real change, so honouring the column here would select the row (sound),
-            // redirect to the button, then the very next hover frame selects the row again (sound),
-            // redirects again — the button never lets go and the sound never stops. A deliberate
-            // mouse CLICK on a button still writes the column, through ListRowButton.OnSelected,
-            // same as ever — this only stops a HOVER from reading one back.
-            var slot = Manager.input.SystemIsUsingMouse() ? null : _owner?.FocusedSlot;
-            if (slot.HasValue && rowButtons != null)
-            {
-                foreach (var button in rowButtons)
-                {
-                    if (button != null && button.ButtonRole == slot.Value && button.gameObject.activeSelf)
-                    {
-                        button.Select();
-                        return;
-                    }
-                }
-            }
-            // No slot to honour (or its button no longer exists) — this genuinely IS the text
-            // field taking focus. Clear the screen's memory so a later vertical step doesn't try
-            // to land back on a button nobody is standing on any more.
-            if (_owner != null)
-                _owner.FocusedSlot = null;
         }
 
         // Distinguishes "actively editing" (SELECTED_VALUE_COLOR, vivid) from merely "selected/
@@ -451,33 +333,6 @@ namespace ModSettingsMenu.UI
         // the transition is unconditional and does not know in advance which case it is.
         public override void OnActivated()
         {
-            // CK activates menuOptions[selectedIndex] (RadicalMenu.ActivateSelectedIndex, :342939),
-            // and this row is the menu option — its buttons are not, deliberately (they set
-            // isMenuOption => false so UIelement.Select() notifies them directly). So an Enter
-            // press while a button holds focus arrives HERE, and the inherited text-input
-            // OnActivated would start editing instead. Hand it to the button that actually has
-            // focus. This is the same stand-in role the row already plays for navigation in
-            // NavigateInternally: CK addresses the row, the row answers for whichever of its
-            // children is current.
-            //
-            // A stale currentSelectedUIElement (round 4) cannot misdirect this: IsChildOf(transform)
-            // only accepts a button that is actually a child of THIS row, so a value left over from
-            // elsewhere falls through to base.OnActivated() below — the right answer for "the field
-            // is what is selected".
-            //
-            // Mouse clicks never reach this forwarding, so there is no double-activation risk:
-            // UIMouse calls LeftClick() directly on currentSelectedUIElement (Pug.Other:356024),
-            // which for a focused button IS the button — ListRowButton doesn't override
-            // OnLeftClicked, so its inherited RadicalMenuOption.OnLeftClicked (Pug.Other:343297)
-            // calls OnActivated() on itself right there, never through
-            // RadicalMenu.ActivateSelectedIndex. A click activates the button exactly once,
-            // through that path, and this method is never on the stack for it.
-            var current = Manager.ui.currentSelectedUIElement;
-            if (current is ListRowButton button && current.transform.IsChildOf(transform))
-            {
-                button.OnActivated();
-                return;
-            }
             // A read-only list's rows are still navigable (GetActiveStateInCurrentScene stays
             // ACTIVE) so the player can view/scroll every token, but activating one must not enter
             // edit mode — base.OnActivated() is what calls Manager.input.SetActiveInputField(this);

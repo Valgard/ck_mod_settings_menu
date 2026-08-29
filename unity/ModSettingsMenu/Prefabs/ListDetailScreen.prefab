@@ -1628,7 +1628,7 @@ MonoBehaviour:
   activeInDebugOnly: 0
   forceDeactive: 0
   visibleButNotSelectableWhenInactive: 0
-  handleNavigationInternally: 1
+  handleNavigationInternally: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
   canBeActivated: 1
