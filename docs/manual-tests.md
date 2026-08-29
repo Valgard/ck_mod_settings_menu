@@ -79,14 +79,14 @@ and controller reach such a row regardless.
       at most once, not on every movement. A repeating sound means something is
       re-selecting the same row each frame — CK plays it on the *attempt*, not
       on a change, so a no-op selection is audible.
-- [ ] A mouse click on a button plays **no** sound of its own, and that is
-      correct. There is only one menu sound in the game and nothing plays it on
-      a successful activation; `UIMouse`'s click path never reaches the code
-      that would. Vanilla menu options are silent on mouse activation too, so a
-      "missing click sound" here is not a defect to chase. Any sound you do hear
-      around a click came from a *selection* moving, subject to a shared 50 ms
-      cooldown that silently drops calls made too close together — which is why
-      the same click can sound one time and not the next.
+- [ ] A mouse click on a row button — **open question, do not treat either
+      outcome as settled yet.** Vanilla buttons that are real menu options do
+      sound on a click (the Controls tabs, the binding rows, Join Game's Hide
+      and Join). The one vanilla button that does not is the dropdown's open
+      button in Join Game — and that one, like ours, is not a menu option and is
+      driven through its prefab's `onLeftClick` event. Whether our silence is
+      the same correct silence as that button's is being traced; until it is,
+      record what you hear rather than judging it.
 - [ ] With a button focused, hover back onto that row's field: the button gives
       up its focus marker and the field takes it.
 
