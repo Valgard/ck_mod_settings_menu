@@ -16,7 +16,7 @@ namespace ModSettingsMenu.UI
     /// three copies of the collider overrides below, and keeping THOSE in step is exactly the
     /// failure ADR-005 set out to make unrepresentable.
     /// </summary>
-    public sealed class ListRowButton : RadicalMenuOption, IListRow
+    public sealed class ListRowButton : RadicalMenuOption
     {
         public enum Role
         {
@@ -38,6 +38,22 @@ namespace ModSettingsMenu.UI
         [SerializeField]
         private SpriteRenderer icon;
 
+        // The glyph shown while this button cannot be used. Assigned in the prefab for the two
+        // arrows and left null on the delete button, which is never disabled.
+        //
+        // A SECOND SPRITE, not a tint on the first. Tinting pixel art muddies it — every pixel
+        // shifts toward the tint colour and the hand-placed shading flattens — whereas a drawn
+        // disabled state keeps its own contrast. CK tints because its menu options are text, and a
+        // PugText glyph has a single flat colour to change; an icon does not.
+        [SerializeField]
+        private Sprite iconDisabled;
+
+        // Captured in Awake rather than serialized a second time: the resting sprite is already on
+        // the renderer, and a duplicate field could be pointed somewhere else by accident.
+        private Sprite _iconNormal;
+
+        private bool _disabled;
+
         // Shown while this button is the selected element. Re-declared here for the same reason
         // ListAddRow re-declares it: `selectedMarker` belongs to RadicalMenuOptionTextInput, which
         // this class does not derive from, and without it a controller user has nothing telling
@@ -49,7 +65,32 @@ namespace ModSettingsMenu.UI
 
         public Role ButtonRole => role;
 
-        public int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : 0;
+        protected override void Awake()
+        {
+            base.Awake();
+            if (icon != null)
+                _iconNormal = icon.sprite;
+        }
+
+        // Deliberately NOT OptionActiveState.GRAYED_OUT. That state bundles four effects — tint,
+        // click blocking, staying in the layout, and being SKIPPED by navigation — and the fourth is
+        // broken on this screen: SelectIndexInDirection asks GetAdjacentUIElement BEFORE filtering,
+        // so a locked neighbour yields no match and navigation stalls instead of stepping over. That
+        // applies only on the UIElement path, which is the path this screen has used since
+        // 2026-08-24. Taking the look without the skip is also the better answer on its own terms: a
+        // button that cannot be reached cannot explain why it does nothing.
+        public void SetDisabled(bool disabled)
+        {
+            _disabled = disabled;
+            if (icon == null)
+                return;
+            // A button with no disabled sprite keeps its own — the delete button, which is never
+            // disabled anyway. Falling back to the resting sprite rather than blanking the renderer
+            // means a missing assignment shows as "does not grey out", not as an invisible button.
+            var wanted = disabled && iconDisabled != null ? iconDisabled : _iconNormal;
+            if (wanted != null)
+                icon.sprite = wanted;
+        }
 
         public void Bind(ListDetailItem row)
         {
@@ -91,6 +132,8 @@ namespace ModSettingsMenu.UI
         public override void OnActivated()
         {
             base.OnActivated();
+            if (_disabled)
+                return;
             if (_row != null && _row.Owner != null)
                 _row.Owner.OnRowButtonActivated(_row, role);
         }
