@@ -2731,6 +2731,7 @@ MonoBehaviour:
   role: 1
   fieldBorder: {fileID: 5788287529936909592}
   icon: {fileID: 9006302894819908873}
+  iconDisabled: {fileID: 100014, guid: 177805356e56055ae8abd25063004bea, type: 3}
   selectedMarker: {fileID: 1561903702462900766}
 --- !u!1 &3130181968277780329
 GameObject:
@@ -3456,6 +3457,7 @@ MonoBehaviour:
   role: 0
   fieldBorder: {fileID: 1396331818437272354}
   icon: {fileID: 684368336174487055}
+  iconDisabled: {fileID: 100012, guid: 177805356e56055ae8abd25063004bea, type: 3}
   selectedMarker: {fileID: 557917818691812863}
 --- !u!1 &7570738245913820092
 GameObject:
@@ -3536,6 +3538,7 @@ MonoBehaviour:
   role: 2
   fieldBorder: {fileID: 8923851940435787025}
   icon: {fileID: 5636971772120315905}
+  iconDisabled: {fileID: 0}
   selectedMarker: {fileID: 2165160890629217603}
 --- !u!1 &8721884322465996270
 GameObject:
