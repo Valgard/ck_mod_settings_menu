@@ -79,9 +79,12 @@ and controller reach such a row regardless.
       at most once, not on every movement. A repeating sound means something is
       re-selecting the same row each frame — CK plays it on the *attempt*, not
       on a change, so a no-op selection is audible.
-- [ ] **Clicking a row button plays the activation sound** — the same lower
-      pitch Enter on that button produces, not the higher selection sound. The
-      two are one sample at different pitches, so compare them back to back.
+- [ ] **Hovering a row button plays the selection sound**, like any other
+      control. It did not before the buttons became real menu options, so this
+      is the cheapest check that the rebuild actually took effect.
+- [ ] **Clicking a row button plays the activation sound** — the lower pitch,
+      the same one Enter produces. Both come from CK now; this mod plays no
+      sound of its own anywhere.
 - [ ] **A greyed-out edge arrow stays silent** (first row's ↑, last row's ↓).
       It does nothing, so it acknowledges nothing.
 - [ ] Enter on a focused button still sounds exactly once — not twice. CK plays
@@ -111,8 +114,11 @@ and controller reach such a row regardless.
 
 ### The focused column
 
-The column the navigation is in is screen state, not row state. These checks are
-all about it not leaking.
+The column is no longer remembered anywhere — each control simply names its
+counterpart in the neighbouring row, so ↓ from a ✕ reaches the next ✕ because
+that is what it points at. These checks used to guard against remembered state
+going stale; they stay because the wiring is rebuilt on every change and can be
+rebuilt wrongly.
 
 - [ ] Standing on a row's ✕, press down twice: the selection lands on the ✕ of
       the next two rows, never in their text fields.
@@ -147,7 +153,13 @@ Run these with **both** devices in reach, alternating deliberately.
 - [ ] ↑ on the middle row of `Short` swaps it with the row above; the file
       reflects the new order.
 - [ ] Pressing ↑ repeatedly walks the same entry upward without the selection
-      leaving the arrow.
+      leaving the arrow. This is the one thing the rebuild does NOT get from
+      wiring — the entry moves to another row, so the landing is named
+      explicitly by the action. Four presses must move one entry four rows.
+- [ ] Walk an entry to the very top: the selection stays on the now-greyed ↑
+      rather than jumping away. A disabled arrow is still selectable on purpose
+      — on this navigation path a greyed neighbour is a dead end, not a skip, so
+      making it unselectable would strand the whole column.
 - [ ] First row's ↑ and last row's ↓ are visibly dull and do nothing.
 - [ ] In `Long`, walk `Item20` upward past the top of the visible area — the
       view follows the selection.
@@ -165,8 +177,9 @@ Run these with **both** devices in reach, alternating deliberately.
       "delete" caption reads wrong to anyone who knows the game's own dialogs.
 - [ ] Cancel leaves both the list and the file untouched.
 - [ ] Release the hold early: nothing is deleted.
-- [ ] Confirm removes the entry; the selection lands on the ✕ of the row that
-      moved up (on the last row, its predecessor).
+- [ ] Confirm removes the entry; the selection lands on the **✕** of the row
+      that moved up (on the last row, its predecessor) — so several entries can
+      be deleted in succession without walking back to ✕ each time.
 - [ ] Press **Add entry**, then ✕ on the new blank row: **no dialog**, the row
       disappears, and the file is untouched — a blank row never reached it.
 - [ ] Delete the only remaining entry: no crash, and nothing selected out of
