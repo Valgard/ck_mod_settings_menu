@@ -42,6 +42,9 @@ namespace ModSettingsMenu.UI
         // A rebuild's explicit selection target, or RowSelection.None to keep the previous slot (clamped).
         private RowSelection _pendingSelect = RowSelection.None;
 
+        // The in-row slot the selection last occupied, so a vertical step keeps the column.
+        private ListRowButton.Role? _lastFocusedSlot;
+
         // Bumped once per open. This is the ONLY thing in the design that marks a session boundary:
         // the screen is a singleton reused for every list, so `_owner` cannot tell two sessions
         // apart and a row's index is a coordinate with no coordinate system. A row takes this value
@@ -418,6 +421,12 @@ namespace ModSettingsMenu.UI
             }
         }
 
+        // Records which in-row control last took focus, so the NEXT row entered by a vertical step
+        // can be seeded into the same column (see OnSelectedOptionChanged below). Called from
+        // ListRowButton.OnSelected (a slot) and ListDetailItem.OnSelected (null — the text field),
+        // never written directly by this class.
+        internal void NoteFocusedSlot(ListRowButton.Role? slot) => _lastFocusedSlot = slot;
+
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
         // and computes real heights). Size each row to its rendered text (like ModSettingsScreen), then
         // lay out. contentRoot position is owned by UIScrollWindow, so no manual anchoring here.
@@ -490,6 +499,12 @@ namespace ModSettingsMenu.UI
         protected override void OnSelectedOptionChanged()
         {
             base.OnSelectedOptionChanged();
+            // Standing in the ✕ column and pressing down should land on the ✕ below, the expectation
+            // any table sets — and "clear out several entries" is the case these buttons exist for.
+            // The slot lives on the row, so moving it here is what makes it a COLUMN rather than a
+            // per-row accident.
+            if (_lastFocusedSlot.HasValue && selectedIndex >= 0 && selectedIndex < menuOptions.Count && menuOptions[selectedIndex] is ListDetailItem entering)
+                entering.FocusedSlot = _lastFocusedSlot;
             if (_scroll == null || box == null || box.itemContainer == null)
                 return;
             if (selectedIndex < 0 || selectedIndex >= menuOptions.Count)
@@ -661,9 +676,10 @@ namespace ModSettingsMenu.UI
             if (menuOptions.Count == 0)
                 return;
             int target = explicitTarget.HasRow ? explicitTarget.Row : previousIndex;
-            SelectOptionIndex(Mathf.Clamp(target, 0, menuOptions.Count - 1));
-            // The slot inside the row is restored in Task 5 via GetInternalOption; until then the
-            // row itself is selected, which is the pre-existing behaviour.
+            int clamped = Mathf.Clamp(target, 0, menuOptions.Count - 1);
+            if (explicitTarget.Slot.HasValue && menuOptions[clamped] is ListDetailItem restored)
+                restored.FocusedSlot = explicitTarget.Slot;
+            SelectOptionIndex(clamped);
         }
     }
 }
