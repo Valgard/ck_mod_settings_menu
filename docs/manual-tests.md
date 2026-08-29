@@ -178,7 +178,12 @@ Run these with **both** devices in reach, alternating deliberately.
 
 - [ ] ✕ on a filled row opens a confirmation naming that entry.
 - [ ] **The confirm button must be held, not tapped** — a progress bar fills
-      while it is held and runs back down on release. Vanilla pairs this caption
+      while it is held and runs back down on release.
+- [ ] **The bar starts empty**, and it does so at **every** list length. Check
+      at least 4, 5 and 6 entries: this once failed at 4, worked at 5 and failed
+      again at 6, so a single list size proves nothing. A bar that is already
+      full still requires the full hold, which reads as the dialogue being
+      broken rather than as a display fault. Vanilla pairs this caption
       with a hold in both places it uses it, and a tapped delete behind a
       "delete" caption reads wrong to anyone who knows the game's own dialogs.
 - [ ] Cancel leaves both the list and the file untouched.
