@@ -445,6 +445,33 @@ namespace ModSettingsMenu.UI
         // ordinary use. Either way, do not read the sentence above as "always".
         public override void OnActivated()
         {
+            // CK activates menuOptions[selectedIndex] (RadicalMenu.ActivateSelectedIndex, :342939),
+            // and this row is the menu option — its buttons are not, deliberately (they set
+            // isMenuOption => false so UIelement.Select() notifies them directly). So an Enter
+            // press while a button holds focus arrives HERE, and the inherited text-input
+            // OnActivated would start editing instead. Hand it to the button that actually has
+            // focus. This is the same stand-in role the row already plays for navigation in
+            // NavigateInternally: CK addresses the row, the row answers for whichever of its
+            // children is current.
+            //
+            // A stale currentSelectedUIElement (round 4) cannot misdirect this: IsChildOf(transform)
+            // only accepts a button that is actually a child of THIS row, so a value left over from
+            // elsewhere falls through to base.OnActivated() below — the right answer for "the field
+            // is what is selected".
+            //
+            // Mouse clicks never reach this forwarding, so there is no double-activation risk:
+            // UIMouse calls LeftClick() directly on currentSelectedUIElement (Pug.Other:356024),
+            // which for a focused button IS the button — ListRowButton doesn't override
+            // OnLeftClicked, so its inherited RadicalMenuOption.OnLeftClicked (Pug.Other:343297)
+            // calls OnActivated() on itself right there, never through
+            // RadicalMenu.ActivateSelectedIndex. A click activates the button exactly once,
+            // through that path, and this method is never on the stack for it.
+            var current = Manager.ui.currentSelectedUIElement;
+            if (current is ListRowButton button && current.transform.IsChildOf(transform))
+            {
+                button.OnActivated();
+                return;
+            }
             // A read-only list's rows are still navigable (GetActiveStateInCurrentScene stays
             // ACTIVE) so the player can view/scroll every token, but activating one must not enter
             // edit mode — base.OnActivated() is what calls Manager.input.SetActiveInputField(this);
