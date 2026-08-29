@@ -433,16 +433,22 @@ namespace ModSettingsMenu.UI
         // silently overwritten back to the prefab default on the very next keystroke for exactly
         // this reason. So the field flip IS the right mechanism here (not a redundant one) — it's
         // just insufficient by itself for the very first frame, which OnSelected() below covers
-        // explicitly. No revert on end-of-edit is needed for any edit that CHANGES the value: it
-        // triggers ListDetailScreen.RebuildRows(), which destroys this (flipped) instance and
-        // creates a fresh one starting back at the prefab's own isValueText = false.
+        // explicitly.
         //
-        // A no-op commit is the expected exception, and it is deliberate rather than overlooked:
-        // activating a row and leaving it untouched returns early in OnRowTextCommitted, no rebuild
-        // follows, and the row keeps the vivid editing tint until the next real rebuild. Harmless —
-        // it marks the row you were last on. The same is true of that method's other early returns
-        // (no entry, stale generation, unbound index), but those are logged fault paths rather than
-        // ordinary use. Either way, do not read the sentence above as "always".
+        // Reverted at end-of-edit too, unconditionally, in Update() below — the transition it
+        // detects (activeInputField leaving this row) is the mirror image of this one. An earlier
+        // version of this comment judged the lingering tint "harmless" for a no-op commit or one of
+        // OnRowTextCommitted's other early returns (no entry, stale generation, unbound index),
+        // reasoning that it merely "marks the row you were last on" until the next rebuild. That
+        // judgement held when this drill-in was rows only and a field was entered on purpose; per-
+        // row buttons make the player move between field and buttons constantly, so a tint that
+        // outlives its own edit no longer marks anything the player can act on — it just sits on a
+        // row they already left. Treat the earlier reasoning as superseded by that change, not as
+        // having been wrong for the drill-in it was written for. For an edit that CHANGES the
+        // value, the revert in Update() is redundant rather than load-bearing: RebuildRows()
+        // destroys this (flipped) instance anyway and creates a fresh one starting back at the
+        // prefab's own isValueText = false — but redundant is the right place for it to be, given
+        // the transition is unconditional and does not know in advance which case it is.
         public override void OnActivated()
         {
             // CK activates menuOptions[selectedIndex] (RadicalMenu.ActivateSelectedIndex, :342939),
@@ -663,7 +669,26 @@ namespace ModSettingsMenu.UI
             _textLastFrame = now;
 
             if (_wasActiveField && !isActiveField)
+            {
+                // Revert OnActivated's flip HERE, unconditionally, rather than inside
+                // OnRowTextCommitted — that method has several early returns (no entry, stale
+                // generation, unbound index, and a genuine no-op commit), and every one of them is
+                // a way an edit can end, so the tint has to clear in all of them, not only the ones
+                // that persist a change. Mirrors the set exactly, for the identical reason: flipping
+                // isValueText alone does not repaint an already-selected row, since the colour is
+                // only (re)applied at specific transitions (see OnActivated's own comment) — this
+                // transition (activeInputField just left this row, which is still selected the
+                // whole time per the comment above) is one of them, but only because OnSelected()
+                // is called explicitly; the flag flip by itself would sit there unapplied until the
+                // next such transition happened to come along.
+                var effect = GetComponentInChildren<PugTextEffectMenuOption>();
+                if (effect != null)
+                {
+                    effect.isValueText = false;
+                    effect.OnSelected();
+                }
                 _owner?.OnRowTextCommitted(this);
+            }
             _wasActiveField = isActiveField;
         }
     }
