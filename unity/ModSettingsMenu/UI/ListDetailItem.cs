@@ -285,6 +285,17 @@ namespace ModSettingsMenu.UI
                 var adjacent = current.GetAdjacentUIElement(id, current.transform.position);
                 if (adjacent != null)
                 {
+                    if (adjacent == this)
+                    {
+                        // Moving back onto this row's own field from one of its buttons. Select()
+                        // on the row we are already on is a same-index no-op in SelectOptionIndex
+                        // (selectedIndex never left this row while the button had focus), so
+                        // OnSelected() does not re-fire and would never clear the slot on its own —
+                        // it would sit there stale and redirect the NEXT entry into this row,
+                        // whether that next entry comes from a further keyboard/controller step or
+                        // a mouse hover.
+                        FocusedSlot = null;
+                    }
                     adjacent.Select();
                     return true;
                 }
@@ -295,16 +306,17 @@ namespace ModSettingsMenu.UI
             // key. ChainRowsForUIElementNavigation builds that chain on every rebuild.
             //
             // Seed the NEIGHBOUR's FocusedSlot BEFORE calling Select() on it, not after. Select()
-            // routes through UIelement.Select() -> MenuManager.OnUIElementSelected ->
-            // RadicalMenu.SelectOptionIndex (Pug.Other:342813-342833), which calls the target's
-            // OnSelected() SYNCHRONOUSLY inside this very call — by the time Select() returns, the
-            // neighbour has already read FocusedSlot (in its own OnSelected(), below) and decided
-            // which control to focus. Writing FocusedSlot afterwards, or relying on a screen-level
-            // carry read from OnSelectedOptionChanged, is one step too late for this same
-            // transition — OnSelectedOptionChanged only fires AFTER OnSelected() has already run
-            // (same lines), which is also why this class no longer overrides GetInternalOption():
-            // its one caller hands the result to the OUTGOING option's OnPreSelected, an empty
-            // virtual, so redirecting through it had no effect to begin with.
+            // routes through UIelement.Select() -> UIManager.OnUIElementSelected (Pug.Other:273416,
+            // reached via Manager.ui) -> RadicalMenu.SelectOptionIndex (Pug.Other:342813-342833),
+            // which calls the target's OnSelected() SYNCHRONOUSLY inside this very call — by the
+            // time Select() returns, the neighbour has already read FocusedSlot (in its own
+            // OnSelected(), below) and decided which control to focus. Writing FocusedSlot
+            // afterwards, or relying on a screen-level carry read from OnSelectedOptionChanged, is
+            // one step too late for this same transition — OnSelectedOptionChanged only fires
+            // AFTER OnSelected() has already run (same lines), which is also why this class no
+            // longer overrides GetInternalOption(): SelectOptionIndex asks it of the option being
+            // LEFT and hands the result to the ENTERING option's OnPreSelected, an empty virtual,
+            // so redirecting through it had no effect to begin with.
             var rowNeighbour = GetAdjacentUIElement(id, transform.position);
             if (rowNeighbour is ListDetailItem nextRow && nextRow != this)
             {
@@ -341,13 +353,14 @@ namespace ModSettingsMenu.UI
         // (Pug.Other ~331672/331681 override GetInternalOption and redirect from OnPreSelected;
         // this class redirects from OnSelected instead, because CK calls OnSelected on the
         // ENTERING option — Pug.Other:342813-342833 — which is the one guaranteed moment this
-        // decision has to be made for this row). GetInternalOption doesn't work here: its one
-        // caller hands the result to the OUTGOING option's OnPreSelected, an empty virtual this
-        // class never overrides — that path was tried and found inert.
+        // decision has to be made for this row). GetInternalOption doesn't work here: SelectOptionIndex
+        // asks it of the option being LEFT and hands the result to the ENTERING option's
+        // OnPreSelected, an empty virtual this class never overrides — that path was tried and
+        // found inert.
         //
         // Selecting the button here does not re-enter this method or SelectOptionIndex: the
         // button overrides isMenuOption to report false (see ListRowButton), so its own Select()
-        // call takes UIelement.OnUIElementSelected's OTHER branch and calls the button's
+        // call takes UIManager.OnUIElementSelected's OTHER branch and calls the button's
         // OnSelected() directly (Pug.Other:273416-273429) — no recursion.
         public override void OnSelected()
         {
@@ -366,10 +379,9 @@ namespace ModSettingsMenu.UI
                 }
             }
             // No slot to honour (or its button no longer exists) — this genuinely IS the text
-            // field taking focus. Clear both the row's own memory and the screen's so a later
-            // vertical step doesn't try to land back on a button nobody is standing on any more.
+            // field taking focus. Clear the row's own memory so a later vertical step doesn't try
+            // to land back on a button nobody is standing on any more.
             FocusedSlot = null;
-            _owner?.NoteFocusedSlot(null);
         }
 
         // Distinguishes "actively editing" (SELECTED_VALUE_COLOR, vivid) from merely "selected/
