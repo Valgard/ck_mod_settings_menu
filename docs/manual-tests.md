@@ -37,7 +37,7 @@ own. The file to inspect after a write:
 | `Long` | `Item01 … Item20` | scrolling, scroll-follow, movement across the visible edge |
 | `LongReadOnly` | same, view-only | the read-only path — no editing affordances at all |
 | `ShortRestart` | `Alpha, Beta, Gamma`, restart-flagged | the restart prompt |
-| `Overlong` | `Before, <58-char token>, After` | a token wider than the field, and its untouched neighbours |
+| `Overlong` | `Before, AncientGuardianStatueFragmentPolishedObsidianVariantLarge, After` | a 57-character token, far wider than the field, between two short neighbours |
 | `ProseNotAList` | `This is a long sentence, and another one` | prose that must NOT be taken for a list |
 | `WithSpaces` | `Item One, Item Two, Big Chest` | tokens containing spaces |
 
@@ -150,9 +150,10 @@ Run these with **both** devices in reach, alternating deliberately.
 - [ ] First row's ↑ and last row's ↓ are visibly dull and do nothing.
 - [ ] In `Long`, walk `Item20` upward past the top of the visible area — the
       view follows the selection.
-- [ ] In `Overlong`, move the long token. `Before` and `After` come back
-      **byte-identical** in the file: an untouched row must contribute what it
-      was seeded with, never what fits on screen.
+- [ ] In `Overlong`, move `AncientGuardianStatueFragmentPolishedObsidianVariantLarge`.
+      `Before` and `After` come back **byte-identical** in the file: an
+      untouched row must contribute what it was seeded with, never what fits on
+      screen.
 
 ### Deleting
 
