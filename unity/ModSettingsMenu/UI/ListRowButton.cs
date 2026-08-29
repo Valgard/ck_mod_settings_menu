@@ -119,7 +119,11 @@ namespace ModSettingsMenu.UI
             if (selectedMarker != null)
                 selectedMarker.SetActive(true);
             if (_row != null)
+            {
                 _row.FocusedSlot = role;
+                if (_row.Owner != null)
+                    _row.Owner.NoteFocusedSlot(role);
+            }
         }
 
         public override void OnDeselected(bool playEffect = true)
