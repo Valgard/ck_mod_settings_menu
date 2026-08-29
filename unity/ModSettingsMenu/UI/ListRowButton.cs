@@ -58,10 +58,19 @@ namespace ModSettingsMenu.UI
                 selectedMarker.SetActive(false);
         }
 
-        // ACTIVE only for a live instance, exactly as ListDetailItem and ListAddRow override it: the
-        // inactive template must report INACTIVE or RadicalMenu's includeInactive scan navigates to
-        // it too.
-        public override OptionActiveState GetActiveStateInCurrentScene() => gameObject.activeSelf ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
+        // ACTIVE only for a live instance — and the test is `activeInHierarchy`, NOT `activeSelf`.
+        //
+        // The two sibling row types get away with `activeSelf` because THEY are the object the
+        // template switches off. A button is a CHILD of that template: its own `activeSelf` stays
+        // true while the template above it is off, so `activeSelf` reports a button that is not on
+        // screen as a live menu option.
+        //
+        // That matters because `RadicalMenu.Awake` collects options with
+        // `GetComponentsInChildren(includeInactive: true, menuOptions)` — the template's own buttons
+        // land in `menuOptions`, and `Activate()` then calls `OnParentMenuActivation()` and
+        // `SetActive(flag)` on them as if they were rows of the open list.
+        public override OptionActiveState GetActiveStateInCurrentScene() =>
+            gameObject.activeInHierarchy ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
         public override void OnSelected()
         {
