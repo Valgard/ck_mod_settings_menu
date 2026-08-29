@@ -146,11 +146,14 @@ namespace ModSettingsMenu.UI
                 return;
             switch (role)
             {
+                // Pass the role so the rebuild lands the selection back on THIS arrow: reordering is
+                // usually repeated, and walking the selection off the arrow after every press would
+                // cost a sideways step each time.
                 case Role.MoveUp:
-                    _row.Owner.MoveRow(_row.RowIndex, -1);
+                    _row.Owner.MoveRow(_row.RowIndex, -1, Role.MoveUp);
                     break;
                 case Role.MoveDown:
-                    _row.Owner.MoveRow(_row.RowIndex, +1);
+                    _row.Owner.MoveRow(_row.RowIndex, +1, Role.MoveDown);
                     break;
                 case Role.Delete:
                     _row.Owner.RequestDelete(_row.RowIndex);

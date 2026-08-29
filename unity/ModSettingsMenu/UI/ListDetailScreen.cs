@@ -439,7 +439,7 @@ namespace ModSettingsMenu.UI
         // through _rebuildPending, and a second, shortcutting path would have to swap both rows'
         // RowIndex bindings by hand. That is the class of special case ADR-005 split the row types
         // to be rid of.
-        internal void MoveRow(int index, int delta)
+        internal void MoveRow(int index, int delta, ListRowButton.Role? landOn = null)
         {
             int target = index + delta;
             if (index < 0 || index >= _rows.Count || target < 0 || target >= _rows.Count)
@@ -449,13 +449,12 @@ namespace ModSettingsMenu.UI
             // Unconditionally, ignoring the return value: swapping two identical tokens leaves the
             // stored value untouched, and the rows still have to redraw in their new order.
             _rebuildPending = true;
-            // The selection follows the ROW to its new position, landing on its own field —
-            // RowSelection no longer carries which button to return to (see its own comment): the
-            // buttons are real menu options now, so a further press in the SAME direction moves the
-            // selection to the row above/below rather than repeating the move. Reaching the arrow
-            // again to keep reordering costs one extra press (right, then the direction) that a
-            // remembered column used to save.
-            _pendingSelect = new RowSelection(target);
+            // The selection follows the ROW to its new position AND stays on the control that
+            // caused the move, so pressing ↑ repeatedly walks one entry upward instead of moving it
+            // once and then stepping the selection to the neighbouring row. landOn is null when the
+            // move came from somewhere other than an in-row button, and then the row's field is the
+            // right landing.
+            _pendingSelect = new RowSelection(target, landOn);
         }
 
         // Remove a row. An EMPTY row goes without asking — it never reached the owning mod's config
@@ -531,11 +530,12 @@ namespace ModSettingsMenu.UI
             _rows.RemoveAt(index);
             WriteValueFromRows();
             _rebuildPending = true;
-            // Land on whatever row moved up into this slot — its own field, not its delete button
-            // (RowSelection carries no slot to return to any more). Deleting the last row lands on
-            // its predecessor, which Mathf.Min already produces from an out-of-range index.
+            // Land on the delete button of whatever row moved up into this slot, so deleting
+            // several entries in a row does not walk the selection away from ✕ after each one.
+            // Deleting the last row lands on its predecessor, which Mathf.Min already produces from
+            // an out-of-range index.
             int next = Mathf.Min(index, _rows.Count - 1);
-            _pendingSelect = next >= 0 ? new RowSelection(next) : RowSelection.None;
+            _pendingSelect = next >= 0 ? new RowSelection(next, ListRowButton.Role.Delete) : RowSelection.None;
         }
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -797,12 +797,26 @@ namespace ModSettingsMenu.UI
                 // DIRECT children are the rows themselves regardless of that (buttons live one
                 // level deeper, inside each row), so indexing there still means "the Nth row" and
                 // GetIndexForOption converts the row's own field into its actual menuOptions slot.
-                // Lands on the field, not a specific button: RowSelection no longer names one (see
-                // its own comment) — the column a further keyboard step wants is wiring now
-                // (ChainRowsForUIElementNavigation), not something this rebuild has to restore.
+                // Lands on the row's field unless the action that caused this rebuild came from an
+                // in-row button and named it (see RowSelection) — a one-shot target, not a
+                // remembered column. A named button that no longer exists (the row rebuilt
+                // read-only, or the buttons are switched off) falls back to the field rather than
+                // leaving nothing selected.
                 int clampedRow = Mathf.Clamp(explicitTarget.Row, 0, _rows.Count - 1);
                 var targetRow = box.itemContainer.GetChild(clampedRow).GetComponent<ListDetailItem>();
-                int index = targetRow != null ? GetIndexForOption(targetRow) : -1;
+                UIelement target = targetRow;
+                if (targetRow != null && explicitTarget.Slot.HasValue && targetRow.RowButtons != null)
+                {
+                    foreach (var button in targetRow.RowButtons)
+                    {
+                        if (button != null && button.ButtonRole == explicitTarget.Slot.Value && button.gameObject.activeInHierarchy)
+                        {
+                            target = button;
+                            break;
+                        }
+                    }
+                }
+                int index = target != null ? GetIndexForOption(target) : -1;
                 if (index >= 0)
                     SelectOptionIndex(index);
             }
