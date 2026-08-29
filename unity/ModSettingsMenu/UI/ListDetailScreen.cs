@@ -421,6 +421,83 @@ namespace ModSettingsMenu.UI
             _pendingSelect = new RowSelection(target, delta < 0 ? ListRowButton.Role.MoveUp : ListRowButton.Role.MoveDown);
         }
 
+        // Remove a row. An EMPTY row goes without asking — it never reached the owning mod's config
+        // file, so removing it is inconsequential. A filled one asks first: the write path leads
+        // straight into a THIRD-PARTY mod's config, and the only recovery is the section reset,
+        // which restores the whole section.
+        //
+        // No holdToConfirm. The flag exists (StartNewDisplaySequence ~342074 → SetHoldToConfirm
+        // ~342120) and turns the yes-option into a one-second hold, but CK reserves it for
+        // unrecoverable losses of playtime — deleting a character or a world. The nearer comparison
+        // is Menu/ResetToDefaultsDialog, CK's own settings reset, which passes false, as does this
+        // mod's section reset. A single entry must not weigh more than resetting a whole section.
+        // What the dialog does bring free is accidentalInputBlockDuration (1 s by default), during
+        // which the yes-option reports CanBeActivated() == false — that covers the momentum of the
+        // click that opened it.
+        internal void RequestDelete(int index)
+        {
+            if (index < 0 || index >= _rows.Count)
+                return;
+            if (string.IsNullOrEmpty(_rows[index]))
+            {
+                DeleteRow(index);
+                return;
+            }
+            // The generation at the moment of ASKING. The popup is a pushed menu and the answer
+            // arrives in a callback, so the drill-in may have been closed and reopened on a
+            // different setting by then — the same hazard RowGeneration was introduced for, reached
+            // through a new route. A row index alone says WHERE in a list, never WHICH list.
+            int askedGeneration = RowGeneration;
+            string token = _rows[index];
+            Manager.menu.centerPopUpText.StartNewDisplaySequence(
+                "ModSettingsMenu-UI/DeleteEntryConfirm",
+                // The token is a LITERAL, not a loc term, so localizePlaceholders must be false —
+                // otherwise CK looks it up as a term and renders "<missing>". Same reason
+                // ConfirmReset passes false for the mod's display name.
+                new string[] { token },
+                menuInputCooldown: true,
+                fadeTime: 0f,
+                staticTime: 1.5f,
+                useUnscaledTime: true,
+                yPosition: 0f,
+                textBackgroundAlpha: 1f,
+                localize: true,
+                fontFace: TextManager.FontFace.boldMedium,
+                optionsCallback: delegate(PopupResponse response)
+                {
+                    if (!response.IsConfirm)
+                        return;
+                    if (askedGeneration != RowGeneration)
+                        return;
+                    if (index >= _rows.Count || _rows[index] != token)
+                        return;
+                    DeleteRow(index);
+                },
+                options: new List<string> { "cancelDialogue", "delete" },
+                minWidth: 10f,
+                backgroundAlpha: 0.8f,
+                priority: 0,
+                textMaxWidth: 20f,
+                secondOptionPopsAllMenus: false,
+                pauseGame: true,
+                holdToConfirm: false,
+                localizePlaceholders: false
+            );
+        }
+
+        private void DeleteRow(int index)
+        {
+            _rows.RemoveAt(index);
+            WriteValueFromRows();
+            _rebuildPending = true;
+            // Stay on the delete button of whatever row moved up into this slot, so clearing out
+            // several entries stays one gesture. Deleting the last row lands on its predecessor,
+            // which Mathf.Clamp in the rebuild already produces from an out-of-range index — but
+            // saying it here keeps the intent readable rather than emergent.
+            int next = Mathf.Min(index, _rows.Count - 1);
+            _pendingSelect = next >= 0 ? new RowSelection(next, ListRowButton.Role.Delete) : RowSelection.None;
+        }
+
         // A row's button was pressed. The button knows its role and its row and nothing else; the
         // list lives here. Same division as ListAddRow's `_owner?.AddEmptyRow()`.
         internal void OnRowButtonActivated(ListDetailItem row, ListRowButton.Role role)
@@ -436,8 +513,7 @@ namespace ModSettingsMenu.UI
                     MoveRow(row.RowIndex, +1);
                     break;
                 case ListRowButton.Role.Delete:
-                    // Intentionally inert until Task 6 adds RequestDelete. Pressing ✕ does nothing
-                    // in this intermediate state; it is never shipped in it.
+                    RequestDelete(row.RowIndex);
                     break;
             }
         }
