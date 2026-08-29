@@ -321,9 +321,17 @@ namespace ModSettingsMenu.UI
             // new path into a row had to separately know to carry per-row state. See
             // ListDetailScreen.FocusedSlot for the full list of what writes it now.
             var rowNeighbour = GetAdjacentUIElement(id, transform.position);
-            if (rowNeighbour is ListDetailItem nextRow && nextRow != this)
+            // Accept any neighbour OUTSIDE this row — the next row, or the trailing add button,
+            // which is a ListAddRow and not a ListDetailItem. What has to be excluded is a target
+            // INSIDE this row: a horizontal miss (right from the last button) otherwise falls
+            // through to the row's own rightUIElements and lands back on its first button, an
+            // accidental wrap the horizontal chain is deliberately left open to avoid. An earlier
+            // `is ListDetailItem` test excluded that case too, but only as a side effect of a type
+            // check it needed for seeding FocusedSlot onto the neighbour — which round 3 removed
+            // along with the seed, leaving the filter behind to block the add button as well.
+            if (rowNeighbour != null && rowNeighbour != this && !rowNeighbour.transform.IsChildOf(transform))
             {
-                nextRow.Select();
+                rowNeighbour.Select();
                 return true;
             }
             return false;
