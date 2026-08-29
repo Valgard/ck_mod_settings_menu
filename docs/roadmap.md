@@ -173,167 +173,9 @@ side, just a call-site change.
 
 **One constraint comes from elsewhere:** the consumer driving this item wants an
 *ordered* list, so the API has to carry reorder as part of its own design rather
-than as a later bolt-on — see § "Token reorder in the List drill-in", which
-ships independently of this one.
-
-## Token reorder in the List drill-in
-
-The drill-in that `list-widget-editing` shipped (ADR-003) lets a user add and
-edit tokens, but their **insertion order is fixed** — no drag, no up/down, no
-keyboard reorder. Fine for an exclude-set, where order carries no meaning;
-wrong for a genuine priority list, where editing alone means reordering by
-retyping every token.
-
-**Buildable on its own.** The editable drill-in already exists and already runs
-against discovered foreign configs, so reorder is a change to `ListDetailScreen`
-and needs no consumer-facing declaration API to be useful. It sits beside
-§ "Consumer-facing List declaration" for two reasons only: the same
-already-shipped consumer motivates both — auto-rail-bridges' bridge build order
-is exactly a priority list — and a declaration API designed without reorder in
-mind would have to be revisited.
-
-### Decided 2026-08-24: per-row ↑/↓ buttons, not a grab mode
-
-Both shapes were checked against the decompiled `Pug.Other` and the ripped
-vanilla prefabs; the mechanics and their line numbers live in
-`docs/ck/ui-framework.md` § "Redirecting menu input". **Buttons won on
-consistency:** a grab mode's only workable mouse form is drag-and-drop, and
-Core Keeper's menus have none — dragging exists in the inventory, which is a
-different system entirely. A control the mouse cannot reach is the wrong default
-for a screen mouse users also open.
-
-**Both shapes share one prerequisite, which is the real cost.** Anything with a
-second control inside a row runs through
-`RadicalMenuOption.handleNavigationInternally` +
-`NavigateInternally(Direction.Id)`, and that pair is only consulted on the
-`useUIElementsForNavigation` path. **Both MSM prefabs sit on the index path
-(`useUIElementsForNavigation: 0`)** — inherited from `UISettings.prefab`, which
-is also `0` and whose options never set `handleNavigationInternally`. Ten
-vanilla menus do set it, `Join Game Menu` among them, and that prefab is the
-working reference for several controls in one row. Switching MSM's screens over
-is a prefab change that alters how *every existing row* is reached, so it wants
-its own verification pass — including the `GRAYED_OUT` skip, which behaves
-differently there (see § "Locked settings").
-
-**Consequence for sequencing:** this couples back to § "Per-row delete button".
-Once the row carries buttons, delete and ↑/↓ are three affordances beside the
-same field, and the row width has to carry all three or none. The geometry for
-all three is settled there (2026-08-24) — 24 × 24 px buttons with 16 × 16 px
-glyphs, the row down to 16.625 units — and the arrows reuse the existing `Arrow`
-sprite rotated by ±90°. The code can still land in two steps; the prefab work
-cannot.
-
-**The navigation path is already in place** (2026-08-24): the drill-in was moved
-to `useUIElementsForNavigation` with a chain built per rebuild, verified in game.
-What the buttons still need is only the in-row half of that chain — `left`/
-`rightUIElements` between field and buttons — and that half lives in the prefab,
-because siblings of one template keep their references through `Instantiate`.
-
-**Rejected, and why it is worth remembering:** the grab mode needs no prefab
-change at all if built on `SelectNextIndex`/`SelectPrevIndex` overrides (both
-`public virtual`, and `RadicalCreditsMenu` overrides exactly those) — that
-remains the cheapest way to reinterpret ↑/↓ on the index path, should a later
-feature want one without leaving it. CK's own idiom for the same thing is the
-flag above, worked out in `RadicalOptionsMenuOption_Slider`'s
-`_requiresActivationForAdjustment`, which is switched on in exactly one shipped
-prefab (`ControlMappingMenu`).
-
-**What the chosen shape still needs:** the swap has to move the selection with
-the row, since `RebuildRows` tears every row down and re-seeds the selection
-through `_pendingSelect`; and the buttons need their own reachable focus, which
-is what `NavigateInternally` is for — copy the player list (`:331681`), which
-asks `GetAdjacentUIElement` on the selected child and calls `Select()`.
-
-## Per-row delete button in the List drill-in
-
-**There is no way to delete a list entry.** The drill-in offers edit and add;
-removal is the one operation with no control at all. Promised as a later step
-when the row model was reworked (2026-08-22, "später kommt noch ein Delete
-Button an jede Zeile") and left out of that slice on purpose — ADR-005 records
-it as not adopted, and both it and ADR-003 already claim it "remains on the
-roadmap", which until now it did not.
-
-**What happens instead today is not a substitute, and it used to look like
-one.** Clearing a row's text takes the token out of the stored value —
-`OnRowTextCommitted` derives the value through `ListTokenizer.Join`, which skips
-empties. But since ADR-005 the row itself **stays on screen** for the rest of the
-session, because the screen owns its row list and an empty row is a legitimate
-working state there. So the gesture that used to double as "delete" (the row
-vanished on the next commit) no longer gives that feedback: the entry is gone
-from the file while the row is still sitting there, and the list only looks
-right again after closing and reopening. Whichever way a user reads that, one
-half of it is wrong.
-
-**One of the three costs ADR-003 rejected the feature over is already paid.** It
-weighed an explicit remove affordance as "three new pieces where the uniform
-model needs one": a remove action bound to a new controller input, a self-rolled
-hint object, and a separate non-text add-row class. The third shipped with
-ADR-005 as `ListAddRow`, so what is left is the input binding and its hint — and
-the section-reset work (ADR-004) has since demonstrated the cheaper half of that
-on a dormant vanilla action plus `GetHelpButtonsToShow`.
-
-**The geometry is deliberately prepared.** The field frame spans the *field*, not
-the row, precisely so a button can sit beside it — CK's own idiom, where a text
-input's trailing affordance is a **sibling** of the field rather than a child of
-it (the same multi-control row the masked-value and dropdown items depend on;
-see § "Explicitly out of scope" on the dual-range slider for the vanilla
-evidence). Nothing in the current prefab has to move to make room.
-
-### Geometry, decided 2026-08-24 — shared with the reorder buttons
-
-A visible per-row button, not a hint-bar action on the selected row: the
-hint-bar shape (ADR-004's) costs no geometry but is invisible to a mouse user,
-and deletion is precisely the operation the mouse has no other way to reach.
-Controller reachability came first and is done — the drill-in now runs on CK's
-UIElement navigation path.
-
-The measurements below are the full set (delete plus the two reorder arrows),
-because the row width has to carry all three or none. Everything derives from
-`spritePixelsToUnits: 16` in the atlas — **1 unit = 16 px**, `filterMode: 0`, so
-every position must land on a whole pixel.
-
-| | |
-|---|---|
-| Row today | 22 × 1.5 units = **352 × 24 px** |
-| Button | **24 × 24 px**, the full row height, so it sits flush with the field frame |
-| Icon inside it | **16 × 16 px** — `field_border` is 16×16 with `border: [4,4,4,4]`, so 4 px of frame all round |
-| Three buttons + 1 px gaps | 74 px |
-| Gap to the field frame | 12 px (CK's own spacing in `SaveSlot.prefab`) |
-| Total taken from the row | **86 px = 5.375 units** |
-| Row becomes | **16.625 units** |
-| `ListDetailItem.maxWidth` 21 → | **~15.5** |
-
-Chrome comes from the sprites already in `ui_chrome`: `field_border` as the
-resting frame, `field_focus` (12×12, border 3) as the selection marker — the
-same pair the row itself uses, and the same resting/selected split CK's own
-save-slot button has (`background` / `selectBackground`). The arrows can reuse
-the existing `Arrow` sprite rotated by ±90°, which is lossless under point
-filtering; only the delete glyph is new. A new sprite needs its `pad` entry and
-a pinned `internalIds` number in `sources/msm_ui_chrome.json` — next free is
-`100011` — or the next cut re-derives the id and orphans the prefab reference.
-
-> **The viewport this used to wait for now exists** ([ADR-007](adrs/007-horizontal-text-scrolling.md)).
-> The row keeps its full value regardless of how much of it is visible, so
-> narrowing the row is a question of how much text shows at once, not of what
-> survives an edit. That removes the reason this item was blocked.
-
-CK's own delete button is 16×16 inside a 32 px row, i.e. deliberately smaller
-than the row — the one vanilla argument for a smaller button here. It was
-weighed against a flush 24 px one and lost on legibility: at 16×16 the frame
-leaves an 8×8 glyph, which is half of what `ToggleListView` / `TogglePlainView`
-already use in this very atlas.
-
-### Open design questions — the delete button
-
-- **Confirmation, or none?** ADR-003's own con against the current model was
-  that "an accidental clear-and-confirm removes a token with no dedicated 'are
-  you sure' step". A delete button is easier to hit deliberately *and* easier to
-  hit accidentally. The section reset asks; a single token may not warrant it.
-- **What happens to an empty row?** With a delete control present, an empty row
-  becomes purely a working state — but then nothing ever removes one except
-  closing the screen. Whether delete should also be the way to drop an empty row
-  (and whether the add button should refuse to append a second empty one) is the
-  same question from the other side.
+than as a later bolt-on. Reordering itself has shipped — per-row arrows in the
+drill-in, ADR-008 — so what remains here is exposing order through the
+declaration API.
 
 ## Text input for plain string settings (`SettingKind.Text`)
 
@@ -359,12 +201,11 @@ the same two sprites and the same field wiring** — see ADR-005 for the row mod
 they hang in, and `docs/ck/ui-framework.md` for the `PugText.maxWidth` trap that
 disables the capacity check if the text is allowed to wrap.
 
-This also **supersedes the cheap intermediate step** sketched under
-§ "Consumer-facing List declaration" — a
-`.Text(...)` rendering through the `Info` path as a *read-only placeholder*.
-With the frame available, a real editable field is barely more work than the
-placeholder, and the placeholder would ship a row that looks editable-ish and
-isn't.
+This also **supersedes the cheap intermediate step** sketched under §
+"Consumer-facing List declaration" — a `.Text(...)` rendering through the `Info`
+path as a *read-only placeholder*. With the frame available, a real editable
+field is barely more work than the placeholder, and the placeholder would ship a
+row that looks editable-ish and isn't.
 
 ### What it needs beyond the drill-in row
 
@@ -786,21 +627,22 @@ which is the honest fix and the widest blast radius (every text input in the gam
 runs through it, the character-name field included); or a narrower prefix that
 records the argument for the current field so the commit path can read it.
 
-**The sibling half of this finding is fixed in 2.0.0.** The same dropped parameter
-let a *world event* delete a list entry mid-edit:
-`UIManager.HideAllInventoryAndCraftingUI` ends with
-`SetInputText("")` + `Deactivate(commit: false)` on whatever field is being edited,
-which is indistinguishable from pressing Enter on an emptied row — the entry was
-dropped and the shortened value written to the owning mod's config. Its callers are
-world events, not menu actions (opening a chest, a cattle pen, a vending machine, a
-crafting station, a sign, the map, and `PlayerController.FadeOutAndLockPlayer`), and
-in multiplayer the simulation keeps running while a player sits in the options menu,
-so another player or a mob can trigger it. `MenuPatch` now prefixes that method and
-commits the row first, which also clears `activeInputField` and thereby disarms CK's
-own `if (textInputIsActive)` blanking. It had to be a patch rather than a rule in
-`ListDetailItem`: that sequence is byte-for-byte the on-screen keyboard's own result
-handler, so only the call's *source* can separate "the player just typed this" from
-"the world just wiped it" — see that patch's comment.
+**The sibling half of this finding is fixed in 2.0.0.** The same dropped
+parameter let a *world event* delete a list entry mid-edit:
+`UIManager.HideAllInventoryAndCraftingUI` ends with `SetInputText("")` +
+`Deactivate(commit: false)` on whatever field is being edited, which is
+indistinguishable from pressing Enter on an emptied row — the entry was dropped
+and the shortened value written to the owning mod's config. Its callers are
+world events, not menu actions (opening a chest, a cattle pen, a vending
+machine, a crafting station, a sign, the map, and
+`PlayerController.FadeOutAndLockPlayer`), and in multiplayer the simulation
+keeps running while a player sits in the options menu, so another player or a
+mob can trigger it. `MenuPatch` now prefixes that method and commits the row
+first, which also clears `activeInputField` and thereby disarms CK's own `if
+(textInputIsActive)` blanking. It had to be a patch rather than a rule in
+`ListDetailItem`: that sequence is byte-for-byte the on-screen keyboard's own
+result handler, so only the call's *source* can separate "the player just typed
+this" from "the world just wiped it" — see that patch's comment.
 
 ## Small fixes
 

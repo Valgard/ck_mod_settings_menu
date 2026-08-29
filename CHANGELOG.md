@@ -5,6 +5,11 @@ entry is the version published to mod.io; its body is the modfile changelog.
 
 ## [2.0.0]
 
+- **List entries can be reordered and deleted.** Every row in the drill-in now
+  carries up/down arrows and a delete button, reachable by mouse, keyboard and
+  controller alike. Deleting asks first — the confirmation names the entry and
+  has to be held, not tapped — while an entry you only just added and never
+  filled in disappears without a prompt.
 - **Any mod's settings can be restored to their defaults.** Select a row in that
   mod's box and press the reset button shown at the bottom of the screen; a
   confirmation names the mod before anything changes. Works for detected mods
