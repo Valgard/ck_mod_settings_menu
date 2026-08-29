@@ -42,29 +42,6 @@ namespace ModSettingsMenu.UI
         // A rebuild's explicit selection target, or RowSelection.None to keep the previous slot (clamped).
         private RowSelection _pendingSelect = RowSelection.None;
 
-        // Which in-row control the navigation is currently in: null for a row's own text field,
-        // otherwise a button's role. Lives HERE — on the screen — rather than on the row that
-        // happens to be selected, because it describes the NAVIGATION, not any one row. Two earlier
-        // attempts kept it per-row (ListDetailItem.FocusedSlot) and each missed a different path
-        // into a row: a screen-level carry read from OnSelectedOptionChanged (always too late,
-        // since SelectOptionIndex calls OnSelected() first — Pug.Other:342813-342833), then
-        // NavigateInternally's row-to-row fallback seeding a copy its own primary branch had no
-        // reason to know needed clearing. State that belongs to the navigation but is scattered
-        // across every row is exactly the shape where a new path can silently miss it; one field in
-        // one place, written from five call sites, removes that shape rather than patching it a
-        // fourth time:
-        //   - ListRowButton.OnSelected sets it to the pressed button's role.
-        //   - ListDetailItem.NavigateInternally's primary branch clears it when focus returns to a
-        //     row's own field (the transition that never re-fires OnSelected — see there).
-        //   - ListDetailItem.OnSelected's own "nothing to honour" branch clears it when the field
-        //     itself takes focus by any other route.
-        //   - Populate resets it at the session boundary (a stale column from a DIFFERENT list must
-        //     not carry into this one).
-        //   - Update's rebuild path seeds it for an explicit reorder/add target, same ordering
-        //     requirement as everywhere else (before the selection, not after).
-        // Read (and redirected to a matching button) from ListDetailItem.OnSelected.
-        internal ListRowButton.Role? FocusedSlot { get; set; }
-
         // Bumped once per open. This is the ONLY thing in the design that marks a session boundary:
         // the screen is a singleton reused for every list, so `_owner` cannot tell two sessions
         // apart and a row's index is a coordinate with no coordinate system. A row takes this value
@@ -155,7 +132,6 @@ namespace ModSettingsMenu.UI
             _rows.Clear();
             _rebuildPending = false; // a stale deferred rebuild from a prior open can't apply here
             _pendingSelect = RowSelection.None; // ...and neither can its selection target
-            FocusedSlot = null; // ...nor a column left over from browsing a DIFFERENT list before this open
             _scroll = GetComponent<UIScrollWindow>();
             if (box == null || box.itemContainer == null || box.itemTemplate == null || box.addRow == null)
             {
@@ -294,63 +270,107 @@ namespace ModSettingsMenu.UI
             ChainRowsForUIElementNavigation();
         }
 
-        // Link each row to its vertical neighbours. Only the UIElement navigation path reads these
-        // (RadicalMenu.useUIElementsForNavigation -> SelectIndexInDirection -> GetAdjacentUIElement),
-        // and on that path an empty list means no navigation at all rather than a fallback — so this
-        // has to run on every rebuild, for rows that exist only from now on.
+        // Link each row's controls to their vertical neighbours. Only the UIElement navigation path
+        // reads these (RadicalMenu.useUIElementsForNavigation -> SelectIndexInDirection ->
+        // GetAdjacentUIElement), and on that path an empty list means no navigation at all rather
+        // than a fallback — so this has to run on every rebuild, for rows that exist only from now on.
         //
         // This is CK's own arrangement for a dynamically built list, not an invention: what sits
         // INSIDE a row is wired in the prefab (sibling fileIDs survive Instantiate), what sits
         // BETWEEN rows is assigned here, because row N cannot know row N+1 before either exists.
-        // ChooseCharacterMenu does exactly this for its save slots, SelectWorldMenu for its worlds.
+        // SelectWorldMenu does exactly this for its own per-slot buttons (Pug.Other:344739), wiring
+        // each slot's playOption/moreOption/deleteOption/etc. against the SAME control on the
+        // slot before it — one neighbour-list assignment per role, per adjacent pair. This mirrors
+        // that shape directly: an editable row's field and its three buttons are each their own
+        // menu option now (see ListRowButton — it no longer opts out of isMenuOption), so each gets
+        // its own vertical chain, column by column, instead of one chain that used to stand in for
+        // the whole row.
         //
-        // The chain is CYCLIC: the first row's top neighbour is the last one, the last row's bottom
-        // neighbour is the first. That keeps the wrap-around this screen has always had — the index
-        // path gets it free from `(i + 1) % Count`, and losing it on the UIElement path was a
-        // regression, not a design change (reported from a play session).
+        // The chain does NOT wrap row-to-row. It wraps through the add button instead: every
+        // control in the last row points down at the add button (one unambiguous target), and the
+        // add button's own topUIElements/bottomUIElements each carry all four of the adjacent row's
+        // controls, letting GetClosestUIElementInList (Pug.Other:358056) pick a reachable one by
+        // closest position — the same graceful-degradation shape SelectWorldMenu's own multi-entry
+        // lists use when a slot's exact counterpart does not exist in the next one. There is no
+        // longer a "which column was I in" memory to restore here; the add button cannot know which
+        // control the player left from, and does not need to — closest-by-position is a reasonable
+        // landing either way.
         //
-        // Wrapping through the chain rather than through an override of the navigation methods is
-        // what makes it correct rather than merely present: CK's own GetClosestUIElementInList still
-        // applies, so a wrap target that is scrolled out of view is accepted via
-        // UIElementsSharesScrollWindow, and OnSelectedOptionChanged scrolls to it like any other
-        // step. An override would have had to reproduce all of that by hand.
-        //
-        // It is also what vanilla does. CreateWorldMenu and WorldSettingsMenu both carry a chain
-        // that is cyclic in BOTH directions, wired in the prefab — CK wraps wherever the screen is a
-        // real vertical pick-list, and leaves it open on forms (Join Game) and short button rows
-        // (Pause Menu). What it cannot do in a prefab is a list whose length is unknown until it
-        // opens, which is why the code-side precedents (ChooseCharacterMenu, SelectWorldMenu) chain
-        // linearly and stop: they are wiring rows that do not exist yet, not declining to wrap.
-        // Doing the ring here is therefore the same convention, expressed the only way a dynamic
-        // list can express it.
+        // A read-only list has no buttons and no add row (RebuildRows switches both off) — for it
+        // this degrades to the plain field-to-field cyclic chain this screen used before the
+        // buttons existed, which is also what a single-role list is when nothing else is wired: no
+        // special case for read-only, just a list with one column instead of four.
         private void ChainRowsForUIElementNavigation()
         {
-            int last = menuOptions.Count - 1;
+            var rows = new List<ListDetailItem>();
+            for (int i = 0; i < box.itemContainer.childCount; i++)
+            {
+                var item = box.itemContainer.GetChild(i).GetComponent<ListDetailItem>();
+                if (item != null)
+                    rows.Add(item);
+            }
+            int last = rows.Count - 1;
+
+            if (_readOnly)
+            {
+                // No buttons, no add row on this screen at all — CYCLIC, the same wrap-around
+                // this screen has always had for a plain vertical list. A single row gets empty
+                // lists rather than a cycle onto itself: the wrap would resolve to the row already
+                // selected, a no-op with a selection SFX.
+                for (int i = 0; i <= last; i++)
+                {
+                    var field = rows[i];
+                    if (last == 0)
+                    {
+                        field.topUIElements = new List<UIelement>();
+                        field.bottomUIElements = new List<UIelement>();
+                        continue;
+                    }
+                    field.topUIElements = new List<UIelement> { rows[i > 0 ? i - 1 : last] };
+                    field.bottomUIElements = new List<UIelement> { rows[i < last ? i + 1 : 0] };
+                }
+                return;
+            }
+
+            if (rows.Count == 0)
+            {
+                // Nothing to wrap to — the add button is the only control on screen.
+                box.addRow.topUIElements = new List<UIelement>();
+                box.addRow.bottomUIElements = new List<UIelement>();
+                return;
+            }
             for (int i = 0; i <= last; i++)
             {
-                var option = menuOptions[i];
-                if (option == null)
-                    continue;
-                // Fresh lists rather than Clear()+Add: a row is a clone of the template, so it may
-                // carry whatever the template's own lists hold, and reusing that instance would
-                // quietly share it between rows.
-                //
-                // A single row gets empty lists rather than a cycle onto itself: the wrap would
-                // resolve to the row already selected, which is a no-op with a selection SFX.
-                if (last == 0)
+                var elements = RowElements(rows[i]);
+                var prevElements = i > 0 ? RowElements(rows[i - 1]) : null;
+                var nextElements = i < last ? RowElements(rows[i + 1]) : null;
+                for (int col = 0; col < elements.Count; col++)
                 {
-                    option.topUIElements = new List<UIelement>();
-                    option.bottomUIElements = new List<UIelement>();
-                    continue;
+                    elements[col].topUIElements = new List<UIelement> { prevElements != null ? prevElements[col] : box.addRow };
+                    elements[col].bottomUIElements = new List<UIelement> { nextElements != null ? nextElements[col] : box.addRow };
                 }
-                option.topUIElements = new List<UIelement> { menuOptions[i > 0 ? i - 1 : last] };
-                option.bottomUIElements = new List<UIelement> { menuOptions[i < last ? i + 1 : 0] };
             }
+            box.addRow.topUIElements = new List<UIelement>(RowElements(rows[last]));
+            box.addRow.bottomUIElements = new List<UIelement>(RowElements(rows[0]));
         }
 
-        // Clone the (inactive) item template into the container, seed its text, register it as a
-        // navigable menu option. The template being inactive makes Instantiate(_, parent) produce an
-        // inactive clone (no mid-clone OnEnable/NRE); SetActive(true) then activates it cleanly.
+        // The four navigable controls of one row, in the fixed column order every clone of the
+        // template shares (field, ↑, ↓, ✕) — ListRowButton[] is serialized on the prefab, so
+        // Instantiate preserves its element order across every row, which is what lets column N
+        // mean the same control everywhere this method wires it.
+        private static List<UIelement> RowElements(ListDetailItem row)
+        {
+            var elements = new List<UIelement> { row };
+            if (row.RowButtons != null)
+                elements.AddRange(row.RowButtons);
+            return elements;
+        }
+
+        // Clone the (inactive) item template into the container, seed its text, register the field
+        // AND its three buttons as navigable menu options — every one of the four is independently
+        // selectable now (see ListRowButton), not just the field standing in for the row. The
+        // template being inactive makes Instantiate(_, parent) produce an inactive clone (no
+        // mid-clone OnEnable/NRE); SetActive(true) then activates it cleanly.
         private void AddItem(string token, int rowIndex)
         {
             var row = Object.Instantiate(box.itemTemplate, box.itemContainer);
@@ -374,6 +394,20 @@ namespace ModSettingsMenu.UI
             }
             item.SetParentMenu(this);
             menuOptions.Add(item);
+            // Registered unconditionally, read-only rows included: a read-only row's buttons are
+            // simply INACTIVE (RefreshButtonStates -> SetActive(!readOnly)), which already reports
+            // GetActiveStateInCurrentScene() == INACTIVE and fails IsSelectionEnabled(), so they are
+            // unreachable by construction rather than by a check here.
+            if (item.RowButtons != null)
+            {
+                foreach (var button in item.RowButtons)
+                {
+                    if (button == null)
+                        continue;
+                    button.SetParentMenu(this);
+                    menuOptions.Add(button);
+                }
+            }
         }
 
         // Called from the button's OnActivated, i.e. from inside a row's own callback — so the
@@ -393,7 +427,7 @@ namespace ModSettingsMenu.UI
             // (ListDetailItem.maxWidth is 0; see its class-level note). SeedText/RenderContent's
             // baseline-then-rebaseline against the (now hypothetical) trim is redundancy today, not a
             // second reason this line can't simply be reversed.
-            _pendingSelect = new RowSelection(_rows.Count - 1, null);
+            _pendingSelect = new RowSelection(_rows.Count - 1);
         }
 
         // Swap a row with its neighbour. Deferred through _rebuildPending exactly as AddEmptyRow is,
@@ -415,10 +449,13 @@ namespace ModSettingsMenu.UI
             // Unconditionally, ignoring the return value: swapping two identical tokens leaves the
             // stored value untouched, and the rows still have to redraw in their new order.
             _rebuildPending = true;
-            // The selection follows the ROW, and stays on the same button, so a further press keeps
-            // moving the same entry. Landing back on the text field would make moving an entry four
-            // places cost eight inputs instead of four.
-            _pendingSelect = new RowSelection(target, delta < 0 ? ListRowButton.Role.MoveUp : ListRowButton.Role.MoveDown);
+            // The selection follows the ROW to its new position, landing on its own field —
+            // RowSelection no longer carries which button to return to (see its own comment): the
+            // buttons are real menu options now, so a further press in the SAME direction moves the
+            // selection to the row above/below rather than repeating the move. Reaching the arrow
+            // again to keep reordering costs one extra press (right, then the direction) that a
+            // remembered column used to save.
+            _pendingSelect = new RowSelection(target);
         }
 
         // Remove a row. An EMPTY row goes without asking — it never reached the owning mod's config
@@ -494,32 +531,11 @@ namespace ModSettingsMenu.UI
             _rows.RemoveAt(index);
             WriteValueFromRows();
             _rebuildPending = true;
-            // Stay on the delete button of whatever row moved up into this slot, so clearing out
-            // several entries stays one gesture. Deleting the last row lands on its predecessor,
-            // which Mathf.Clamp in the rebuild already produces from an out-of-range index — but
-            // saying it here keeps the intent readable rather than emergent.
+            // Land on whatever row moved up into this slot — its own field, not its delete button
+            // (RowSelection carries no slot to return to any more). Deleting the last row lands on
+            // its predecessor, which Mathf.Min already produces from an out-of-range index.
             int next = Mathf.Min(index, _rows.Count - 1);
-            _pendingSelect = next >= 0 ? new RowSelection(next, ListRowButton.Role.Delete) : RowSelection.None;
-        }
-
-        // A row's button was pressed. The button knows its role and its row and nothing else; the
-        // list lives here. Same division as ListAddRow's `_owner?.AddEmptyRow()`.
-        internal void OnRowButtonActivated(ListDetailItem row, ListRowButton.Role role)
-        {
-            if (row == null || row.Generation != RowGeneration)
-                return;
-            switch (role)
-            {
-                case ListRowButton.Role.MoveUp:
-                    MoveRow(row.RowIndex, -1);
-                    break;
-                case ListRowButton.Role.MoveDown:
-                    MoveRow(row.RowIndex, +1);
-                    break;
-                case ListRowButton.Role.Delete:
-                    RequestDelete(row.RowIndex);
-                    break;
-            }
+            _pendingSelect = next >= 0 ? new RowSelection(next) : RowSelection.None;
         }
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -751,10 +767,10 @@ namespace ModSettingsMenu.UI
             selectedIndex = -1; // stale index from before the rebuild — reset so SelectOptionIndex's
             // no-op guard and range check don't see a wrong/out-of-range value
             // A caller that knows where the selection must land says so via _pendingSelect — today
-            // that is AddEmptyRow, aiming at the row the add button just appended, since the numeric
-            // slot the button itself occupies would land on the button again. Everything else leaves
-            // it at -1, meaning "keep the same numeric slot" (clamped), which is what every
-            // edit/removal wants anyway.
+            // that is AddEmptyRow, MoveRow and DeleteRow, each naming a ROW (never a specific
+            // in-row control any more — see RowSelection). Everything else leaves it at -1, meaning
+            // "keep the same numeric slot" (clamped), which is what an ordinary text-edit commit
+            // wants anyway.
             // Nothing to select is a legitimate outcome, and Mathf.Clamp cannot express it: with an
             // empty list the bounds invert (0 .. -1), and Clamp's `if (v < min) v = min; else if
             // (v > max) v = max;` then yields -1 for any non-negative target — or 0 for a negative
@@ -764,30 +780,40 @@ namespace ModSettingsMenu.UI
             // it reachable without anyone looking at this line.
             if (menuOptions.Count == 0)
                 return;
-            // Directional input has no target of its own and needs the selection carried across
-            // the rebuild — pressing further after a reorder should keep moving the same entry,
-            // and an ordinary edit/removal should keep the same numeric slot (clamped). A pointer
-            // carries its own target every frame instead (UIMouse re-derives selection from
-            // hover), and restoring a remembered one here fights it: the mouse has not moved, so
-            // forcing the selection back onto the row that used to sit at this slot moves it away
-            // from whatever the pointer is now actually over, until the next hover recalculates
-            // it. Skip the restore on mouse and let the pointer decide — the redraw above still
-            // happens either way, only this explicit selection step is device-dependent.
-            if (!Manager.input.SystemIsUsingMouse())
+            // A pointer carries its own target every frame instead (UIMouse re-derives selection
+            // from hover), and restoring anything here fights it: the mouse has not moved, so
+            // forcing the selection onto whatever this rebuild wants moves it away from whatever
+            // the pointer is now actually over, until the next hover recalculates it. Skip the
+            // restore on mouse and let the pointer decide — the redraw above still happens either
+            // way, only this explicit selection step is device-dependent (the same test
+            // OnSelectedOptionChanged already uses to gate its own scroll-follow).
+            if (Manager.input.SystemIsUsingMouse())
+                return;
+            if (explicitTarget.HasRow)
             {
-                int target = explicitTarget.HasRow ? explicitTarget.Row : previousIndex;
-                int clamped = Mathf.Clamp(target, 0, menuOptions.Count - 1);
-                // Set the column BEFORE SelectOptionIndex for the same reason NavigateInternally does:
-                // it calls the target row's OnSelected() synchronously, which is where the column is
-                // read. Guarded on HasRow, not on Slot.HasValue: AddEmptyRow's target has no slot (it
-                // means "land on the field"), and with FocusedSlot no longer reset per-row in Bind(), a
-                // column left over from moving a button around before adding a row would otherwise
-                // carry into the fresh row uninvited. An ordinary edit/removal (no explicit target,
-                // HasRow false) leaves the column exactly as OnSelected last set it while the field was
-                // being edited — already null, since editing requires the field to hold focus.
-                if (explicitTarget.HasRow)
-                    FocusedSlot = explicitTarget.Slot;
-                SelectOptionIndex(clamped);
+                // Every row now contributes several menuOptions entries (its field, plus its
+                // buttons — see AddItem), so a row index can no longer be clamped straight against
+                // menuOptions.Count the way a single-entry-per-row list could. box.itemContainer's
+                // DIRECT children are the rows themselves regardless of that (buttons live one
+                // level deeper, inside each row), so indexing there still means "the Nth row" and
+                // GetIndexForOption converts the row's own field into its actual menuOptions slot.
+                // Lands on the field, not a specific button: RowSelection no longer names one (see
+                // its own comment) — the column a further keyboard step wants is wiring now
+                // (ChainRowsForUIElementNavigation), not something this rebuild has to restore.
+                int clampedRow = Mathf.Clamp(explicitTarget.Row, 0, _rows.Count - 1);
+                var targetRow = box.itemContainer.GetChild(clampedRow).GetComponent<ListDetailItem>();
+                int index = targetRow != null ? GetIndexForOption(targetRow) : -1;
+                if (index >= 0)
+                    SelectOptionIndex(index);
+            }
+            else
+            {
+                // No explicit target — an ordinary text-edit commit wants the same numeric slot it
+                // had before, clamped. previousIndex is still valid here: committing a row's text
+                // changes neither the row count nor the per-row element order, and MenuPatch's own
+                // Harmony prefixes keep selectedIndex pinned to the committing field throughout the
+                // edit, so it can only have been that field's own index.
+                SelectOptionIndex(Mathf.Clamp(previousIndex, 0, menuOptions.Count - 1));
             }
         }
     }

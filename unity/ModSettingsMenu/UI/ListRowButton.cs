@@ -65,15 +65,6 @@ namespace ModSettingsMenu.UI
 
         public Role ButtonRole => role;
 
-        // A row button is NOT a menu option, even though RadicalMenuOption says otherwise.
-        // UIelement.Select() calls OnSelected() only when this is false; when it is true it
-        // defers to MenuManager.SelectOption, which looks the element up in the menu's
-        // menuOptions list and silently does nothing when it is not there — and a row button
-        // never is, only rows are. Vanilla's own sub-elements (PlayerListEntryButton) are
-        // plain UIelements for the same reason; this class keeps RadicalMenuOption for its
-        // activation and collider plumbing and opts out of the routing alone.
-        public override bool isMenuOption => false;
-
         protected override void Awake()
         {
             base.Awake();
@@ -127,11 +118,6 @@ namespace ModSettingsMenu.UI
             base.OnSelected();
             if (selectedMarker != null)
                 selectedMarker.SetActive(true);
-            // Written onto the SCREEN (ListDetailScreen.FocusedSlot), not this row: the column is
-            // navigation state, not row state. See that field's own comment for the full list of
-            // what writes it and why it moved here after two per-row attempts.
-            if (_row != null && _row.Owner != null)
-                _row.Owner.FocusedSlot = role;
         }
 
         public override void OnDeselected(bool playEffect = true)
@@ -141,33 +127,35 @@ namespace ModSettingsMenu.UI
                 selectedMarker.SetActive(false);
         }
 
+        // Now that this button is a genuine menuOptions entry (see the removed isMenuOption
+        // override — CK's own default applies again), CK addresses it directly:
+        // RadicalMenu.ActivateSelectedIndex is literally menuOptions[selectedIndex].OnActivated(),
+        // and a click reaches it the same way — UIMouse.LeftClick() on currentSelectedUIElement,
+        // which for a focused menu option now also fires CK's own selection machinery (see
+        // ListDetailScreen's own navigation rewrite). No forwarding is needed on either the row's
+        // side or this one any more: the row this used to arrive at (ListDetailItem.OnActivated
+        // used to hand it here) never sees it, because CK's selectedIndex now names this button
+        // directly. Move/delete are called straight from here instead of through a screen-side
+        // dispatcher, since there is no longer a row in the middle to relay through.
         public override void OnActivated()
         {
             base.OnActivated();
             if (_disabled)
                 return;
-            if (_row != null && _row.Owner != null)
-                _row.Owner.OnRowButtonActivated(_row, role);
-        }
-
-        // CK's activation receipt (the lower-pitched menu sfx) is played from the input poll, not
-        // from the click: MenuManager.UpdateInputAndApplyToCurrentMenu (Pug.Other:269883), gated on
-        // CanActivateCurrentOption(). That gate is false by the time a click reaches THIS button,
-        // because the hover that brought the pointer here already cleared it: UIMouse
-        // .TrySelectNewElement calls DeselectAnySelectedUIElement (:273433), which unconditionally
-        // sets selectedIndex = -1 (:342844), and the Select() that follows only restores the index
-        // for a real menu option — which this deliberately is not. Enter on the same button still
-        // sounds, since no hover change happens and the index still names the row. So the control
-        // was audible on one input and silent on the other; this makes them agree.
-        //
-        // It belongs on the click path alone. OnActivated is shared with the keyboard route, where
-        // CK has already played the receipt, and a second call there would be dropped only by the
-        // 50 ms sfx cooldown — correct by accident, and silently wrong the day that timing shifts.
-        public override void OnLeftClicked(bool mod1, bool mod2)
-        {
-            if (!_disabled)
-                Manager.menu.AttemptToPlayMenuSfx(SfxID.FIXME_menu_select, 0.6f, 0f, reuse: false);
-            base.OnLeftClicked(mod1, mod2);
+            if (_row == null || _row.Owner == null)
+                return;
+            switch (role)
+            {
+                case Role.MoveUp:
+                    _row.Owner.MoveRow(_row.RowIndex, -1);
+                    break;
+                case Role.MoveDown:
+                    _row.Owner.MoveRow(_row.RowIndex, +1);
+                    break;
+                case Role.Delete:
+                    _row.Owner.RequestDelete(_row.RowIndex);
+                    break;
+            }
         }
 
         // CK creates the click collider from RENDERED TEXT: InitClickCollider only makes one when
