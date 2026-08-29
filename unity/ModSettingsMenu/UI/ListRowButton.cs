@@ -65,6 +65,15 @@ namespace ModSettingsMenu.UI
 
         public Role ButtonRole => role;
 
+        // A row button is NOT a menu option, even though RadicalMenuOption says otherwise.
+        // UIelement.Select() calls OnSelected() only when this is false; when it is true it
+        // defers to MenuManager.SelectOption, which looks the element up in the menu's
+        // menuOptions list and silently does nothing when it is not there — and a row button
+        // never is, only rows are. Vanilla's own sub-elements (PlayerListEntryButton) are
+        // plain UIelements for the same reason; this class keeps RadicalMenuOption for its
+        // activation and collider plumbing and opts out of the routing alone.
+        public override bool isMenuOption => false;
+
         protected override void Awake()
         {
             base.Awake();

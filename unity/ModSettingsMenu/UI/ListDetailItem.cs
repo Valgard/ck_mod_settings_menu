@@ -293,33 +293,26 @@ namespace ModSettingsMenu.UI
             // a BUTTON is focused, since the vertical chain is wired between rows, not buttons.
             // Fall back to this row's own neighbour so the flag does not turn up/down into a dead
             // key. ChainRowsForUIElementNavigation builds that chain on every rebuild.
+            //
+            // Seed the NEIGHBOUR's FocusedSlot BEFORE calling Select() on it, not after. Select()
+            // routes through UIelement.Select() -> MenuManager.OnUIElementSelected ->
+            // RadicalMenu.SelectOptionIndex (Pug.Other:342813-342833), which calls the target's
+            // OnSelected() SYNCHRONOUSLY inside this very call — by the time Select() returns, the
+            // neighbour has already read FocusedSlot (in its own OnSelected(), below) and decided
+            // which control to focus. Writing FocusedSlot afterwards, or relying on a screen-level
+            // carry read from OnSelectedOptionChanged, is one step too late for this same
+            // transition — OnSelectedOptionChanged only fires AFTER OnSelected() has already run
+            // (same lines), which is also why this class no longer overrides GetInternalOption():
+            // its one caller hands the result to the OUTGOING option's OnPreSelected, an empty
+            // virtual, so redirecting through it had no effect to begin with.
             var rowNeighbour = GetAdjacentUIElement(id, transform.position);
-            if (rowNeighbour != null && rowNeighbour != this)
+            if (rowNeighbour is ListDetailItem nextRow && nextRow != this)
             {
-                rowNeighbour.Select();
+                nextRow.FocusedSlot = FocusedSlot;
+                nextRow.Select();
                 return true;
             }
             return false;
-        }
-
-        // Which child takes focus when this row is entered. CK asks this question itself — the
-        // player list answers it from a cached "last selected" field — so honouring the remembered
-        // slot here is using the framework's own hook rather than selecting a child by hand.
-        //
-        // The player list caches on the row; this row cannot, because RebuildRows destroys it. The
-        // screen carries the slot across instead (RowSelection) and seeds FocusedSlot on the fresh
-        // row, which is what makes moving down the ✕ column land on the ✕ below.
-        public override UIelement GetInternalOption()
-        {
-            if (FocusedSlot.HasValue && rowButtons != null)
-            {
-                foreach (var button in rowButtons)
-                {
-                    if (button != null && button.ButtonRole == FocusedSlot.Value && button.gameObject.activeSelf)
-                        return button;
-                }
-            }
-            return base.GetInternalOption();
         }
 
         // NOT called from here anymore — see Update() below. RadicalMenu.SelectOptionIndex calls
@@ -343,14 +336,38 @@ namespace ModSettingsMenu.UI
         // Mirrors OnDeselected above: suppress the hover-selected marker on THIS row while a
         // DIFFERENT row in this menu is the active input field, so hovering around while typing
         // elsewhere doesn't visually highlight whatever the mouse happens to pass over.
+        //
+        // Also where a seeded FocusedSlot is actually honoured — the player-list shape
+        // (Pug.Other ~331672/331681 override GetInternalOption and redirect from OnPreSelected;
+        // this class redirects from OnSelected instead, because CK calls OnSelected on the
+        // ENTERING option — Pug.Other:342813-342833 — which is the one guaranteed moment this
+        // decision has to be made for this row). GetInternalOption doesn't work here: its one
+        // caller hands the result to the OUTGOING option's OnPreSelected, an empty virtual this
+        // class never overrides — that path was tried and found inert.
+        //
+        // Selecting the button here does not re-enter this method or SelectOptionIndex: the
+        // button overrides isMenuOption to report false (see ListRowButton), so its own Select()
+        // call takes UIelement.OnUIElementSelected's OTHER branch and calls the button's
+        // OnSelected() directly (Pug.Other:273416-273429) — no recursion.
         public override void OnSelected()
         {
             if (Manager.input.activeInputField != null && Manager.input.activeInputField != (object)this)
                 return;
             base.OnSelected();
-            // The row's own text field taking focus is what ends a stay in the button column —
-            // clear both the row's memory and the screen's so a later vertical step doesn't try to
-            // land back on a button nobody is standing on any more.
+            if (FocusedSlot.HasValue && rowButtons != null)
+            {
+                foreach (var button in rowButtons)
+                {
+                    if (button != null && button.ButtonRole == FocusedSlot.Value && button.gameObject.activeSelf)
+                    {
+                        button.Select();
+                        return;
+                    }
+                }
+            }
+            // No slot to honour (or its button no longer exists) — this genuinely IS the text
+            // field taking focus. Clear both the row's own memory and the screen's so a later
+            // vertical step doesn't try to land back on a button nobody is standing on any more.
             FocusedSlot = null;
             _owner?.NoteFocusedSlot(null);
         }
