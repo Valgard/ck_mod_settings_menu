@@ -385,7 +385,19 @@ namespace ModSettingsMenu.UI
             if (Manager.input.activeInputField != null && Manager.input.activeInputField != (object)this)
                 return;
             base.OnSelected();
-            var slot = _owner?.FocusedSlot;
+            // Honour the remembered column only off a keyboard/controller selection, never a
+            // mouse one — the same device test ListDetailScreen.OnSelectedOptionChanged already
+            // uses to gate its own scroll-follow. A mouse selection carries its own target: the
+            // pointer is over THIS row's field, which is exactly what the player is asking for, and
+            // redirecting it to a remembered button turns a hover into a fight between the pointer
+            // and stale state. It is not merely wrong, it is UNSTABLE: MenuManager.SelectOption
+            // (Pug.Other:269846) plays the menu-select sound on every ATTEMPT to select an option,
+            // not only on a real change, so honouring the column here would select the row (sound),
+            // redirect to the button, then the very next hover frame selects the row again (sound),
+            // redirects again — the button never lets go and the sound never stops. A deliberate
+            // mouse CLICK on a button still writes the column, through ListRowButton.OnSelected,
+            // same as ever — this only stops a HOVER from reading one back.
+            var slot = Manager.input.SystemIsUsingMouse() ? null : _owner?.FocusedSlot;
             if (slot.HasValue && rowButtons != null)
             {
                 foreach (var button in rowButtons)
