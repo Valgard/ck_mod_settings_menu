@@ -127,8 +127,11 @@ namespace ModSettingsMenu.UI
             base.OnSelected();
             if (selectedMarker != null)
                 selectedMarker.SetActive(true);
-            if (_row != null)
-                _row.FocusedSlot = role;
+            // Written onto the SCREEN (ListDetailScreen.FocusedSlot), not this row: the column is
+            // navigation state, not row state, and this is one of only two places that set it — see
+            // that field's own comment for why it moved here after two per-row attempts.
+            if (_row != null && _row.Owner != null)
+                _row.Owner.FocusedSlot = role;
         }
 
         public override void OnDeselected(bool playEffect = true)

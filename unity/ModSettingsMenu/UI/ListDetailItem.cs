@@ -43,11 +43,6 @@ namespace ModSettingsMenu.UI
         private ListDetailScreen _owner;
         public ListDetailScreen Owner => _owner;
 
-        // Which control inside this row currently has focus: null for the text field, otherwise the
-        // button's role. Written by ListRowButton.OnSelected and by the row's own selection, read by
-        // the screen when it records where a rebuild must put the selection back.
-        internal ListRowButton.Role? FocusedSlot { get; set; }
-
         // The row's three in-row buttons, assigned in the prefab. An array rather than three fields
         // because every use is a loop over them; the role lives on the button itself.
         [SerializeField]
@@ -196,7 +191,6 @@ namespace ModSettingsMenu.UI
             _owner = owner;
             _rowIndex = rowIndex;
             _generation = owner != null ? owner.RowGeneration : -1;
-            FocusedSlot = null;
             this.readOnly = readOnly;
             // A fresh row has never been the active input field, whatever the GameObject did in a
             // previous life. Without this reset a row that still held activeInputField when the
@@ -285,16 +279,19 @@ namespace ModSettingsMenu.UI
                 var adjacent = current.GetAdjacentUIElement(id, current.transform.position);
                 if (adjacent != null)
                 {
-                    if (adjacent == this)
+                    if (adjacent == this && _owner != null)
                     {
                         // Moving back onto this row's own field from one of its buttons. Select()
                         // on the row we are already on is a same-index no-op in SelectOptionIndex
                         // (selectedIndex never left this row while the button had focus), so
-                        // OnSelected() does not re-fire and would never clear the slot on its own —
-                        // it would sit there stale and redirect the NEXT entry into this row,
-                        // whether that next entry comes from a further keyboard/controller step or
-                        // a mouse hover.
-                        FocusedSlot = null;
+                        // OnSelected() does not re-fire and would never clear the column on its
+                        // own — it would sit there stale on the SCREEN (see Owner.FocusedSlot) and
+                        // redirect the NEXT row entered, whether that next entry comes from a
+                        // further keyboard/controller step or a mouse hover. This is the one
+                        // transition that can leave the field visually/functionally focused without
+                        // OnSelected() running again, so it is the one place this has to be cleared
+                        // outside OnSelected() itself.
+                        _owner.FocusedSlot = null;
                     }
                     adjacent.Select();
                     return true;
@@ -305,22 +302,17 @@ namespace ModSettingsMenu.UI
             // Fall back to this row's own neighbour so the flag does not turn up/down into a dead
             // key. ChainRowsForUIElementNavigation builds that chain on every rebuild.
             //
-            // Seed the NEIGHBOUR's FocusedSlot BEFORE calling Select() on it, not after. Select()
-            // routes through UIelement.Select() -> UIManager.OnUIElementSelected (Pug.Other:273416,
-            // reached via Manager.ui) -> RadicalMenu.SelectOptionIndex (Pug.Other:342813-342833),
-            // which calls the target's OnSelected() SYNCHRONOUSLY inside this very call — by the
-            // time Select() returns, the neighbour has already read FocusedSlot (in its own
-            // OnSelected(), below) and decided which control to focus. Writing FocusedSlot
-            // afterwards, or relying on a screen-level carry read from OnSelectedOptionChanged, is
-            // one step too late for this same transition — OnSelectedOptionChanged only fires
-            // AFTER OnSelected() has already run (same lines), which is also why this class no
-            // longer overrides GetInternalOption(): SelectOptionIndex asks it of the option being
-            // LEFT and hands the result to the ENTERING option's OnPreSelected, an empty virtual,
-            // so redirecting through it had no effect to begin with.
+            // No seeding needed here any more: the column lives on Owner (the screen), which both
+            // this row and the neighbour share, so there is nothing to carry across the Select()
+            // call below — only one value that already holds. Two earlier attempts kept the column
+            // on the ROW instead (ListDetailItem.FocusedSlot) and each missed a different path into
+            // a row — a screen-level carry read too late from OnSelectedOptionChanged, then this
+            // very branch not seeding what the PRIMARY branch above needed cleared — because every
+            // new path into a row had to separately know to carry per-row state. One field only
+            // ListRowButton.OnSelected and the two places above write is what ends that.
             var rowNeighbour = GetAdjacentUIElement(id, transform.position);
             if (rowNeighbour is ListDetailItem nextRow && nextRow != this)
             {
-                nextRow.FocusedSlot = FocusedSlot;
                 nextRow.Select();
                 return true;
             }
@@ -349,14 +341,22 @@ namespace ModSettingsMenu.UI
         // DIFFERENT row in this menu is the active input field, so hovering around while typing
         // elsewhere doesn't visually highlight whatever the mouse happens to pass over.
         //
-        // Also where a seeded FocusedSlot is actually honoured — the player-list shape
-        // (Pug.Other ~331672/331681 override GetInternalOption and redirect from OnPreSelected;
-        // this class redirects from OnSelected instead, because CK calls OnSelected on the
-        // ENTERING option — Pug.Other:342813-342833 — which is the one guaranteed moment this
-        // decision has to be made for this row). GetInternalOption doesn't work here: SelectOptionIndex
-        // asks it of the option being LEFT and hands the result to the ENTERING option's
-        // OnPreSelected, an empty virtual this class never overrides — that path was tried and
-        // found inert.
+        // Also where the current column (Owner.FocusedSlot — a SCREEN-level field, not this row's
+        // own) is actually honoured — the player-list shape (Pug.Other ~331672/331681 override
+        // GetInternalOption and redirect from OnPreSelected; this class redirects from OnSelected
+        // instead, because CK calls OnSelected on the ENTERING option — Pug.Other:342813-342833 —
+        // which is the one guaranteed moment this decision has to be made for this row).
+        // GetInternalOption doesn't work here: SelectOptionIndex asks it of the option being LEFT
+        // and hands the result to the ENTERING option's OnPreSelected, an empty virtual this class
+        // never overrides — that path was tried and found inert.
+        //
+        // The column lives on the SCREEN rather than on this row (or a copy carried between rows)
+        // because it describes the NAVIGATION, not any one row, and every attempt to keep it
+        // per-row missed a path: a screen-level carry read too late (from OnSelectedOptionChanged,
+        // which always fires after OnSelected already decided), then NavigateInternally's row-to-
+        // row fallback seeding a value its own primary branch didn't know to clear. One field only
+        // ListRowButton.OnSelected and NavigateInternally's primary branch write is what makes a
+        // missed path unrepresentable rather than merely unlikely.
         //
         // Selecting the button here does not re-enter this method or SelectOptionIndex: the
         // button overrides isMenuOption to report false (see ListRowButton), so its own Select()
@@ -367,11 +367,12 @@ namespace ModSettingsMenu.UI
             if (Manager.input.activeInputField != null && Manager.input.activeInputField != (object)this)
                 return;
             base.OnSelected();
-            if (FocusedSlot.HasValue && rowButtons != null)
+            var slot = _owner?.FocusedSlot;
+            if (slot.HasValue && rowButtons != null)
             {
                 foreach (var button in rowButtons)
                 {
-                    if (button != null && button.ButtonRole == FocusedSlot.Value && button.gameObject.activeSelf)
+                    if (button != null && button.ButtonRole == slot.Value && button.gameObject.activeSelf)
                     {
                         button.Select();
                         return;
@@ -379,9 +380,10 @@ namespace ModSettingsMenu.UI
                 }
             }
             // No slot to honour (or its button no longer exists) — this genuinely IS the text
-            // field taking focus. Clear the row's own memory so a later vertical step doesn't try
+            // field taking focus. Clear the screen's memory so a later vertical step doesn't try
             // to land back on a button nobody is standing on any more.
-            FocusedSlot = null;
+            if (_owner != null)
+                _owner.FocusedSlot = null;
         }
 
         // Distinguishes "actively editing" (SELECTED_VALUE_COLOR, vivid) from merely "selected/
