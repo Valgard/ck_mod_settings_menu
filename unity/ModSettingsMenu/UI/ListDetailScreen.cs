@@ -50,10 +50,19 @@ namespace ModSettingsMenu.UI
         // since SelectOptionIndex calls OnSelected() first — Pug.Other:342813-342833), then
         // NavigateInternally's row-to-row fallback seeding a copy its own primary branch had no
         // reason to know needed clearing. State that belongs to the navigation but is scattered
-        // across every row is exactly the shape where a new path can silently miss it; one field
-        // written from exactly two places (ListRowButton.OnSelected, and NavigateInternally's
-        // primary branch when focus returns to a row's own field) removes that shape rather than
-        // patching it a third time. Read and redirected from ListDetailItem.OnSelected.
+        // across every row is exactly the shape where a new path can silently miss it; one field in
+        // one place, written from five call sites, removes that shape rather than patching it a
+        // fourth time:
+        //   - ListRowButton.OnSelected sets it to the pressed button's role.
+        //   - ListDetailItem.NavigateInternally's primary branch clears it when focus returns to a
+        //     row's own field (the transition that never re-fires OnSelected — see there).
+        //   - ListDetailItem.OnSelected's own "nothing to honour" branch clears it when the field
+        //     itself takes focus by any other route.
+        //   - Populate resets it at the session boundary (a stale column from a DIFFERENT list must
+        //     not carry into this one).
+        //   - Update's rebuild path seeds it for an explicit reorder/add target, same ordering
+        //     requirement as everywhere else (before the selection, not after).
+        // Read (and redirected to a matching button) from ListDetailItem.OnSelected.
         internal ListRowButton.Role? FocusedSlot { get; set; }
 
         // Bumped once per open. This is the ONLY thing in the design that marks a session boundary:
