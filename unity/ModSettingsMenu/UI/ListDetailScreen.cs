@@ -426,14 +426,18 @@ namespace ModSettingsMenu.UI
         // straight into a THIRD-PARTY mod's config, and the only recovery is the section reset,
         // which restores the whole section.
         //
-        // No holdToConfirm. The flag exists (StartNewDisplaySequence ~342074 → SetHoldToConfirm
-        // ~342120) and turns the yes-option into a one-second hold, but CK reserves it for
-        // unrecoverable losses of playtime — deleting a character or a world. The nearer comparison
-        // is Menu/ResetToDefaultsDialog, CK's own settings reset, which passes false, as does this
-        // mod's section reset. A single entry must not weigh more than resetting a whole section.
-        // What the dialog does bring free is accidentalInputBlockDuration (1 s by default), during
-        // which the yes-option reports CanBeActivated() == false — that covers the momentum of the
-        // click that opened it.
+        // holdToConfirm: true. The flag exists (StartNewDisplaySequence ~342074 → SetHoldToConfirm
+        // ~342120) and turns the yes-option into a one-second hold. This dialog's option string is
+        // "delete" — not "yes" — and in vanilla that caption appears in exactly two places:
+        // SaveSlotDeleteOption (Pug.Other:343910) and the world-delete dialog (:345042), and both
+        // pass holdToConfirm: true. A player who has learned "delete" as a press-and-hold from
+        // either of those met a tap dialog here first (caught in play) — the caption and the
+        // gesture are a vanilla pair, and matching both is what makes this dialog read like the
+        // game's own delete dialogs rather than like a differently-worded reset. (Reset stays a
+        // tap: its option string is "yes", matching Menu/ResetToDefaultsDialog, which passes false.)
+        // Caption and flag are independent parameters — nothing enforces they agree — which is
+        // exactly how they drifted apart here. accidentalInputBlockDuration (1 s by default) still
+        // applies underneath the hold, covering the momentum of the click that opened the dialog.
         internal void RequestDelete(int index)
         {
             if (index < 0 || index >= _rows.Count)
@@ -480,7 +484,7 @@ namespace ModSettingsMenu.UI
                 textMaxWidth: 20f,
                 secondOptionPopsAllMenus: false,
                 pauseGame: true,
-                holdToConfirm: false,
+                holdToConfirm: true,
                 localizePlaceholders: false
             );
         }
