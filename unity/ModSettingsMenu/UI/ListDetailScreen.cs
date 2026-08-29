@@ -621,6 +621,18 @@ namespace ModSettingsMenu.UI
             if (Manager.input.SystemIsUsingMouse())
                 return;
 
+            // Scroll to the ROW, not to the selected control. Every position below is read as a
+            // localPosition inside the scrolled container, which only a direct child of that
+            // container actually is: an in-row button sits one level deeper, so its own
+            // localPosition describes where it sits WITHIN its row (roughly zero) and would scroll
+            // to the top of the list no matter which row is selected. Taking the owning row also
+            // happens to be what the player needs — a button is only worth seeing in the context of
+            // the entry it acts on. A control with no owning row (the add button) is its own
+            // geometry.
+            var owningRow = option.GetComponentInParent<ListDetailItem>();
+            if (owningRow != null)
+                option = owningRow;
+
             float origin = option.transform.localPosition.y;
             var wrap = option.GetComponent<WrapperUIComponent>();
             float height = wrap != null ? wrap.GetUIComponentRenderHeight() : 1f;

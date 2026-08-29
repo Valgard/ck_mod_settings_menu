@@ -110,6 +110,15 @@ and controller reach such a row regardless.
       convention for a short button row, unlike the rows themselves, which wrap.
 - [ ] Up/down **while a button is focused** changes rows, and reaches the Add
       button from the last row.
+- [ ] Up/down **while a button is focused** scrolls the list once the selection
+      passes the visible edge — exactly as it does from a text field. A column
+      that navigates but does not scroll walks the selection off-screen and
+      leaves the player pressing keys blind.
+- [ ] Wrapping across the **Add entry** button does not carry the column: coming
+      back into the list lands on whichever control is nearest, not on the one
+      you left from. Known and accepted — the add button is a single control, so
+      there is no column for it to hand on. Note it if it ever gets worse than
+      "lands somewhere sensible".
 - [ ] **Enter/Space on a focused button triggers that button** — moves or
       deletes — and does not open the row's text field. Activation runs on the
       menu option, which is the row; the row has to hand it on.
