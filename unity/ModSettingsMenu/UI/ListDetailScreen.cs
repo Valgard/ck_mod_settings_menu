@@ -641,8 +641,22 @@ namespace ModSettingsMenu.UI
 
             if (height <= _scroll.windowHeight)
             {
+                // Deliberately NOT MoveScrollToIncludePosition (Pug.Other:357679), which is CK's own
+                // helper for exactly this: on a keyboard/mouse system it acts only while a menu
+                // up/down button is HELD. That fits CK's own callers, which all run from directional
+                // navigation, and silently does nothing for ours that do not — a selection restored
+                // after a rebuild (reorder, delete, add) happens on the frame after Enter, with no
+                // direction held, so the view stayed put while the selection travelled off-screen.
+                // The gate exists to stop mouse hover from scrolling the page under the pointer, and
+                // this method already refused that case above, so reproducing the arithmetic here
+                // loses no protection. Same shape as the oversized-row branch below.
                 float center = topEdge - height / 2f;
-                _scroll.MoveScrollToIncludePosition(center, height / 2f);
+                float padding = height / 2f;
+                float positionInWindow = box.itemContainer.localPosition.y + center;
+                if (positionInWindow - padding < -_scroll.windowHeight)
+                    _scroll.MoveScroll(-_scroll.windowHeight - positionInWindow + padding);
+                else if (positionInWindow + padding > 0f)
+                    _scroll.MoveScroll(-(positionInWindow + padding));
             }
             else
             {
