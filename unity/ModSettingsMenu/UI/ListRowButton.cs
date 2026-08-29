@@ -33,8 +33,8 @@ namespace ModSettingsMenu.UI
         [SerializeField]
         private SpriteRenderer fieldBorder;
 
-        // The glyph. Held so the greyed-out edge state (Task 4) can tint it; the frame stays lit so
-        // the button remains locatable while disabled.
+        // The glyph. SetDisabled swaps its sprite between _iconNormal and iconDisabled; the frame
+        // stays lit so the button remains locatable while disabled.
         [SerializeField]
         private SpriteRenderer icon;
 
