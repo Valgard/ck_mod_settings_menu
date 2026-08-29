@@ -272,8 +272,17 @@ namespace ModSettingsMenu.UI
         // whose entries are chained to each other and answer both from one lookup.
         public override bool NavigateInternally(Direction.Id id)
         {
-            // Whatever holds focus right now: this row, or one of its buttons.
+            // currentSelectedUIElement is written ONLY by UIelement.Select() (via
+            // UIManager.OnUIElementSelected, Pug.Other:273422). A selection that arrived through
+            // RadicalMenu.SelectOptionIndex instead — the ordinary index path, which is how a wrap
+            // between this list's rows and the add button (handleNavigationInternally: 0) reaches
+            // this row — leaves it pointing at whatever was selected BEFORE, i.e. the add button.
+            // Asking that stale element for its neighbour re-selects this row and burns the key
+            // press, so the user has to press twice after every such wrap. Fall back to this row,
+            // which is the element the framework actually considers selected.
             var current = Manager.ui.currentSelectedUIElement;
+            if (current == null || (current != this && !current.transform.IsChildOf(transform)))
+                current = this;
             if (current != null)
             {
                 var adjacent = current.GetAdjacentUIElement(id, current.transform.position);
@@ -308,8 +317,8 @@ namespace ModSettingsMenu.UI
             // on the ROW instead (ListDetailItem.FocusedSlot) and each missed a different path into
             // a row — a screen-level carry read too late from OnSelectedOptionChanged, then this
             // very branch not seeding what the PRIMARY branch above needed cleared — because every
-            // new path into a row had to separately know to carry per-row state. One field only
-            // ListRowButton.OnSelected and the two places above write is what ends that.
+            // new path into a row had to separately know to carry per-row state. See
+            // ListDetailScreen.FocusedSlot for the full list of what writes it now.
             var rowNeighbour = GetAdjacentUIElement(id, transform.position);
             if (rowNeighbour is ListDetailItem nextRow && nextRow != this)
             {
@@ -354,9 +363,9 @@ namespace ModSettingsMenu.UI
         // because it describes the NAVIGATION, not any one row, and every attempt to keep it
         // per-row missed a path: a screen-level carry read too late (from OnSelectedOptionChanged,
         // which always fires after OnSelected already decided), then NavigateInternally's row-to-
-        // row fallback seeding a value its own primary branch didn't know to clear. One field only
-        // ListRowButton.OnSelected and NavigateInternally's primary branch write is what makes a
-        // missed path unrepresentable rather than merely unlikely.
+        // row fallback seeding a value its own primary branch didn't know to clear. See
+        // ListDetailScreen.FocusedSlot for the full list of what writes it now — one field in one
+        // place is what makes a missed path unrepresentable rather than merely unlikely.
         //
         // Selecting the button here does not re-enter this method or SelectOptionIndex: the
         // button overrides isMenuOption to report false (see ListRowButton), so its own Select()
