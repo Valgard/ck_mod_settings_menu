@@ -264,6 +264,27 @@ compact row plus a pushed detail screen:
   stay full teardown-and-recreate: destroying a row is the only thing that resets
   `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid editing
   tint and nothing else reverts.
+- **`ListRowButton : RadicalMenuOption`** — the three per-row controls (↑, ↓, ✕), one
+  class with a serialized `Role` rather than three types. They are **real menu
+  options**, registered in `menuOptions` beside the rows and navigated on CK's UIElement
+  path (`useUIElementsForNavigation` on the screen): each control names its counterpart
+  in the neighbouring row via `topUIElements`/`bottomUIElements`, so "which column am I
+  in" is **wiring, not remembered state** (ADR-008; an earlier design kept the buttons
+  out of CK's routing and paid for it seven times over, rebuilding the selection model
+  by hand). `ChainRowsForUIElementNavigation` rebuilds all four chains on every rebuild
+  — horizontal open at both ends, vertical wrapping through the add button, whose own
+  lists carry all four controls of the adjacent row so `GetClosestUIElementInList` picks
+  by position. An icon-only option has no text, so it builds its own `BoxCollider` (CK
+  derives one from rendered text and would dereference null here), and
+  `GetActiveStateInCurrentScene` tests `activeInHierarchy`, not `activeSelf` like the
+  two row types — a button is a CHILD of the template that gets switched off. A disabled
+  edge arrow still reports **ACTIVE**, because a greyed neighbour is a dead end on this
+  path rather than a skip and an unreachable arrow would strand the whole column; it
+  overrides `CanBeActivated()` to false instead, which is also what stops CK sounding an
+  activation receipt and offering the SELECT hint for a press that does nothing. The one
+  thing wiring cannot express is where the selection lands after a reorder or delete —
+  the entry moves rows — so the acting control names its own role through
+  `RowSelection`, a one-shot target consumed by that rebuild and never read again.
 - **`ListKindStore`** (`Settings`, persisted via `API.ConfigFilesystem` like
   `ConfigStore`) — sticky "this foreign string was once a genuine list" memory.
   `ForeignConfigDiscovery.HeuristicSaysList` needs ≥2 tokens, and discovery re-runs on
