@@ -87,10 +87,6 @@ and controller reach such a row regardless.
       two back to back: they must match.
 - [ ] **A greyed-out edge arrow stays silent** (first row's ↑, last row's ↓).
       It does nothing, so it acknowledges nothing.
-- [ ] Enter on a focused button still sounds exactly once — not twice. CK plays
-      its own receipt on that path; a second one from us would be audible only
-      as a doubling, or swallowed by the 50 ms cooldown and therefore
-      intermittent.
 - [ ] With a button focused, hover back onto that row's field: the button gives
       up its focus marker and the field takes it.
 
@@ -120,8 +116,9 @@ and controller reach such a row regardless.
       there is no column for it to hand on. Note it if it ever gets worse than
       "lands somewhere sensible".
 - [ ] **Enter/Space on a focused button triggers that button** — moves or
-      deletes — and does not open the row's text field. Activation runs on the
-      menu option, which is the row; the row has to hand it on.
+      deletes — and does not open the row's text field. Getting this wrong is
+      not subtle: you press Enter meaning to delete and end up typing in the
+      entry instead.
 
 ### The focused column
 
@@ -134,11 +131,11 @@ press at a time — walk several rows in each case.
 - [ ] Standing on a row's ✕, press down twice: the selection lands on the ✕ of
       the next two rows, never in their text fields.
 - [ ] Move a button-focused selection down, arrow **left** back into that row's
-      field, then move down again: the next row selects its **field**, not a
-      remembered button.
+      field, then move down again: the next row selects its **field**. Once you
+      have deliberately left the buttons, nothing may pull you back into them.
 - [ ] In `Short`, focus a button, leave with Escape, then open `Long`: the first
-      navigation there lands in a text field. (The drill-in screen is a
-      singleton reused for every list.)
+      navigation there lands in a text field — a column chosen in one list must
+      not follow you into an unrelated one.
 - [ ] Press **Add entry** while a button column is active: the new row is
       selected at its **field**.
 
