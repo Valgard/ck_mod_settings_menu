@@ -180,14 +180,23 @@ namespace ModSettingsMenu
             // before clearing the rest of the stack — so closing everything at once while the list
             // drill-in is open on top skips ModSettingsScreen.Deactivate(pop: true) entirely, and a
             // RequiresRestart edit made in the drill-in moments before would never get its prompt.
-            // Poll instead of trying to detect which teardown path fired: if the flag is still set and
-            // NEITHER of our own menu instances is currently the top of CK's menu stack, we are
-            // unambiguously not "covered" by either of them anymore (regardless of how we got here),
-            // so it is safe — and necessary — to flush it here.
+            // Poll instead of trying to detect which teardown path fired: if the flag is still set
+            // and neither of our own screens is anywhere in CK's menu stack, we are not "covered" by
+            // either of them anymore (regardless of how we got here), so it is safe — and necessary
+            // — to flush it here.
+            //
+            // Membership, NOT the top of the stack. Anything our own screens push sits above them
+            // while staying entirely inside our own UI — the delete confirmation is exactly that, a
+            // PushMenu(POP_UP). Testing the top mistook that for "the player has left", flushed the
+            // flag mid-dialogue, and three frames later the restart prompt landed on CK's single
+            // shared centerPopUpText while the delete dialogue still owned it: the restart text
+            // appeared over the delete dialogue's own buttons, and confirming a deletion restarted
+            // the game. HasMenuInStack (Pug.Other:269774) asks the right question, and it resolves
+            // our menu types through TypeToMenu, which MenuPatch's prefix already answers.
             if (ModSettingsScreen.RestartPending)
             {
-                var top = Manager.menu.GetTopMenu();
-                if (top != MenuPatch.MenuInstance && top != MenuPatch.ListDetailInstance)
+                bool stillInsideOurUI = Manager.menu.HasMenuInStack(SettingsMenuType) || Manager.menu.HasMenuInStack(ListDetailMenuType);
+                if (!stillInsideOurUI)
                 {
                     ModSettingsScreen.RestartPending = false;
                     RequestRestartPrompt();
