@@ -79,14 +79,25 @@ and controller reach such a row regardless.
       at most once, not on every movement. A repeating sound means something is
       re-selecting the same row each frame — CK plays it on the *attempt*, not
       on a change, so a no-op selection is audible.
-- [ ] A mouse click on a row button — **open question, do not treat either
-      outcome as settled yet.** Vanilla buttons that are real menu options do
-      sound on a click (the Controls tabs, the binding rows, Join Game's Hide
-      and Join). The one vanilla button that does not is the dropdown's open
-      button in Join Game — and that one, like ours, is not a menu option and is
-      driven through its prefab's `onLeftClick` event. Whether our silence is
-      the same correct silence as that button's is being traced; until it is,
-      record what you hear rather than judging it.
+- [ ] **The click sound — two isolating clicks, no verdict required.** Reading
+      the code has failed twice here, so this is a measurement, not a check with
+      an expected outcome. CK plays a lower-pitched receipt for the *mouse
+      button* whenever the selected option is activatable, regardless of what
+      the pointer is over (`docs/ck/ui-framework.md` § "Two menu sounds"). By
+      that, our buttons should sound. They do not. Two clicks locate where the
+      chain breaks:
+      1. Click **empty space** inside the drill-in while a row is selected.
+      2. Click a row's **text field**, then a **button on that same row**.
+
+      | Result | What it means |
+      |---|---|
+      | both silent | the break is upstream of anything of ours — the poll's gate or the Rewired action |
+      | empty space sounds, button does not | the break is in our button's own click path |
+      | field sounds, button does not | selection is not where the code says it is while a button has focus |
+
+      Note the pitch too: the selection sound and the activation receipt are the
+      same sample, and the activation one is audibly lower. A 50 ms cooldown
+      drops whichever comes second, so move the mouse, pause, then click.
 - [ ] With a button focused, hover back onto that row's field: the button gives
       up its focus marker and the field takes it.
 
