@@ -75,6 +75,12 @@ and controller reach such a row regardless.
 - [ ] Click a greyed-out edge arrow — nothing happens.
 - [ ] Hover across rows while a row's text field is being edited — the edit is
       not stolen or ended by the hover.
+- [ ] Move the pointer around **over a row's text field**: the menu-select sound
+      plays at most once, not on every movement. A repeating sound means
+      something is re-selecting the same row each frame — CK plays that sound on
+      the *attempt*, not on a change, so a no-op selection is audible.
+- [ ] With a button focused, hover back onto that row's field: the button gives
+      up its focus marker and the field takes it.
 
 ### Keyboard and controller
 
@@ -90,6 +96,9 @@ and controller reach such a row regardless.
       convention for a short button row, unlike the rows themselves, which wrap.
 - [ ] Up/down **while a button is focused** changes rows, and reaches the Add
       button from the last row.
+- [ ] **Enter/Space on a focused button triggers that button** — moves or
+      deletes — and does not open the row's text field. Activation runs on the
+      menu option, which is the row; the row has to hand it on.
 
 ### The focused column
 
@@ -107,6 +116,23 @@ all about it not leaking.
 - [ ] Press **Add entry** while a button column is active: the new row is
       selected at its **field**.
 
+### Switching between mouse and keyboard
+
+Three separate defects have lived here, all of the same shape: state that
+directional input needs applied while a pointer was driving. A pointer names its
+target every frame and needs no memory; carrying one for it makes the two fight.
+Run these with **both** devices in reach, alternating deliberately.
+
+- [ ] Navigate to a button with the keyboard, then move the mouse: the pointer
+      takes over without the selection snapping back.
+- [ ] Reorder a row **with the mouse**: the selection stays where the pointer
+      is, rather than following the moved entry. (With the keyboard it must do
+      the opposite — see Reordering.)
+- [ ] After a mouse-driven reorder, click again without moving the pointer: the
+      button under the cursor responds on the first click.
+- [ ] Hover a row, then navigate away with the keyboard and back: no remembered
+      button hijacks the entry.
+
 ### Reordering
 
 - [ ] ↑ on the middle row of `Short` swaps it with the row above; the file
@@ -123,7 +149,12 @@ all about it not leaking.
 ### Deleting
 
 - [ ] ✕ on a filled row opens a confirmation naming that entry.
+- [ ] **The confirm button must be held, not tapped** — a progress bar fills
+      while it is held and runs back down on release. Vanilla pairs this caption
+      with a hold in both places it uses it, and a tapped delete behind a
+      "delete" caption reads wrong to anyone who knows the game's own dialogs.
 - [ ] Cancel leaves both the list and the file untouched.
+- [ ] Release the hold early: nothing is deleted.
 - [ ] Confirm removes the entry; the selection lands on the ✕ of the row that
       moved up (on the last row, its predecessor).
 - [ ] Press **Add entry**, then ✕ on the new blank row: **no dialog**, the row
@@ -133,6 +164,15 @@ all about it not leaking.
 - [ ] In `WithSpaces`, delete `Item Two`: the dialog shows the token including
       its space, and the remainder reads `Item One, Big Chest` — no token is
       re-split on the space.
+
+### The editing tint
+
+- [ ] Activate a row's field, change nothing, and leave it: the vivid editing
+      colour goes away. It marks "being edited", and nothing else reverts it —
+      for a long time it survived until the next rebuild, which only happens
+      when a value actually changed.
+- [ ] Activate a field, change something, commit: the tint is gone afterwards
+      here too (this path rebuilds the row anyway).
 
 ### Read-only
 
