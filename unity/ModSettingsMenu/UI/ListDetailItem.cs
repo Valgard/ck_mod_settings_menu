@@ -1,3 +1,4 @@
+using Pug.UnityExtensions;
 using UnityEngine;
 
 namespace ModSettingsMenu.UI
@@ -271,6 +272,56 @@ namespace ModSettingsMenu.UI
         // template is the list's last prefab sibling). Unchanged from the read-only version.
         public override OptionActiveState GetActiveStateInCurrentScene() => gameObject.activeSelf ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
+        // With handleNavigationInternally set, CK hands this row EVERY direction and returns
+        // whatever we answer — so `false` is not "pass it on", it is "nothing moves". This method
+        // therefore has to serve both axes, unlike vanilla's player list (Pug.Other ~331681),
+        // whose entries are chained to each other and answer both from one lookup.
+        public override bool NavigateInternally(Direction.Id id)
+        {
+            // Whatever holds focus right now: this row, or one of its buttons.
+            var current = Manager.ui.currentSelectedUIElement;
+            if (current != null)
+            {
+                var adjacent = current.GetAdjacentUIElement(id, current.transform.position);
+                if (adjacent != null)
+                {
+                    adjacent.Select();
+                    return true;
+                }
+            }
+            // Nothing that way from where focus sits — which is the normal case for up/down while
+            // a BUTTON is focused, since the vertical chain is wired between rows, not buttons.
+            // Fall back to this row's own neighbour so the flag does not turn up/down into a dead
+            // key. ChainRowsForUIElementNavigation builds that chain on every rebuild.
+            var rowNeighbour = GetAdjacentUIElement(id, transform.position);
+            if (rowNeighbour != null && rowNeighbour != this)
+            {
+                rowNeighbour.Select();
+                return true;
+            }
+            return false;
+        }
+
+        // Which child takes focus when this row is entered. CK asks this question itself — the
+        // player list answers it from a cached "last selected" field — so honouring the remembered
+        // slot here is using the framework's own hook rather than selecting a child by hand.
+        //
+        // The player list caches on the row; this row cannot, because RebuildRows destroys it. The
+        // screen carries the slot across instead (RowSelection) and seeds FocusedSlot on the fresh
+        // row, which is what makes moving down the ✕ column land on the ✕ below.
+        public override UIelement GetInternalOption()
+        {
+            if (FocusedSlot.HasValue && rowButtons != null)
+            {
+                foreach (var button in rowButtons)
+                {
+                    if (button != null && button.ButtonRole == FocusedSlot.Value && button.gameObject.activeSelf)
+                        return button;
+                }
+            }
+            return base.GetInternalOption();
+        }
+
         // NOT called from here anymore — see Update() below. RadicalMenu.SelectOptionIndex calls
         // OnDeselected() on every navigation-away, INCLUDING mere mouse hover onto a different row
         // (CK's own UIMouse re-derives menu selection from a hover raycast every frame; hovering a
@@ -297,6 +348,11 @@ namespace ModSettingsMenu.UI
             if (Manager.input.activeInputField != null && Manager.input.activeInputField != (object)this)
                 return;
             base.OnSelected();
+            // The row's own text field taking focus is what ends a stay in the button column —
+            // clear both the row's memory and the screen's so a later vertical step doesn't try to
+            // land back on a button nobody is standing on any more.
+            FocusedSlot = null;
+            _owner?.NoteFocusedSlot(null);
         }
 
         // Distinguishes "actively editing" (SELECTED_VALUE_COLOR, vivid) from merely "selected/
