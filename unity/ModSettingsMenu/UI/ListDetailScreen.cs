@@ -764,19 +764,31 @@ namespace ModSettingsMenu.UI
             // it reachable without anyone looking at this line.
             if (menuOptions.Count == 0)
                 return;
-            int target = explicitTarget.HasRow ? explicitTarget.Row : previousIndex;
-            int clamped = Mathf.Clamp(target, 0, menuOptions.Count - 1);
-            // Set the column BEFORE SelectOptionIndex for the same reason NavigateInternally does:
-            // it calls the target row's OnSelected() synchronously, which is where the column is
-            // read. Guarded on HasRow, not on Slot.HasValue: AddEmptyRow's target has no slot (it
-            // means "land on the field"), and with FocusedSlot no longer reset per-row in Bind(), a
-            // column left over from moving a button around before adding a row would otherwise
-            // carry into the fresh row uninvited. An ordinary edit/removal (no explicit target,
-            // HasRow false) leaves the column exactly as OnSelected last set it while the field was
-            // being edited — already null, since editing requires the field to hold focus.
-            if (explicitTarget.HasRow)
-                FocusedSlot = explicitTarget.Slot;
-            SelectOptionIndex(clamped);
+            // Directional input has no target of its own and needs the selection carried across
+            // the rebuild — pressing further after a reorder should keep moving the same entry,
+            // and an ordinary edit/removal should keep the same numeric slot (clamped). A pointer
+            // carries its own target every frame instead (UIMouse re-derives selection from
+            // hover), and restoring a remembered one here fights it: the mouse has not moved, so
+            // forcing the selection back onto the row that used to sit at this slot moves it away
+            // from whatever the pointer is now actually over, until the next hover recalculates
+            // it. Skip the restore on mouse and let the pointer decide — the redraw above still
+            // happens either way, only this explicit selection step is device-dependent.
+            if (!Manager.input.SystemIsUsingMouse())
+            {
+                int target = explicitTarget.HasRow ? explicitTarget.Row : previousIndex;
+                int clamped = Mathf.Clamp(target, 0, menuOptions.Count - 1);
+                // Set the column BEFORE SelectOptionIndex for the same reason NavigateInternally does:
+                // it calls the target row's OnSelected() synchronously, which is where the column is
+                // read. Guarded on HasRow, not on Slot.HasValue: AddEmptyRow's target has no slot (it
+                // means "land on the field"), and with FocusedSlot no longer reset per-row in Bind(), a
+                // column left over from moving a button around before adding a row would otherwise
+                // carry into the fresh row uninvited. An ordinary edit/removal (no explicit target,
+                // HasRow false) leaves the column exactly as OnSelected last set it while the field was
+                // being edited — already null, since editing requires the field to hold focus.
+                if (explicitTarget.HasRow)
+                    FocusedSlot = explicitTarget.Slot;
+                SelectOptionIndex(clamped);
+            }
         }
     }
 }
