@@ -283,28 +283,29 @@ namespace ModSettingsMenu.UI
             var current = Manager.ui.currentSelectedUIElement;
             if (current == null || (current != this && !current.transform.IsChildOf(transform)))
                 current = this;
-            if (current != null)
+            // No null check on `current` here: the fallback above guarantees it, and `this` cannot
+            // be null in an instance method — a guard for a path that cannot happen would only
+            // invite the next reader to suspect one that isn't there, exactly the class of mistake
+            // that cost every one of this method's four fix rounds.
+            var adjacent = current.GetAdjacentUIElement(id, current.transform.position);
+            if (adjacent != null)
             {
-                var adjacent = current.GetAdjacentUIElement(id, current.transform.position);
-                if (adjacent != null)
+                if (adjacent == this && _owner != null)
                 {
-                    if (adjacent == this && _owner != null)
-                    {
-                        // Moving back onto this row's own field from one of its buttons. Select()
-                        // on the row we are already on is a same-index no-op in SelectOptionIndex
-                        // (selectedIndex never left this row while the button had focus), so
-                        // OnSelected() does not re-fire and would never clear the column on its
-                        // own — it would sit there stale on the SCREEN (see Owner.FocusedSlot) and
-                        // redirect the NEXT row entered, whether that next entry comes from a
-                        // further keyboard/controller step or a mouse hover. This is the one
-                        // transition that can leave the field visually/functionally focused without
-                        // OnSelected() running again, so it is the one place this has to be cleared
-                        // outside OnSelected() itself.
-                        _owner.FocusedSlot = null;
-                    }
-                    adjacent.Select();
-                    return true;
+                    // Moving back onto this row's own field from one of its buttons. Select()
+                    // on the row we are already on is a same-index no-op in SelectOptionIndex
+                    // (selectedIndex never left this row while the button had focus), so
+                    // OnSelected() does not re-fire and would never clear the column on its
+                    // own — it would sit there stale on the SCREEN (see Owner.FocusedSlot) and
+                    // redirect the NEXT row entered, whether that next entry comes from a
+                    // further keyboard/controller step or a mouse hover. This is the one
+                    // transition that can leave the field visually/functionally focused without
+                    // OnSelected() running again, so it is the one place this has to be cleared
+                    // outside OnSelected() itself.
+                    _owner.FocusedSlot = null;
                 }
+                adjacent.Select();
+                return true;
             }
             // Nothing that way from where focus sits — which is the normal case for up/down while
             // a BUTTON is focused, since the vertical chain is wired between rows, not buttons.
