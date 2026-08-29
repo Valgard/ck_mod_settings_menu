@@ -128,8 +128,8 @@ namespace ModSettingsMenu.UI
             if (selectedMarker != null)
                 selectedMarker.SetActive(true);
             // Written onto the SCREEN (ListDetailScreen.FocusedSlot), not this row: the column is
-            // navigation state, not row state, and this is one of only two places that set it — see
-            // that field's own comment for why it moved here after two per-row attempts.
+            // navigation state, not row state. See that field's own comment for the full list of
+            // what writes it and why it moved here after two per-row attempts.
             if (_row != null && _row.Owner != null)
                 _row.Owner.FocusedSlot = role;
         }
