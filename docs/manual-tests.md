@@ -79,25 +79,15 @@ and controller reach such a row regardless.
       at most once, not on every movement. A repeating sound means something is
       re-selecting the same row each frame — CK plays it on the *attempt*, not
       on a change, so a no-op selection is audible.
-- [ ] **The click sound — two isolating clicks, no verdict required.** Reading
-      the code has failed twice here, so this is a measurement, not a check with
-      an expected outcome. CK plays a lower-pitched receipt for the *mouse
-      button* whenever the selected option is activatable, regardless of what
-      the pointer is over (`docs/ck/ui-framework.md` § "Two menu sounds"). By
-      that, our buttons should sound. They do not. Two clicks locate where the
-      chain breaks:
-      1. Click **empty space** inside the drill-in while a row is selected.
-      2. Click a row's **text field**, then a **button on that same row**.
-
-      | Result | What it means |
-      |---|---|
-      | both silent | the break is upstream of anything of ours — the poll's gate or the Rewired action |
-      | empty space sounds, button does not | the break is in our button's own click path |
-      | field sounds, button does not | selection is not where the code says it is while a button has focus |
-
-      Note the pitch too: the selection sound and the activation receipt are the
-      same sample, and the activation one is audibly lower. A 50 ms cooldown
-      drops whichever comes second, so move the mouse, pause, then click.
+- [ ] **Clicking a row button plays the activation sound** — the same lower
+      pitch Enter on that button produces, not the higher selection sound. The
+      two are one sample at different pitches, so compare them back to back.
+- [ ] **A greyed-out edge arrow stays silent** (first row's ↑, last row's ↓).
+      It does nothing, so it acknowledges nothing.
+- [ ] Enter on a focused button still sounds exactly once — not twice. CK plays
+      its own receipt on that path; a second one from us would be audible only
+      as a doubling, or swallowed by the 50 ms cooldown and therefore
+      intermittent.
 - [ ] With a button focused, hover back onto that row's field: the button gives
       up its focus marker and the field takes it.
 
