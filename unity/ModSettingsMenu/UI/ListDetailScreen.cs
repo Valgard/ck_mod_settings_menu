@@ -42,6 +42,20 @@ namespace ModSettingsMenu.UI
         // A rebuild's explicit selection target, or RowSelection.None to keep the previous slot (clamped).
         private RowSelection _pendingSelect = RowSelection.None;
 
+        // Which in-row control the navigation is currently in: null for a row's own text field,
+        // otherwise a button's role. Lives HERE — on the screen — rather than on the row that
+        // happens to be selected, because it describes the NAVIGATION, not any one row. Two earlier
+        // attempts kept it per-row (ListDetailItem.FocusedSlot) and each missed a different path
+        // into a row: a screen-level carry read from OnSelectedOptionChanged (always too late,
+        // since SelectOptionIndex calls OnSelected() first — Pug.Other:342813-342833), then
+        // NavigateInternally's row-to-row fallback seeding a copy its own primary branch had no
+        // reason to know needed clearing. State that belongs to the navigation but is scattered
+        // across every row is exactly the shape where a new path can silently miss it; one field
+        // written from exactly two places (ListRowButton.OnSelected, and NavigateInternally's
+        // primary branch when focus returns to a row's own field) removes that shape rather than
+        // patching it a third time. Read and redirected from ListDetailItem.OnSelected.
+        internal ListRowButton.Role? FocusedSlot { get; set; }
+
         // Bumped once per open. This is the ONLY thing in the design that marks a session boundary:
         // the screen is a singleton reused for every list, so `_owner` cannot tell two sessions
         // apart and a row's index is a coordinate with no coordinate system. A row takes this value
@@ -132,6 +146,7 @@ namespace ModSettingsMenu.UI
             _rows.Clear();
             _rebuildPending = false; // a stale deferred rebuild from a prior open can't apply here
             _pendingSelect = RowSelection.None; // ...and neither can its selection target
+            FocusedSlot = null; // ...nor a column left over from browsing a DIFFERENT list before this open
             _scroll = GetComponent<UIScrollWindow>();
             if (box == null || box.itemContainer == null || box.itemTemplate == null || box.addRow == null)
             {
@@ -662,8 +677,16 @@ namespace ModSettingsMenu.UI
                 return;
             int target = explicitTarget.HasRow ? explicitTarget.Row : previousIndex;
             int clamped = Mathf.Clamp(target, 0, menuOptions.Count - 1);
-            if (explicitTarget.Slot.HasValue && menuOptions[clamped] is ListDetailItem restored)
-                restored.FocusedSlot = explicitTarget.Slot;
+            // Set the column BEFORE SelectOptionIndex for the same reason NavigateInternally does:
+            // it calls the target row's OnSelected() synchronously, which is where the column is
+            // read. Guarded on HasRow, not on Slot.HasValue: AddEmptyRow's target has no slot (it
+            // means "land on the field"), and with FocusedSlot no longer reset per-row in Bind(), a
+            // column left over from moving a button around before adding a row would otherwise
+            // carry into the fresh row uninvited. An ordinary edit/removal (no explicit target,
+            // HasRow false) leaves the column exactly as OnSelected last set it while the field was
+            // being edited — already null, since editing requires the field to hold focus.
+            if (explicitTarget.HasRow)
+                FocusedSlot = explicitTarget.Slot;
             SelectOptionIndex(clamped);
         }
     }
