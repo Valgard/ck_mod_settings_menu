@@ -137,6 +137,18 @@ namespace ModSettingsMenu.UI
         // used to hand it here) never sees it, because CK's selectedIndex now names this button
         // directly. Move/delete are called straight from here instead of through a screen-side
         // dispatcher, since there is no longer a row in the middle to relay through.
+        // A disabled edge arrow must stay SELECTABLE but stop being ACTIVATABLE. The two are
+        // separate tests in CK: IsSelectionEnabled (Pug.Other:343106) asks only about enabled,
+        // activeInHierarchy and GRAYED_OUT, so refusing activation here costs no reachability —
+        // which matters, because a greyed neighbour is a dead end rather than a skip on this
+        // navigation path, and an unreachable arrow would strand the whole column below it.
+        //
+        // Without this, CK plays its activation receipt for a press that does nothing
+        // (MenuManager.UpdateInputAndApplyToCurrentMenu, :269883, gated on
+        // CanActivateCurrentOption). The same gate feeds the footer hint, so this also stops
+        // offering SELECT on a control that cannot act.
+        public override bool CanBeActivated() => !_disabled && base.CanBeActivated();
+
         public override void OnActivated()
         {
             base.OnActivated();
