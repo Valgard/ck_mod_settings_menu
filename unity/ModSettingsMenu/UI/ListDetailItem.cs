@@ -64,6 +64,9 @@ namespace ModSettingsMenu.UI
                 if (button == null)
                     continue;
                 button.Bind(this);
+                // Re-evaluated on every rebuild, not just wired once: an edge row's disabled state
+                // depends on both this row's own index and the current row count, and a structural
+                // edit (add, delete, reorder) can change either one.
                 switch (button.ButtonRole)
                 {
                     case ListRowButton.Role.MoveUp:
