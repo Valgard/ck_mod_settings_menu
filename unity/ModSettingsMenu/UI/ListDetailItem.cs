@@ -64,6 +64,18 @@ namespace ModSettingsMenu.UI
                 if (button == null)
                     continue;
                 button.Bind(this);
+                switch (button.ButtonRole)
+                {
+                    case ListRowButton.Role.MoveUp:
+                        button.SetDisabled(_rowIndex <= 0);
+                        break;
+                    case ListRowButton.Role.MoveDown:
+                        button.SetDisabled(_rowIndex >= rowCount - 1);
+                        break;
+                    case ListRowButton.Role.Delete:
+                        button.SetDisabled(false);
+                        break;
+                }
                 // `readOnly` without an underscore: it belongs to RadicalMenuOptionTextInput, the
                 // base class, and this row deliberately declares no field of its own for it.
                 button.gameObject.SetActive(!readOnly);
