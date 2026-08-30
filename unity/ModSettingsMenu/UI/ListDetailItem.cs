@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using ModSettingsMenu.Settings;
 using UnityEngine;
 
@@ -52,6 +53,30 @@ namespace ModSettingsMenu.UI
         // vertical neighbours — a button is a real, independently selectable menu option now (see
         // ListRowButton), not something this row forwards navigation or activation to on its behalf.
         internal ListRowButton[] RowButtons => rowButtons;
+
+        // The buttons this row actually offers at the level it was bound at, in prefab column order.
+        // ONE place asks ShowsRole and one place null-checks the serialized array, for the two
+        // callers that must agree: registration as a menu option (ListDetailScreen.AddItem) and the
+        // navigation chain (RowElements). If those two ever disagree, a button is either invisible
+        // but selectable — the selection lands on it and cannot leave — or wired but absent.
+        //
+        // This row owns both inputs (its buttons and its level), which is why the question belongs
+        // here rather than being asked twice at the call sites in opposite polarity.
+        //
+        // NOT usable by RefreshButtonStates: that one must walk EVERY button, because Refresh is
+        // what switches a hidden one off in the first place.
+        internal List<ListRowButton> OfferedButtons()
+        {
+            var offered = new List<ListRowButton>();
+            if (rowButtons == null)
+                return offered;
+            foreach (var button in rowButtons)
+            {
+                if (button != null && ListRowButton.ShowsRole(_editing, button.ButtonRole))
+                    offered.Add(button);
+            }
+            return offered;
+        }
 
         // Refresh every button against this row's current position. Called on every rebuild, because
         // a row is a fresh clone each time and its buttons start unbound — an unbound button renders
@@ -341,6 +366,15 @@ namespace ModSettingsMenu.UI
         // destroys this (flipped) instance anyway and creates a fresh one starting back at the
         // prefab's own isValueText = false — but redundant is the right place for it to be, given
         // the transition is unconditional and does not know in advance which case it is.
+        // A row that cannot enter edit mode must not offer itself as activatable either: CK gates the
+        // menu-select SFX and the footer's select prompt on this, so without it the player gets an
+        // activation receipt for a press that returns immediately below. The rows stay navigable —
+        // that is GetActiveStateInCurrentScene, a different question — so a read-only list can still
+        // be read and scrolled; only the promise of "pressing this does something" is withdrawn.
+        //
+        // ListRowButton makes the same distinction for its disabled arrows, for the same reason.
+        public override bool CanBeActivated() => base.CanBeActivated() && ListAccess.CanType(_editing);
+
         public override void OnActivated()
         {
             // A read-only list's rows are still navigable (GetActiveStateInCurrentScene stays

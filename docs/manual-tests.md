@@ -56,6 +56,7 @@ by a section reset.
 | `testListOrderOnlySingle` | `OrderOnly` | one entry — the row with no neighbour to wrap to |
 | `testListReadOnly` | `ReadOnly` | declared inert, as opposed to inert through a scope |
 | `testListOrderOnlyEmpty` | `OrderOnly` | no entries and no way to add one — the drill-in must refuse to open |
+| `testListReadOnlyDuplicate` | `ReadOnly` | a repeated default — both reconciliation branches must keep only the first |
 
 ## Before anything else
 
@@ -296,6 +297,18 @@ the two paths reach the drill-in with different things known about the value.
       declared defaults of `testListReadOnly` in `AddDeclaredListFixtures`,
       rebuild, reopen: the new order shows. Nobody can reorder this list in
       game, so a stored order would otherwise outlive every release.
+
+### Duplicates and hand-edited case
+
+- [ ] `testListReadOnlyDuplicate` shows **two** rows (`Alpha`, `Beta`), not three,
+      and `Player.log` names the duplicate at declaration time. Both branches of
+      the reconciliation collapse duplicates; they did not always agree on that.
+- [ ] **A differently-cased entry keeps its place.** In `config.cfg`, change one
+      middle entry of `testListOrderOnly` to lower case and relaunch: it must
+      still sit where it was, spelled as the mod declares it — not dropped and
+      re-appended at the end. This is the only route a player has to these
+      entries outside the menu, so losing their position here would undo exactly
+      what `OrderOnly` is for.
 
 ### A list that cannot work
 
