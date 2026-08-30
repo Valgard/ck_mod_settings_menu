@@ -266,6 +266,14 @@ the two paths reach the drill-in with different things known about the value.
 - [ ] Activating a row does **not** enter edit mode — no caret, no keyboard
       capture, and the on-screen keyboard never appears on a controller.
 - [ ] ↑/↓ still reorder, and the value in `config.cfg` follows.
+- [ ] **The selection travels with the entry, one row per press.** Press ↓ on a
+      middle row: the marker sits on the ↓ of the row one lower, i.e. still on
+      the entry that just moved, so pressing again moves the same entry once
+      more. Then the same upward. Both directions failed this once, and in
+      different ways — ↓ appeared to leave the selection behind, ↑ appeared to
+      skip a row — because the add row, hidden at this level, was still sitting
+      at child 0 of the container that the landing step indexes by row number.
+      Checking only the stored value passes while this is broken.
 - [ ] Down from the bottom row wraps to the top row **in the same column**, and
       up from the top row wraps to the bottom — there is no add row to pass
       through, so the column cycles onto itself.
