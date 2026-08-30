@@ -1,3 +1,4 @@
+using ModSettingsMenu.Settings;
 using UnityEngine;
 
 namespace ModSettingsMenu.UI
@@ -125,7 +126,37 @@ namespace ModSettingsMenu.UI
         // Re-evaluated on every rebuild, not wired once: an edge row's disabled state depends on
         // both this row's own index and the current row count, and a structural edit (add, delete,
         // reorder) can change either one.
-        internal void Refresh(ListDetailItem row, int rowIndex, int rowCount, bool readOnly)
+        // Whether a role is offered at all under a given access level — the ONE definition of that
+        // rule, asked by all three places that would otherwise each need their own copy: this class
+        // (whether the object is on screen), ListDetailScreen.AddItem (whether it registers as a
+        // menu option) and RowElements (whether it becomes a link in the navigation chain).
+        //
+        // Those three must agree or the screen breaks in a way no compiler catches: a button that is
+        // merely SetActive(false) but still registered stays reachable through SelectOptionIndex,
+        // which sets selectedIndex directly and consults no active state (see AddItem's own comment
+        // on the read-only path). A stale copy of this rule in one of the three would produce
+        // exactly that — an invisible row element the selection can land on and not move off.
+        //
+        // Deliberately a static function of (access, role) rather than a flag Refresh leaves behind:
+        // a flag would make the answer depend on whether Refresh has run yet, and the navigation
+        // chain is wired in a different pass than the rows are bound.
+        internal static bool ShowsRole(ListEditing access, Role role)
+        {
+            switch (access)
+            {
+                case ListEditing.FreeText:
+                    return true;
+                case ListEditing.OrderOnly:
+                    // Reordering is the whole point of this level; deleting is not offered, because
+                    // nothing here can add an entry back — the only way would be the section-wide
+                    // reset, which would take every other setting of that mod with it.
+                    return role != Role.Delete;
+                default:
+                    return false;
+            }
+        }
+
+        internal void Refresh(ListDetailItem row, int rowIndex, int rowCount, ListEditing access)
         {
             _row = row;
             if (selectedMarker != null)
@@ -159,7 +190,7 @@ namespace ModSettingsMenu.UI
                     SetDisabled(false);
                     break;
             }
-            gameObject.SetActive(!readOnly);
+            gameObject.SetActive(ShowsRole(access, role));
         }
 
         // ACTIVE only for a live instance — and the test is `activeInHierarchy`, NOT `activeSelf`.

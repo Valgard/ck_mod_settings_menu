@@ -26,9 +26,12 @@ namespace ModSettingsMenu.UI
         private SettingDef _pending; // seeded by Open() before PushMenu resolves this instance
         private SettingDef _activeDef; // the setting this open session is showing/editing — set once
 
-        // this open session's own copy of _activeDef.ReadOnly — set in Populate from _pending (which
-        // Activate() nulls right after)
-        private bool _readOnly;
+        // this open session's own copy of _activeDef.EffectiveEditing — set in Populate from _pending
+        // (which Activate() nulls right after). Effective, not declared: a permission lock has
+        // already been folded in, so nothing on this screen consults SettingDef.ReadOnly separately.
+        // Defaults to the most restrictive level, so a session that never reaches Populate shows an
+        // inert list rather than an editable one.
+        private ListEditing _editing = ListEditing.ReadOnly;
 
         // The rows this open session owns. While the drill-in is open THESE are the truth,
         // not the stored value: an empty row has to survive an edit to a different row, and
@@ -123,7 +126,7 @@ namespace ModSettingsMenu.UI
         private void Populate()
         {
             _activeDef = _pending;
-            _readOnly = _activeDef != null && _activeDef.ReadOnly;
+            _editing = _activeDef != null ? _activeDef.EffectiveEditing : ListEditing.ReadOnly;
             // Everything below marks the boundary to the previous session, and all of it must move
             // together: the generation stamp rows are bound with, the row list itself, and BOTH
             // deferred-rebuild fields. _rows is cleared here rather than after the wiring guard so a
@@ -189,8 +192,8 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Destroys every current row — real tokens, plus the trailing add button for an editable list
-        // (a read-only list has none, see the !_readOnly guard below) — and rebuilds them fresh from
+        // Destroys every current row — real tokens, plus the trailing add button for a FreeText list
+        // (no other level has one, see the canAdd guard below) — and rebuilds them fresh from
         // _rows, this open session's own row list (Populate seeds it from the stored value; commit
         // writes the edited row back into it). The SAME rebuild-from-_rows path serves the initial
         // open (Populate) and every post-edit refresh (OnRowTextCommitted, via the deferred Update
@@ -258,8 +261,11 @@ namespace ModSettingsMenu.UI
             // itself survived; and it has to move back to the end, because the rows above were
             // Instantiate()d into the container and therefore landed AFTER it. The LinearLayout
             // stacks in hierarchy order, so sibling order is the row order.
-            box.addRow.gameObject.SetActive(!_readOnly);
-            if (!_readOnly)
+            // Only FreeText can add: OrderOnly and ReadOnly both have no way to author a new entry,
+            // and an add row that produces a row nobody can type into would be a dead control.
+            bool canAdd = _editing == ListEditing.FreeText;
+            box.addRow.gameObject.SetActive(canAdd);
+            if (canAdd)
             {
                 box.addRow.transform.SetAsLastSibling();
                 box.addRow.Bind(this);
@@ -296,11 +302,12 @@ namespace ModSettingsMenu.UI
         // control the player left from, and does not need to — closest-by-position is a reasonable
         // landing either way.
         //
-        // A read-only list has no buttons and no add row (RebuildRows switches both off), and the
-        // general loop below could not degrade into that on its own — it wires the first and last
-        // rows to box.addRow, which a read-only list does not have. So read-only gets its own
-        // branch below: the plain field-to-field cyclic chain this screen used before the buttons
-        // existed, which is also what a single-role list looks like when nothing else is wired.
+        // Without an add row the same loop wraps each column onto itself instead — bottom row back
+        // to top — which is the plain cyclic chain this screen used before the buttons existed. That
+        // covers both levels that have no add row, and it needs no branch of its own: a ReadOnly list
+        // contributes no buttons to RowElements, so its columns collapse to the single field column
+        // and the loop degrades into exactly the field-to-field cycle it used to hand-code, while an
+        // OrderOnly list keeps its two arrow columns cycling alongside the field.
         private void ChainRowsForUIElementNavigation()
         {
             var rows = new List<ListDetailItem>();
@@ -312,34 +319,22 @@ namespace ModSettingsMenu.UI
             }
             int last = rows.Count - 1;
 
-            if (_readOnly)
+            // Whether the add row takes part at all. It is the wrap target for every column when it
+            // is there; without it a column wraps onto itself, top row to bottom row.
+            bool canAdd = _editing == ListEditing.FreeText;
+
+            if (rows.Count == 0)
             {
-                // No buttons, no add row on this screen at all — CYCLIC, the same wrap-around
-                // this screen has always had for a plain vertical list. A single row gets empty
-                // lists rather than a cycle onto itself: the wrap would resolve to the row already
-                // selected, a no-op with a selection SFX.
-                for (int i = 0; i <= last; i++)
+                // Nothing to wrap to. With an add row it is the only control on screen; without one
+                // the screen is empty and there is nothing to wire.
+                if (canAdd)
                 {
-                    var field = rows[i];
-                    if (last == 0)
-                    {
-                        field.topUIElements = new List<UIelement>();
-                        field.bottomUIElements = new List<UIelement>();
-                        continue;
-                    }
-                    field.topUIElements = new List<UIelement> { rows[i > 0 ? i - 1 : last] };
-                    field.bottomUIElements = new List<UIelement> { rows[i < last ? i + 1 : 0] };
+                    box.addRow.topUIElements = new List<UIelement>();
+                    box.addRow.bottomUIElements = new List<UIelement>();
                 }
                 return;
             }
 
-            if (rows.Count == 0)
-            {
-                // Nothing to wrap to — the add button is the only control on screen.
-                box.addRow.topUIElements = new List<UIelement>();
-                box.addRow.bottomUIElements = new List<UIelement>();
-                return;
-            }
             for (int i = 0; i <= last; i++)
             {
                 var elements = RowElements(rows[i]);
@@ -347,19 +342,39 @@ namespace ModSettingsMenu.UI
                 var nextElements = i < last ? RowElements(rows[i + 1]) : null;
                 for (int col = 0; col < elements.Count; col++)
                 {
-                    elements[col].topUIElements = new List<UIelement> { prevElements != null ? prevElements[col] : box.addRow };
-                    elements[col].bottomUIElements = new List<UIelement> { nextElements != null ? nextElements[col] : box.addRow };
+                    // A single row with no add row has nowhere to go: the wrap would resolve to the
+                    // element already selected, a no-op that still plays the selection SFX. Empty
+                    // lists say "no neighbour" properly.
+                    if (!canAdd && last == 0)
+                    {
+                        elements[col].topUIElements = new List<UIelement>();
+                        elements[col].bottomUIElements = new List<UIelement>();
+                        continue;
+                    }
+                    UIelement above = prevElements != null ? prevElements[col] : (canAdd ? (UIelement)box.addRow : RowElements(rows[last])[col]);
+                    UIelement below = nextElements != null ? nextElements[col] : (canAdd ? (UIelement)box.addRow : RowElements(rows[0])[col]);
+                    elements[col].topUIElements = new List<UIelement> { above };
+                    elements[col].bottomUIElements = new List<UIelement> { below };
                 }
             }
-            box.addRow.topUIElements = new List<UIelement>(RowElements(rows[last]));
-            box.addRow.bottomUIElements = new List<UIelement>(RowElements(rows[0]));
+
+            if (canAdd)
+            {
+                box.addRow.topUIElements = new List<UIelement>(RowElements(rows[last]));
+                box.addRow.bottomUIElements = new List<UIelement>(RowElements(rows[0]));
+            }
         }
 
-        // The four navigable controls of one row, in the fixed column order every clone of the
-        // template shares (field, ↑, ↓, ✕) — ListRowButton[] is serialized on the prefab, so
-        // Instantiate preserves its element order across every row, which is what lets column N
-        // mean the same control everywhere this method wires it.
-        private static List<UIelement> RowElements(ListDetailItem row)
+        // The navigable controls of one row, in the fixed column order every clone of the template
+        // shares (field, ↑, ↓, ✕) — ListRowButton[] is serialized on the prefab, so Instantiate
+        // preserves its element order across every row, which is what lets column N mean the same
+        // control everywhere this method wires it.
+        //
+        // How MANY columns depends on the access level, which is why this cannot be static: a role
+        // this level does not offer is skipped, so every row yields the same shorter list and the
+        // columns still line up. Skipping it here is not cosmetic — a button left in the chain while
+        // switched off would be an invisible link the selection can reach and then not leave.
+        private List<UIelement> RowElements(ListDetailItem row)
         {
             var elements = new List<UIelement> { row };
             if (row.RowButtons != null)
@@ -370,7 +385,7 @@ namespace ModSettingsMenu.UI
                 // null UIelement in the neighbour list.
                 foreach (var button in row.RowButtons)
                 {
-                    if (button != null)
+                    if (button != null && ListRowButton.ShowsRole(_editing, button.ButtonRole))
                         elements.Add(button);
                 }
             }
@@ -389,7 +404,7 @@ namespace ModSettingsMenu.UI
             var item = row.GetComponent<ListDetailItem>();
             if (item == null)
                 return;
-            item.Bind(this, rowIndex, _readOnly);
+            item.Bind(this, rowIndex, _editing);
             item.RefreshButtonStates(_rows.Count);
             if (item.pugText != null)
                 item.pugText.localize = false; // cloned PugText inherits localize=true — same trap as
@@ -405,21 +420,24 @@ namespace ModSettingsMenu.UI
             }
             item.SetParentMenu(this);
             menuOptions.Add(item);
-            // A read-only row's buttons never register at all — not merely because they end up
-            // INACTIVE (RefreshButtonStates -> SetActive(!readOnly)) and fail IsSelectionEnabled().
+            // A button this access level does not offer never registers at all — not merely because
+            // it ends up INACTIVE (RefreshButtonStates -> SetActive) and fails IsSelectionEnabled().
             // That guard only protects SelectIndexInDirection, which filters on it; SelectOptionIndex
             // (Pug.Other:342813) sets selectedIndex directly and consults nothing. Opening with the
             // mouse (selectedIndex stays -1) and then pressing an arrow first hands
             // EnterListIfNothingSelected menuOptions.Count - 1 — the read-only list's ✕ of the last
             // row, invisible and inactive — which GetSelectedMenuOption() would then happily report as
-            // selected, with nothing in its neighbour lists (ChainRowsForUIElementNavigation's own
-            // read-only branch never wires them) to move away to. Excluding them here matches that
-            // same branch, which already ignores them.
-            if (!_readOnly && item.RowButtons != null)
+            // selected, with nothing in its neighbour lists to move away to.
+            //
+            // Asking ShowsRole per button rather than skipping the whole array on a read-only list:
+            // OrderOnly keeps its arrows and drops only ✕, so the decision is per role now. It is the
+            // same call ListRowButton.Refresh and RowElements make, which is what keeps registration,
+            // visibility and the navigation chain from disagreeing.
+            if (item.RowButtons != null)
             {
                 foreach (var button in item.RowButtons)
                 {
-                    if (button == null)
+                    if (button == null || !ListRowButton.ShowsRole(_editing, button.ButtonRole))
                         continue;
                     button.SetParentMenu(this);
                     menuOptions.Add(button);
