@@ -389,30 +389,46 @@ namespace ModSettingsMenu.UI
         // override below is what actually drives the bar.
         public override bool UseCustomHelpButtons => true;
 
-        // Reused across calls instead of allocating a fresh List every time: CK polls this at
-        // least once per frame (twice once a row is selected — see the comment above
-        // UseCustomHelpButtons), same as CK's own menus keep a pre-built list in a field rather
-        // than allocate per call.
-        private readonly List<MenuHelperButtons.HelpButtonTypes> _helpButtons = new List<MenuHelperButtons.HelpButtonTypes>();
-
+        // A FRESH list every call — deliberately, and not an oversight to optimise later.
+        //
+        // MenuHelperButtons.UpdateShowingButtons (Pug.Other:338896) keeps the list it is handed BY
+        // REFERENCE (`currentButtonsToShowing = buttonsToShow`, :338903) and its early-out asks
+        // `currentButtonsToShowing.SequenceEqual(buttonsToShow)` (:338898). That comparison is only
+        // meaningful while the caller hands over an instance CK is not already holding: give it back
+        // the same object and the test compares a list with itself, which is true no matter what was
+        // written into it meanwhile.
+        //
+        // Two cheaper-looking shapes were tried in game on 2026-08-30 and BOTH produced the same
+        // wrong behaviour: the footer kept the prompts of whatever row it had drawn first, so a row
+        // that stops being activatable never lost its select prompt.
+        //   * one reused field — CK is handed the object it already holds, so its check compares a
+        //     list with itself;
+        //   * two buffers alternating on every call — CK only stores the list it actually redraws
+        //     from, so after a skipped frame it is still holding the buffer this method is about to
+        //     overwrite.
+        // The per-variant mechanics above are reasoned, not measured; what IS established is that
+        // both failed and that handing over a fresh instance fixed it. That is the contract to
+        // respect, and it is why neither variant is worth retrying.
+        //
+        // So the allocation is the price of the contract, and it is a small one: this list holds a
+        // handful of enum values, and CK allocates its own List<HelpButton> on every real update
+        // anyway (:338915). Do not "fix" this back into a cached field.
         public override List<MenuHelperButtons.HelpButtonTypes> GetHelpButtonsToShow()
         {
             var buttons = base.GetHelpButtonsToShow();
             if (!SectionReset.CanReset(SelectedSection()))
                 return buttons;
             // NEVER mutate the base result in place: RadicalMenu.GetHelpButtonsToShow returns
-            // Manager.menu.defaultHelpButtons — the SHARED list instance — so appending to IT
-            // would permanently add a reset prompt to every vanilla menu in the game. Copy its
-            // entries into our own reused field instead, then add.
+            // Manager.menu.defaultHelpButtons — the SHARED list instance — so appending to IT would
+            // permanently add a reset prompt to every vanilla menu in the game.
             //
-            // RESET_DEFAULTS is a fully-built but unused vanilla slot: the Global Objects (Main
-            // Manager) prefab wires its root, its per-platform glyph (keyboard "R", the Y-position
-            // face button) and a PugText carrying the shipped, localized term "Menu/Reset" — and no
-            // vanilla menu ever requests it. So this costs no prefab work and no own localization.
-            _helpButtons.Clear();
-            _helpButtons.AddRange(buttons);
-            _helpButtons.Add(MenuHelperButtons.HelpButtonTypes.RESET_DEFAULTS);
-            return _helpButtons;
+            // RESET_DEFAULTS is a slot CK ships fully wired (glyph plus the localized "Menu/Reset"
+            // label) and requests from exactly one other screen, so reusing it here costs no prefab
+            // work and no own localization.
+            var withReset = new List<MenuHelperButtons.HelpButtonTypes>(buttons.Count + 1);
+            withReset.AddRange(buttons);
+            withReset.Add(MenuHelperButtons.HelpButtonTypes.RESET_DEFAULTS);
+            return withReset;
         }
 
         // The section the currently selected row belongs to, or null when nothing selectable is
