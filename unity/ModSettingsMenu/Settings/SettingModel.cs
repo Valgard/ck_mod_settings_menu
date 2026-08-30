@@ -49,9 +49,10 @@ namespace ModSettingsMenu.Settings
     /// insertion of a picker level BETWEEN FreeText and OrderOnly depends on that: the numeric
     /// values shift, so a stored one would silently come back as a different level.
     ///
-    /// Do not test against a member here to decide what the UI offers — ask ListAccess. Each of the
-    /// four capabilities is a separate question, and three of them are spelled identically today
-    /// (`!= FreeText`) purely because there are only three levels.</summary>
+    /// Do not test against a member here to decide what the UI offers — ask ListAccess. Each
+    /// capability is a separate question, and most of them are decided by FreeText-ness alone today
+    /// purely because there are only three levels — which is what makes them look interchangeable
+    /// and is exactly why they are not.</summary>
     public enum ListEditing
     {
         /// <summary>The player types entries: edit, add, delete, reorder.</summary>
@@ -74,10 +75,12 @@ namespace ModSettingsMenu.Settings
     /// which was meant.
     ///
     /// The cost of that was measured rather than imagined. Adding the planned picker level — which
-    /// CAN add entries but is NOT typed into — silently flips three of those sites to the wrong
-    /// answer, and the worst of them (the late-default merge below) would resurrect entries a player
-    /// deleted on purpose, on every launch. All three would compile cleanly, and no test in this
-    /// repo would fail, because verification here is a person walking the menu.
+    /// CAN add entries but is NOT typed into — silently flips three of the five answers below:
+    /// CanAdd and CanDelete would say no where the level means yes, and ReconcilesDefaults would say
+    /// yes where it means no. That last one is the damaging one: <see cref="SectionBuilder"/>'s
+    /// ReconcileWithDefaults runs at every bind, so it would resurrect entries a player deleted on
+    /// purpose, every launch. All three would compile cleanly, and no test in this repo would fail,
+    /// because verification here is a person walking the menu.
     ///
     /// So a new level is filled in here, in one screenful, instead of being audited across the
     /// codebase. Deliberately expression-bodied one-liners rather than a switch: the point is that
