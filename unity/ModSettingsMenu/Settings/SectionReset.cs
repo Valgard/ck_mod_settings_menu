@@ -10,6 +10,13 @@ namespace ModSettingsMenu.Settings
     /// itself carries: a genuine permission lock (view-only / server-locked and not this
     /// session's host) or a Kind == Info fallback where no editable widget exists for the
     /// value's shape at all — the latter is writable, but this menu never showed it as such.
+    ///
+    /// A list declared ListEditing.ReadOnly is a THIRD kind of row the menu shows as unchangeable,
+    /// and it is deliberately NOT skipped: SettingDef.ReadOnly stays false for it, because the lock
+    /// is the consumer's declaration rather than a permission. So a reset restores it, which is
+    /// right — the value is the mod's to define, the reset writes back exactly what the mod
+    /// declared, and it is the only way a stale entry in such a list can ever clear. Two rows that
+    /// look equally uneditable on screen therefore behave differently here, by design.
     /// </summary>
     internal static class SectionReset
     {
