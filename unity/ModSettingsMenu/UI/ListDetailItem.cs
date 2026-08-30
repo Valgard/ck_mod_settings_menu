@@ -52,9 +52,12 @@ namespace ModSettingsMenu.UI
         // ListRowButton), not something this row forwards navigation or activation to on its behalf.
         internal ListRowButton[] RowButtons => rowButtons;
 
-        // Hand each button its row, and hide them all on a read-only list. Called on every rebuild,
-        // because a row is a fresh clone each time and its buttons start unbound — an unbound button
-        // renders normally and does nothing when pressed.
+        // Refresh every button against this row's current position. Called on every rebuild, because
+        // a row is a fresh clone each time and its buttons start unbound — an unbound button renders
+        // normally and does nothing when pressed. What each button does with rowIndex/rowCount/
+        // readOnly (its own disabled state, its read-only visibility) is entirely its own decision
+        // now — see ListRowButton.Refresh; this loop only owns the null check over a serialized array
+        // a prefab slot can leave empty.
         internal void RefreshButtonStates(int rowCount)
         {
             if (rowButtons == null)
@@ -63,25 +66,9 @@ namespace ModSettingsMenu.UI
             {
                 if (button == null)
                     continue;
-                button.Bind(this);
-                // Re-evaluated on every rebuild, not just wired once: an edge row's disabled state
-                // depends on both this row's own index and the current row count, and a structural
-                // edit (add, delete, reorder) can change either one.
-                switch (button.ButtonRole)
-                {
-                    case ListRowButton.Role.MoveUp:
-                        button.SetDisabled(_rowIndex <= 0);
-                        break;
-                    case ListRowButton.Role.MoveDown:
-                        button.SetDisabled(_rowIndex >= rowCount - 1);
-                        break;
-                    case ListRowButton.Role.Delete:
-                        button.SetDisabled(false);
-                        break;
-                }
                 // `readOnly` without an underscore: it belongs to RadicalMenuOptionTextInput, the
                 // base class, and this row deliberately declares no field of its own for it.
-                button.gameObject.SetActive(!readOnly);
+                button.Refresh(this, _rowIndex, rowCount, readOnly);
             }
         }
 
