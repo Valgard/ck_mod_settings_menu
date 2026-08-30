@@ -43,8 +43,11 @@ own. The file to inspect after a write:
 
 The same flag also declares four lists through the **public consumer API**, in
 this mod's own section (`AddDeclaredListFixtures`). They are the other path
-entirely: discovery can only ever produce a `FreeText` list, because a heuristic
-cannot know an entry set is closed, so the narrower levels exist nowhere else.
+entirely: discovery can only ever declare a `FreeText` list, because a heuristic
+cannot know an entry set is closed. So `OrderOnly` exists nowhere else, while
+`ReadOnly` is reachable both ways — and the two are not interchangeable, since
+only the declared one reconciles its defaults and only the scoped one is skipped
+by a section reset.
 
 | Fixture | `ListEditing` | What it is for |
 |---|---|---|
@@ -289,18 +292,39 @@ the two paths reach the drill-in with different things known about the value.
 - [ ] It looks and behaves like `LongReadOnly`, which reaches the same state
       through a `ViewOnly` scope instead of a declaration.
 
-### Defaults merged at bind
+### Defaults reconciled at bind
 
-Needs two builds, and is the only check here that cannot be done in one session.
+Needs two builds, and is the only group here that cannot be done in one session.
+It runs in **both** directions, and the removal half is the one that was missing
+at first: appending alone left an entry the mod had stopped declaring stuck in
+the player's file forever, because neither side can delete it at these levels.
 
 - [ ] Edit the order of `testListOrderOnly` in game, quit, and confirm
       `config.cfg` holds the new order.
-- [ ] Add an entry to that fixture's declared defaults in
-      `ModSettingsMenuMod.AddDeclaredListFixtures`, rebuild, and reopen: the new
+- [ ] **Added default:** add an entry to that fixture's declared defaults in
+      `ModSettingsMenuMod.AddDeclaredListFixtures`, rebuild, and reopen. The new
       entry is present, **at the end**, and the order you set is otherwise
       untouched.
-- [ ] Do the same for `testListFreeText`: the new entry must **not** appear —
-      that list can add entries itself, so merging would resurrect deleted ones.
+- [ ] **Removed default:** delete one of the middle entries from those same
+      declared defaults, rebuild, and reopen. It is **gone** from the list and
+      from `config.cfg`, the remaining entries keep the order you gave them, and
+      `Player.log` names the dropped entry.
+- [ ] Do both again for `testListFreeText`: neither must change anything —
+      that list can add and delete entries itself, so reconciling it would
+      overrule the player.
+
+### The section reset, which is the only escape hatch
+
+`OrderOnly` has no delete button, and both the README and the code point at the
+section reset as the way back. It is worth one pass because the two read-only
+routes behave *differently* here, which nothing on screen shows.
+
+- [ ] Reorder `testListOrderOnly`, then reset this mod's section from the footer
+      hint: the declared order comes back.
+- [ ] The same reset rewrites `testListReadOnly` (declared read-only, so
+      `SettingDef.ReadOnly` is false and it is in scope) but leaves
+      `LongReadOnly` untouched (read-only through a `ViewOnly` scope, which the
+      reset skips).
 
 ## After the walk
 

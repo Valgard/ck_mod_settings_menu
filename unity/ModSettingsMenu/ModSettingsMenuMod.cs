@@ -147,8 +147,12 @@ namespace ModSettingsMenu
 
         // Dev-only fixtures for the DECLARED list path — the counterpart to the raw ConfigFile
         // fixtures in EarlyInit, which exercise discovery instead. Both are needed and neither
-        // stands in for the other: a discovered list is always FreeText (the heuristic cannot know
-        // an entry set is closed), so the two narrower levels are reachable through this path alone.
+        // stands in for the other: a discovered list is always declared FreeText, because the
+        // heuristic cannot know an entry set is closed. So OrderOnly is reachable through this path
+        // alone — while ReadOnly is reachable both ways, and the two are worth telling apart: here
+        // it is a DECLARATION, whereas the LongReadOnly fixture above arrives at the same rendering
+        // through a ViewOnly scope. Only the declared one carries a defaults reconciliation, and
+        // only the scoped one is skipped by a section reset.
         //
         // Declared through the real public API, in this mod's own section, so what is being checked
         // is the API a consumer actually calls rather than a SettingDef assembled by hand.
