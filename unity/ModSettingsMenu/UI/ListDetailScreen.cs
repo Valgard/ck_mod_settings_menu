@@ -279,9 +279,9 @@ namespace ModSettingsMenu.UI
         // INSIDE a row is wired in the prefab (sibling fileIDs survive Instantiate), what sits
         // BETWEEN rows is assigned here, because row N cannot know row N+1 before either exists.
         // SelectWorldMenu does exactly this for its own per-slot buttons (Pug.Other:344739), wiring
-        // each slot's playOption/moreOption/deleteOption/etc. against the SAME control on the
-        // slot before it — one neighbour-list assignment per role, per adjacent pair. This mirrors
-        // that shape directly: an editable row's field and its three buttons are each their own
+        // each slot's playOption/moreOption/deleteOption/etc. against a control on the slot before
+        // it — usually the same role, sometimes a two-entry list falling back to playOption. This
+        // mirrors that shape directly: an editable row's field and its three buttons are each their own
         // menu option now (see ListRowButton — it no longer opts out of isMenuOption), so each gets
         // its own vertical chain, column by column, instead of one chain that used to stand in for
         // the whole row.
@@ -296,10 +296,11 @@ namespace ModSettingsMenu.UI
         // control the player left from, and does not need to — closest-by-position is a reasonable
         // landing either way.
         //
-        // A read-only list has no buttons and no add row (RebuildRows switches both off) — for it
-        // this degrades to the plain field-to-field cyclic chain this screen used before the
-        // buttons existed, which is also what a single-role list is when nothing else is wired: no
-        // special case for read-only, just a list with one column instead of four.
+        // A read-only list has no buttons and no add row (RebuildRows switches both off), and the
+        // general loop below could not degrade into that on its own — it wires the first and last
+        // rows to box.addRow, which a read-only list does not have. So read-only gets its own
+        // branch below: the plain field-to-field cyclic chain this screen used before the buttons
+        // existed, which is also what a single-role list looks like when nothing else is wired.
         private void ChainRowsForUIElementNavigation()
         {
             var rows = new List<ListDetailItem>();
@@ -623,12 +624,12 @@ namespace ModSettingsMenu.UI
 
             // Scroll to the ROW, not to the selected control. Every position below is read as a
             // localPosition inside the scrolled container, which only a direct child of that
-            // container actually is: an in-row button sits one level deeper, so its own
-            // localPosition describes where it sits WITHIN its row (roughly zero) and would scroll
-            // to the top of the list no matter which row is selected. Taking the owning row also
-            // happens to be what the player needs — a button is only worth seeing in the context of
-            // the entry it acts on. A control with no owning row (the add button) is its own
-            // geometry.
+            // container actually is: an in-row button sits two levels deeper (row → Buttons →
+            // button), so its own localPosition describes where it sits WITHIN Buttons (roughly
+            // zero) and would scroll to the top of the list no matter which row is selected. Taking
+            // the owning row also happens to be what the player needs — a button is only worth
+            // seeing in the context of the entry it acts on. A control with no owning row (the add
+            // button) is its own geometry.
             var owningRow = option.GetComponentInParent<ListDetailItem>();
             if (owningRow != null)
                 option = owningRow;
@@ -642,9 +643,11 @@ namespace ModSettingsMenu.UI
             if (height <= _scroll.windowHeight)
             {
                 // Deliberately NOT MoveScrollToIncludePosition (Pug.Other:357679), which is CK's own
-                // helper for exactly this: on a keyboard/mouse system it acts only while a menu
-                // up/down button is HELD. That fits CK's own callers, which all run from directional
-                // navigation, and silently does nothing for ours that do not — a selection restored
+                // helper for exactly this: on a keyboard/mouse system it acts only when
+                // SystemIsUsingKeyboard() is also true AND a menu up/down button is HELD — so on a
+                // KB&M system currently driven by the mouse it does nothing even with a key held.
+                // That fits CK's own callers, which all run from directional navigation, and
+                // silently does nothing for ours that do not — a selection restored
                 // after a rebuild (reorder, delete, add) happens on the frame after Enter, with no
                 // direction held, so the view stayed put while the selection travelled off-screen.
                 // The gate exists to stop mouse hover from scrolling the page under the pointer, and
@@ -792,11 +795,11 @@ namespace ModSettingsMenu.UI
             RenderContent();
             selectedIndex = -1; // stale index from before the rebuild — reset so SelectOptionIndex's
             // no-op guard and range check don't see a wrong/out-of-range value
-            // A caller that knows where the selection must land says so via _pendingSelect — today
-            // that is AddEmptyRow, MoveRow and DeleteRow, each naming a ROW (never a specific
-            // in-row control any more — see RowSelection). Everything else leaves it at -1, meaning
-            // "keep the same numeric slot" (clamped), which is what an ordinary text-edit commit
-            // wants anyway.
+            // A caller that knows where the selection must land says so via _pendingSelect.
+            // AddEmptyRow names a row alone; MoveRow and DeleteRow additionally name the control
+            // that acted (RowSelection.Slot), so a repeated press stays on it. Everything else
+            // leaves RowSelection.None, meaning "keep the same numeric slot" (clamped), which is
+            // what an ordinary text-edit commit wants anyway.
             // Nothing to select is a legitimate outcome, and Mathf.Clamp cannot express it: with an
             // empty list the bounds invert (0 .. -1), and Clamp's `if (v < min) v = min; else if
             // (v > max) v = max;` then yields -1 for any non-negative target — or 0 for a negative
@@ -820,9 +823,12 @@ namespace ModSettingsMenu.UI
                 // Every row now contributes several menuOptions entries (its field, plus its
                 // buttons — see AddItem), so a row index can no longer be clamped straight against
                 // menuOptions.Count the way a single-entry-per-row list could. box.itemContainer's
-                // DIRECT children are the rows themselves regardless of that (buttons live one
-                // level deeper, inside each row), so indexing there still means "the Nth row" and
-                // GetIndexForOption converts the row's own field into its actual menuOptions slot.
+                // direct children are the rows AND, appended last, box.addRow (buttons live two
+                // levels deeper — row → Buttons → button); indexing here is always clamped to
+                // [0, _rows.Count-1], which the append order keeps within the rows alone, so it
+                // still means "the Nth row." GetIndexForOption then converts the target control —
+                // the row's own field, or one of its buttons below — into its actual menuOptions
+                // slot.
                 // Lands on the row's field unless the action that caused this rebuild came from an
                 // in-row button and named it (see RowSelection) — a one-shot target, not a
                 // remembered column. A named button that no longer exists (the row rebuilt
