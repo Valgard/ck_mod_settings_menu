@@ -14,9 +14,10 @@ entry is the version published to mod.io; its body is the modfile changelog.
   ever appeared for a mod that did *not* integrate with this menu — it had to be
   recognised in that mod's config file. A mod author can now declare one
   directly, and say what you may do with it: edit entries freely, only reorder a
-  fixed set, or just read it. Where entries cannot be added, an entry the mod
-  introduces in a later release is added to your saved list instead of being
-  invisible, without disturbing the order you put the rest in.
+  fixed set, or just read it. Where entries cannot be added, the list is kept in
+  step with what the mod currently offers — an entry it adds in a later release
+  appears instead of staying invisible, one it drops disappears instead of being
+  stuck there forever, and the order you put the rest in is left alone.
 - **Any mod's settings can be restored to their defaults.** Select a row in that
   mod's box and press the reset button shown at the bottom of the screen; a
   confirmation names the mod before anything changes. Works for detected mods

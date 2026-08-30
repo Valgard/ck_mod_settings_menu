@@ -75,6 +75,39 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning("[ModSettingsMenu] ListDetail instance missing; cannot open the list drill-in.");
                 return;
             }
+            // A screen with nothing on it is not merely useless here, it throws — and it throws in
+            // three places, which is why this refuses the OPEN rather than defending each of them.
+            //
+            // With no rows and no add row, menuOptions is empty. Then:
+            //   1. base.Activate() itself. rememberSelectedIndex is set on this prefab, so CK does
+            //      `if (selectedIndex != MathUtilities.Clamp(selectedIndex, 0, menuOptions.Count - 1))`
+            //      and otherwise dereferences menuOptions[selectedIndex] (Pug.Other:342704-342708).
+            //      That Clamp is NOT Mathf.Clamp: it is two sequential ifs (Pug.UnityExtensions:5349),
+            //      so Clamp(-1, 0, -1) walks -1 up to 0 and back down to -1 and returns -1 — equal to
+            //      selectedIndex, so the guard reads "in range" and the else-branch indexes with -1.
+            //      This fires before any key is pressed, and on keyboard too: SystemIsUsingMouse
+            //      compares the LAST ACTIVE controller, and opening this row with Enter makes that
+            //      the keyboard.
+            //   2. Left/right, via SkimLeft/SkimRight (Pug.Other:342977/342995) — internal AND
+            //      non-virtual, so no override can reach them.
+            //   3. Up/down, which SelectNextIndex/SelectPrevIndex below do guard.
+            //
+            // Only the third was defensible from inside this class, so the two guards there are
+            // redundancy now, not the defence.
+            //
+            // Reachable two ways, which is why a check in SectionBuilder would not be enough: a
+            // consumer declaring an unaddable list with no defaults (warned about there), and a
+            // DISCOVERED list edited down to nothing — ListKindStore keeps the List classification
+            // after the value drops below the heuristic's threshold, and a Server-scoped entry then
+            // reads ReadOnly at the title screen, where there is no player.
+            var pending = ListTokenizer.Tokenize(def?.Entry?.BoxedValue?.ToString() ?? "");
+            if (pending.Count == 0 && !ListAccess.CanAdd(def != null ? def.EffectiveEditing : ListEditing.ReadOnly))
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] List '{(def != null ? def.Key : "?")}' has no entries and its level offers no way to add one — not opening the drill-in, which would be an empty and unnavigable screen."
+                );
+                return;
+            }
             MenuPatch.ListDetailInstance._pending = def;
             Manager.menu.PushMenu(ModSettingsMenuMod.ListDetailMenuType);
         }
@@ -181,12 +214,20 @@ namespace ModSettingsMenu.UI
             // applied to a shorter new one.
             //
             // **Correction (2026-08-23):** this used to claim RadicalMenu.Activate() indexes
-            // menuOptions[selectedIndex] UNGUARDED via DeselectAnyCurrentOption(). It does not —
-            // that method checks `selectedIndex != -1 && selectedIndex < menuOptions.Count` before
-            // dereferencing, and the non-mouse branch clamps. The reset is still right, but as
-            // correctness rather than crash avoidance: a stale index would silently select the wrong
-            // row of a different setting's list. Do not read the old rationale as licence to drop
-            // this line, and do not trust "unguarded" claims about CK without opening the method.
+            // menuOptions[selectedIndex] UNGUARDED via DeselectAnyCurrentOption(). That method is
+            // indeed guarded — it checks `selectedIndex != -1 && selectedIndex < menuOptions.Count`
+            // before dereferencing. So the reset below is right as correctness rather than crash
+            // avoidance: a stale index would silently select the wrong row of a different setting's
+            // list. Do not read the old rationale as licence to drop this line.
+            //
+            // **Amended (2026-08-30):** the same correction went on to say "and the non-mouse branch
+            // clamps", and that half is wrong. It clamps, but MathUtilities.Clamp is two sequential
+            // ifs (Pug.UnityExtensions:5349), so for an EMPTY menuOptions it returns selectedIndex
+            // unchanged and Activate falls through to menuOptions[selectedIndex]
+            // (Pug.Other:342704-342708). Harmless while an empty list could not exist; the levels
+            // with no add row made it possible, and Open() now refuses that case outright. Two
+            // lessons, and the second one is why this note keeps growing: do not trust "unguarded"
+            // claims about CK without opening the method — and do not trust a guard's NAME either.
             //
             // -1 is RadicalMenu's own "nothing selected" sentinel (its declared default, and what
             // every one of its range checks treats as safe) — the same reset the post-edit rebuild
@@ -716,13 +757,12 @@ namespace ModSettingsMenu.UI
         // returns FALSE for an empty list, which hands control to base.SelectNextIndex() — and CK's
         // SelectIndexInDirection (Pug.Other:342744) then takes the "nothing selected and this is not
         // a keyboard-first system" path, calls SelectOptionIndex(DefaultOptionIndex = 0) with no
-        // count check, and dereferences menuOptions[0]. RadicalMenu.Activate and the index path both
-        // guard that; this one does not.
+        // count check, and dereferences menuOptions[0]. Only the INDEX path guards that
+        // (Pug.Other:342778); Activate does not, and neither do SkimLeft/SkimRight.
         //
-        // An empty screen only became reachable with the levels that have no add row: a FreeText
-        // list always has that button, and a discovered list always has at least two entries because
-        // the heuristic needs them to call it a list at all. SectionBuilder warns about the
-        // declaration that gets here; these two stop it being a crash meanwhile.
+        // These two therefore close one of three routes into that fault, not all of it. Open()
+        // refuses to show an empty list at all, which is what actually closes it — see the reasoning
+        // there for the other two routes and why they cannot be fixed from inside this class.
         public override bool SelectNextIndex() => menuOptions.Count > 0 && (EnterListIfNothingSelected(0) || base.SelectNextIndex());
 
         public override bool SelectPrevIndex() => menuOptions.Count > 0 && (EnterListIfNothingSelected(menuOptions.Count - 1) || base.SelectPrevIndex());

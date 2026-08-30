@@ -152,13 +152,26 @@ mod with it. If you want entries to be individually switchable, declare separate
 
 **At `OrderOnly` and `ReadOnly`, the stored value is reconciled against your
 declared defaults every time it is bound**, in both directions: a default you
-add in a later release appears (at the end), and one you remove disappears. The
-player's own order is kept for everything still declared. That is what keeps
-membership yours at the levels where the player cannot change it — without it, a
-removed default would be stuck in every existing player's file forever, since
-neither of you can reach in and delete it. Under `FreeText` none of this
-happens: there the entries are the player's, and the same code would resurrect
-one they deleted on purpose, on every launch.
+add in a later release appears, and one you remove disappears. That is what
+keeps membership yours at the levels where the player cannot change it — without
+it, a removed default would be stuck in every existing player's file forever,
+since neither of you can reach in and delete it.
+
+Order follows the same rule as membership, so it differs between the two: at
+`OrderOnly` the player can reorder, so **their** order is kept and new entries
+land at the end. At `ReadOnly` nobody can, so your declared order wins outright
+— otherwise the order from a player's very first launch would outlive every
+release you ship. Under `FreeText` none of this happens at all: there the
+entries are the player's, and the same code would resurrect one they deleted on
+purpose, on every launch.
+
+⚠️ **Narrowing the level on an existing key is destructive.** Reconciliation
+keys on the level you declare *this* launch and has no record of the last one,
+so re-declaring a `FreeText` key as `OrderOnly` treats everything the player
+authored as "no longer declared" and deletes it. Use a new key if you need to
+change the level of a shipped setting. The same applies to a player who
+hand-edits the `.cfg` of a list they cannot add to — their additions are removed
+on the next launch, which is worth saying in your own mod's documentation.
 
 Declaring `OrderOnly` or `ReadOnly` with no defaults at all gives you a drill-in
 with no entries and no way to gain one; the framework warns about it, so watch

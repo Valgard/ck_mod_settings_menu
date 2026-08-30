@@ -170,6 +170,12 @@ namespace ModSettingsMenu
             // a ViewOnly scope. Same rendering, opposite origin — and the one that proves a consumer
             // can ask for it without any permission machinery.
             section.List(out _, "testListReadOnly", new[] { "Alpha", "Beta", "Gamma" }, ListEditing.ReadOnly);
+            // A declaration that cannot work: no entries, and no way for the player to add one. It
+            // exists to be opened, because the drill-in must REFUSE to open rather than push an
+            // empty screen — an empty menuOptions crashes CK in three different places, one of them
+            // inside base.Activate() before a key is ever pressed (see ListDetailScreen.Open).
+            // The only fixture here whose expected outcome is a warning in Player.log.
+            section.List(out _, "testListOrderOnlyEmpty", new string[0], ListEditing.OrderOnly);
         }
 
         public void ModObjectLoaded(Object obj)

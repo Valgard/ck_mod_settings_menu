@@ -155,8 +155,8 @@ namespace ModSettingsMenu.Settings
         /// A blank entry is not a value: Tokenize drops it on read and Join drops it on write, so
         /// the handle never yields "" and a row left empty in the editor simply does not persist.
         ///
-        /// Reading <c>handle.Value</c> decodes the stored string every time (split, list, array).
-        /// The sibling handles are plain field reads; this one is not, so cache it and refresh on
+        /// Reading <c>handle.Value</c> decodes the stored string every time (split, list, array),
+        /// where the numeric handles are plain field reads. So cache it and refresh on
         /// <c>OnChanged</c> rather than reading it inside a per-tick patch.
         /// </summary>
         public SectionBuilder List(out SettingHandle<string[]> handle, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)
@@ -165,7 +165,7 @@ namespace ModSettingsMenu.Settings
             WarnAboutUnusableDefaults(key, defaults, declared, editing);
             var entry = _file.Bind("Settings", key, declared, new ConfigDescription(key));
             if (ListAccess.ReconcilesDefaults(editing))
-                ReconcileWithDefaults(entry, declared, key);
+                ReconcileWithDefaults(entry, declared, key, editing);
             handle = new SettingHandle<string[]>(entry, s => ListTokenizer.Tokenize(s).ToArray(), v => ListTokenizer.Join(v));
             _section.Settings.Add(
                 new SettingDef
@@ -200,16 +200,43 @@ namespace ModSettingsMenu.Settings
                 );
             if (defaults == null)
                 return;
+            // Collected and reported per LIST, not per entry: an array whose elements all carry the
+            // separator is one systematic mistake, and N identical lines every launch is how a
+            // warning teaches people to scroll past warnings.
+            var rewritten = new List<string>();
+            var seen = new List<string>();
+            var duplicated = new List<string>();
+            int blanks = 0;
             foreach (var raw in defaults)
             {
                 var token = ListTokenizer.Sanitize(raw);
                 if (token.Length == 0)
-                    Debug.LogWarning($"[ModSettingsMenu] List '{key}' declares a blank or comma-only default — it is dropped and will never appear.");
-                else if (token != raw)
-                    Debug.LogWarning(
-                        $"[ModSettingsMenu] List '{key}' default \"{raw}\" is stored as \"{token}\" (an entry cannot contain a comma, and is trimmed) — compare against the stored form."
-                    );
+                {
+                    blanks++;
+                    continue;
+                }
+                if (token != raw)
+                    rewritten.Add($"\"{raw}\" -> \"{token}\"");
+                // Only reported where it changes the outcome. At FreeText the stored value keeps
+                // both copies; at the other levels ReconcileWithDefaults collapses them, which is
+                // the one of its three rules that would otherwise operate without a trace.
+                if (seen.Contains(token))
+                    duplicated.Add(token);
+                else
+                    seen.Add(token);
             }
+            if (blanks > 0)
+                Debug.LogWarning($"[ModSettingsMenu] List '{key}' declares {blanks} blank or comma-only default(s) — they are dropped and will never appear.");
+            if (rewritten.Count > 0)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] List '{key}' stores {rewritten.Count} default(s) differently than declared, because an entry cannot contain a "
+                        + $"comma and is trimmed ({string.Join("; ", rewritten.ToArray())}) — compare against the stored form, not the declared one."
+                );
+            if (duplicated.Count > 0 && !ListAccess.CanAdd(editing))
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] List '{key}' declares duplicate default(s) ({string.Join(", ", duplicated.ToArray())}) — at {editing} only the "
+                        + "first of each is kept."
+                );
         }
 
         // Brings a stored value back in line with what the consumer currently declares, in BOTH
@@ -222,25 +249,44 @@ namespace ModSettingsMenu.Settings
         // on the same version then held different lists, and the consumer's own code received a
         // token it no longer has a case for.
         //
-        // Membership belongs to whoever can change it. Here that is the consumer, so the declared
-        // set wins; what stays the player's is the ORDER, which is the whole point of OrderOnly and
-        // is preserved for every entry still declared. FreeText is excluded for the mirror-image
-        // reason: there the player owns membership too, and this same code would resurrect an entry
-        // they deleted on purpose, on every launch.
-        private static void ReconcileWithDefaults(ConfigEntry<string> entry, string declared, string key)
+        // Each axis belongs to whoever can change it, which decides both halves:
+        //
+        // MEMBERSHIP is the consumer's at both levels, so the declared set wins. ORDER is the
+        // player's only where they can actually reorder — at OrderOnly, where it is the entire point
+        // of the level. At ReadOnly nobody can, so keeping the stored order would freeze whatever
+        // the first launch happened to write and a consumer's later re-ordering would never reach an
+        // existing player; there the declared order is the only one that means anything.
+        //
+        // FreeText is excluded from all of it for the mirror-image reason: the player owns
+        // membership too, and this same code would resurrect an entry they deleted on purpose.
+        //
+        // ⚠️ NARROWING THE LEVEL IS DESTRUCTIVE, and nothing here can soften that. This keys on the
+        // level declared THIS launch and has no record of the last one, so a consumer who ships a
+        // key as FreeText and later re-declares it OrderOnly turns everything the player authored
+        // into "not declared" and deletes it. Same for a player who hand-edits the .cfg of a list
+        // they cannot add to. The log says so as plainly as it can; there is no state here to do
+        // better with.
+        private static void ReconcileWithDefaults(ConfigEntry<string> entry, string declared, string key, ListEditing editing)
         {
             var declaredTokens = ListTokenizer.Tokenize(declared);
             var stored = ListTokenizer.Tokenize(entry.Value);
             var reconciled = new List<string>();
-            foreach (var token in stored)
+            if (ListAccess.CanReorder(editing))
             {
-                if (declaredTokens.Contains(token) && !reconciled.Contains(token))
-                    reconciled.Add(token);
+                foreach (var token in stored)
+                {
+                    if (declaredTokens.Contains(token) && !reconciled.Contains(token))
+                        reconciled.Add(token);
+                }
+                foreach (var token in declaredTokens)
+                {
+                    if (!reconciled.Contains(token))
+                        reconciled.Add(token);
+                }
             }
-            foreach (var token in declaredTokens)
+            else
             {
-                if (!reconciled.Contains(token))
-                    reconciled.Add(token);
+                reconciled.AddRange(declaredTokens);
             }
             // Compared as TOKENS, not as the joined string: the two differ for a value a player
             // hand-formatted ("Alpha, Beta"), and rewriting that would change their file to say the
@@ -248,27 +294,48 @@ namespace ModSettingsMenu.Settings
             // is about not producing a different-looking equal value in the first place.
             if (SameTokens(stored, reconciled))
                 return;
+            var dropped = new List<string>();
             foreach (var token in stored)
             {
-                if (!declaredTokens.Contains(token))
-                    Debug.LogWarning(
-                        $"[ModSettingsMenu] List '{key}' drops stored entry \"{token}\" — the mod no longer declares it and this list cannot be edited."
-                    );
+                if (!reconciled.Contains(token))
+                    dropped.Add(token);
             }
-            // The merge is a convenience, not a correctness requirement, and it runs inside the
-            // consumer's IMod.Init. The write reaches API.ConfigFilesystem, which has no exception
-            // handling along the way (a Wine filesystem fault, or another mod's SettingChanged
-            // handler on this same file throwing). Unguarded, such a fault would unwind out of
-            // List(), so the consumer's remaining chain and its Build() never run and the WHOLE
-            // section vanishes from the menu — because a convenience could not persist.
+            // This is the extra write MSM makes on top of Bind's own, and only it is guarded — Bind
+            // itself ends in Save() (ConfigFile.cs) and is as unguarded here as it is in Toggle,
+            // Slider, Choice and Stepper. So this catch does NOT make List() fault-proof; it keeps
+            // MSM's own convenience write from being the thing that takes the consumer's remaining
+            // builder chain and its Build() down with it.
+            //
+            // Only the filesystem can actually reach it: CoreLib wraps every SettingChanged
+            // subscriber in its own try/catch (ConfigFile.cs), so a foreign handler throwing is
+            // logged there, not propagated. Save() runs before those handlers and has no guard.
+            //
+            // Reported as an ERROR with the full exception, matching what the section-reset path
+            // does for the identical failure: a Wine IOException and a type fault produce
+            // indistinguishable one-liners from ex.Message alone, and this is the kind of thing that
+            // arrives as a user's Player.log with no way to ask a follow-up question.
+            bool persisted = true;
             try
             {
                 entry.Value = ListTokenizer.Join(reconciled);
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[ModSettingsMenu] Could not reconcile list '{key}' with its declared defaults — the stored value stands: {ex.Message}");
+                persisted = false;
+                Debug.LogError(
+                    $"[ModSettingsMenu] Could not persist the reconciled list '{key}'. This session uses the reconciled value — CoreLib assigns the "
+                        + $"field before it saves — while the file may still hold the old one or be partly written, and the next successful save of "
+                        + $"this mod's config will persist it with no further warning: {ex}"
+                );
             }
+            // Logged AFTER the write, so the log describes what happened rather than what was about
+            // to be attempted — the two used to contradict each other on a failed write.
+            if (dropped.Count > 0 && persisted)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] List '{key}' is declared {editing}, so its membership is the mod's: dropped {dropped.Count} stored "
+                        + $"entr{(dropped.Count == 1 ? "y" : "ies")} it no longer declares ({string.Join(", ", dropped.ToArray())}). "
+                        + "If this list used to be FreeText, or was hand-edited, those were the player's own."
+                );
         }
 
         private static bool SameTokens(List<string> a, List<string> b)

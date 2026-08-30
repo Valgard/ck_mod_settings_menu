@@ -76,8 +76,14 @@ term for a key is `<ModId>-Config/<key>`.
 rather than a typed scalar — `ListTokenizer` defines that format in both directions, and it is
 the same format a discovered foreign list arrives in, which is why the drill-in needs no notion
 of where a list came from. And it carries a `ListEditing` level saying what the player may do
-with the entries; at the two levels that cannot add one, declared defaults missing from the
-stored value are appended at bind, since nothing on that screen could ever put them there.
+with the entries.
+
+At the two levels that cannot add one, the stored value is **reconciled** against the declared
+defaults at bind, in both directions: entries the consumer no longer declares are dropped,
+newly declared ones appended. Order follows the same principle as membership — it stays the
+player's where they can reorder (`OrderOnly`) and follows the declaration where nobody can
+(`ReadOnly`). `ListAccess` holds each of those questions as a named predicate; nothing outside
+it should test a `ListEditing` member directly.
 
 ### `SettingHandle<T>`
 
