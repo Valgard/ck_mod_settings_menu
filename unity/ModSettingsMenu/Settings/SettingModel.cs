@@ -32,6 +32,30 @@ namespace ModSettingsMenu.Settings
         ByLabel,
     }
 
+    /// <summary>What a player may do to a List setting's entries, declared by the consumer and
+    /// ordered from most to least. Each value answers one question — where does a new entry come
+    /// from? — which is why a picker variant would slot in beside these rather than needing a
+    /// second dimension.
+    ///
+    /// FreeText is the default and the shape ForeignConfigDiscovery produces: a discovered list is
+    /// a comma string whose entries the heuristic knows nothing about, so nothing narrower would
+    /// be honest about it.
+    ///
+    /// This is the CONSUMER's declaration, not the effective state — a permission lock
+    /// (SettingDef.ReadOnly) demotes any of these to ReadOnly at render time. Ask
+    /// SettingDef.EffectiveEditing, never this field directly.</summary>
+    public enum ListEditing
+    {
+        /// <summary>The player types entries: edit, add, delete, reorder.</summary>
+        FreeText,
+
+        /// <summary>No entries come or go; the player only reorders the ones that are there.</summary>
+        OrderOnly,
+
+        /// <summary>Display only — every row is inert.</summary>
+        ReadOnly,
+    }
+
     /// <summary>
     /// Non-generic descriptor of one registered setting. Carries everything the
     /// Phase-2b menu needs to render + drive it: the derived loc term, the widget
@@ -52,10 +76,24 @@ namespace ModSettingsMenu.Settings
         public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
         public bool Foreign; // true → discovered (not API-registered): raw label, serialized Choice, marker
         public bool Unbounded; // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
-        public bool ReadOnly; // true → this row's own Kind still renders natively, but the widget (or,
-        // for List, the drill-in) must not respond to input: either a genuine permission lock
-        // (view-only/server-locked and not this session's host) or, hard-coded true regardless of
-        // scope, a Kind == Info fallback where no editable widget exists for the value's shape at all
+
+        // true → this row's own Kind still renders natively, but the widget (or, for List, the
+        // drill-in) must not respond to input: either a genuine permission lock (view-only/
+        // server-locked and not this session's host) or, hard-coded true regardless of scope, a
+        // Kind == Info fallback where no editable widget exists for the value's shape at all.
+        // (Leading, not trailing: CSharpier reflows a multi-line trailing comment into the gap
+        // before the next member, which made its tail read as documentation for Editing.)
+        public bool ReadOnly;
+
+        public ListEditing Editing; // List only: what the CONSUMER declared. Read EffectiveEditing, not this.
+
+        /// <summary>What the drill-in may actually offer, once a permission lock is taken into
+        /// account. ReadOnly demotes every declaration to ReadOnly; nothing ever promotes.
+        ///
+        /// It returns the same enum the consumer declares rather than a second, parallel one,
+        /// because there is no state here the declaration cannot already express — a second type
+        /// would only create the question of which of the two a given call site meant.</summary>
+        public ListEditing EffectiveEditing => ReadOnly ? ListEditing.ReadOnly : Editing;
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using ModSettingsMenu.Settings;
 using UnityEngine;
 
 namespace ModSettingsMenu.UI
@@ -66,9 +67,7 @@ namespace ModSettingsMenu.UI
             {
                 if (button == null)
                     continue;
-                // `readOnly` without an underscore: it belongs to RadicalMenuOptionTextInput, the
-                // base class, and this row deliberately declares no field of its own for it.
-                button.Refresh(this, _rowIndex, rowCount, readOnly);
+                button.Refresh(this, _rowIndex, rowCount, _editing);
             }
         }
 
@@ -100,6 +99,14 @@ namespace ModSettingsMenu.UI
         // neighbours. CommittedText closes the other half, this row itself.
         private int _rowIndex = -1;
         public int RowIndex => _rowIndex;
+
+        // The access level this row was bound at, already reduced by any permission lock (the screen
+        // hands over SettingDef.EffectiveEditing, never the raw declaration). Kept alongside the
+        // inherited readOnly rather than derived back out of it: readOnly answers "may this text be
+        // typed into", which is true for both OrderOnly and ReadOnly, and the buttons need the two
+        // told apart. Defaults to the most restrictive value, so a row that somehow renders before
+        // Bind offers nothing rather than everything.
+        private ListEditing _editing = ListEditing.ReadOnly;
 
         // The token this row was seeded with, and whether a keystroke has changed the text since.
         //
@@ -177,12 +184,19 @@ namespace ModSettingsMenu.UI
         // Writing the inherited field directly means CK's own read path and ours are guaranteed to
         // agree — true for a genuine read-only list (SettingDef.ReadOnly): view/scroll/navigate like
         // any other row, but OnActivated below never enters edit mode.
-        public void Bind(ListDetailScreen owner, int rowIndex, bool readOnly)
+        //
+        // FreeText is the ONLY level whose rows are typed into, so anything else maps to the
+        // inherited readOnly flag — an OrderOnly row is as inert to the keyboard as a locked one,
+        // and differs only in the buttons beside it, which is ListRowButton's decision to make.
+        // The declared level is kept as well, because RefreshButtonStates has to pass it on and
+        // cannot recover it from a boolean that has already collapsed two levels into one.
+        public void Bind(ListDetailScreen owner, int rowIndex, ListEditing editing)
         {
             _owner = owner;
             _rowIndex = rowIndex;
             _generation = owner != null ? owner.RowGeneration : -1;
-            this.readOnly = readOnly;
+            _editing = editing;
+            this.readOnly = editing != ListEditing.FreeText;
             // A fresh row has never been the active input field, whatever the GameObject did in a
             // previous life. Without this reset a row that still held activeInputField when the
             // screen closed keeps the latch set, and can fire one more commit while being torn down
