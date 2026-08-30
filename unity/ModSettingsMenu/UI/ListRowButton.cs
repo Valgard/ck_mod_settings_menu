@@ -3,10 +3,12 @@ using UnityEngine;
 namespace ModSettingsMenu.UI
 {
     /// <summary>
-    /// One icon button inside a list drill-in row: move up, move down, or delete. A sibling of the
-    /// field frame rather than a child of it — CK's own idiom for an affordance beside a text input
-    /// (RadicalMenuOptionTextInput.radicalMenuOptionToggleVisibility is the vanilla case), and the
-    /// reason ADR-005 gave the frame the width of the FIELD instead of the whole row.
+    /// One icon button inside a list drill-in row: move up, move down, or delete. It lives beside
+    /// the field rather than inside it — its container (`Buttons`) is a sibling of the field's own
+    /// (`EditField`), not the button itself a sibling of the field's frame. CK's own idiom for an
+    /// affordance beside a text input (RadicalMenuOptionTextInput.radicalMenuOptionToggleVisibility
+    /// is the vanilla case), and the reason ADR-005 gave the frame the width of the FIELD instead of
+    /// the whole row.
     ///
     /// ONE type with a role, not three types. That is deliberately the opposite call to ADR-005,
     /// which split ListAddRow off ListDetailItem — there, three fields (kind, rowIndex, readOnly)
@@ -101,10 +103,11 @@ namespace ModSettingsMenu.UI
 
         // ACTIVE only for a live instance — and the test is `activeInHierarchy`, NOT `activeSelf`.
         //
-        // The two sibling row types get away with `activeSelf` because THEY are the object the
-        // template switches off. A button is a CHILD of that template: its own `activeSelf` stays
-        // true while the template above it is off, so `activeSelf` reports a button that is not on
-        // screen as a live menu option.
+        // The two sibling row types get away with `activeSelf` because each is switched off (or,
+        // for a cloned row, created inactive) as itself — never as a child of something else that
+        // is. A button is a CHILD of the row template: its own `activeSelf` stays true while the
+        // template above it is off, so `activeSelf` reports a button that is not on screen as a
+        // live menu option.
         //
         // That matters because `RadicalMenu.Awake` collects options with
         // `GetComponentsInChildren(includeInactive: true, menuOptions)` — the template's own buttons
@@ -127,16 +130,17 @@ namespace ModSettingsMenu.UI
                 selectedMarker.SetActive(false);
         }
 
-        // Now that this button is a genuine menuOptions entry (see the removed isMenuOption
-        // override — CK's own default applies again), CK addresses it directly:
-        // RadicalMenu.ActivateSelectedIndex is literally menuOptions[selectedIndex].OnActivated(),
-        // and a click reaches it the same way — UIMouse.LeftClick() on currentSelectedUIElement,
-        // which for a focused menu option now also fires CK's own selection machinery (see
-        // ListDetailScreen's own navigation rewrite). No forwarding is needed on either the row's
-        // side or this one any more: the row this used to arrive at (ListDetailItem.OnActivated
-        // used to hand it here) never sees it, because CK's selectedIndex now names this button
-        // directly. Move/delete are called straight from here instead of through a screen-side
-        // dispatcher, since there is no longer a row in the middle to relay through.
+        // This button is a genuine menuOptions entry — CK's own default isMenuOption applies (an
+        // earlier design opted out of it and paid for that; see docs/adrs/008-list-row-buttons.md,
+        // "Pros and Cons of the Options"). CK addresses it directly: RadicalMenu.ActivateSelectedIndex
+        // is literally menuOptions[selectedIndex].OnActivated(), and a click reaches it the same
+        // way — UIMouse calls LeftClick() (declared on UIelement, Pug.Other:357895) on
+        // currentSelectedUIElement (Pug.Other:356024), which for a focused menu option now also
+        // fires CK's own selection machinery (see ListDetailScreen's own navigation rewrite). No
+        // forwarding is needed on either the row's side or this one: CK's selectedIndex names this
+        // button directly, so no other class ever sees this activation. Move/delete are called
+        // straight from here instead of through a screen-side dispatcher, since there is no longer
+        // a row in the middle to relay through.
         // A disabled edge arrow must stay SELECTABLE but stop being ACTIVATABLE. The two are
         // separate tests in CK: IsSelectionEnabled (Pug.Other:343106) asks only about enabled,
         // activeInHierarchy and GRAYED_OUT, so refusing activation here costs no reachability —
@@ -173,10 +177,13 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // CK creates the click collider from RENDERED TEXT: InitClickCollider only makes one when
-        // labelText or valueText is set (Pug.Other ~343161), and it is a `protected` field with no
-        // [SerializeField], so it cannot be authored in the prefab either. A button that is only a
-        // picture therefore has neither — it must make its own.
+        // CK creates the click collider from RENDERED TEXT: the base InitClickCollider (Pug.Other:343161)
+        // only makes one once labelText or valueText ends up set, through three routes —
+        // a prefab-authored serialized field (both are public, :343056/:343058), RadicalMenuOption's
+        // own OnValidate auto-filling from a child named "Label"/"Value" (:343074-343075), or a
+        // GetComponent<PugText> fallback on the same GameObject when labelText is still null
+        // (:343163). A button whose subtree is three SpriteRenderers (Border, SelectedMarker, Glyph)
+        // comes up empty on all three, so it must build its own collider instead.
         protected override void InitClickCollider()
         {
             if (clickCollider != null)
@@ -185,11 +192,11 @@ namespace ModSettingsMenu.UI
             clickCollider.isTrigger = true;
         }
 
-        // Deliberately does NOT call base. The base branch (~343174) picks valueText when labelText
-        // is null, so with BOTH null it dereferences null — today unreachable only because no
-        // collider exists in that case, which the override above has just changed. Sizing from the
-        // frame is also what the two sibling row types do, for the same reason: the frame is what
-        // the player sees and aims at.
+        // Deliberately does NOT call base. The base branch (Pug.Other:343179-343181) picks valueText
+        // when labelText is null, so with BOTH null it dereferences null — today unreachable only
+        // because no collider exists in that case, which the override above has just changed.
+        // Sizing from the frame is also what the two sibling row types do, for the same reason: the
+        // frame is what the player sees and aims at.
         protected override void UpdateClickCollider()
         {
             if (clickCollider == null)
