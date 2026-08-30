@@ -16,6 +16,16 @@ namespace ModSettingsMenu.Settings
         private readonly ModSection _section;
         private readonly ConfigFile _file;
 
+        // True when the widget declared LAST failed to bind and therefore added no SettingDef.
+        //
+        // RequiresRestart() addresses "the most recently declared setting" positionally, as
+        // _section.Settings[Count - 1]. Before binds were guarded, a failure threw and the chain
+        // never reached the modifier at all; now the chain continues, so without this flag
+        // `.Choice(…).RequiresRestart()` would mark whatever was declared BEFORE the failed
+        // Choice — a setting that applies immediately, now demanding a restart, with nothing in
+        // the log connecting the two.
+        private bool _lastDeclarationFailed;
+
         internal SectionBuilder(ModSection section, ConfigFile file)
         {
             _section = section;
@@ -74,9 +84,11 @@ namespace ModSettingsMenu.Settings
             if (entry == null)
             {
                 handle = new SettingHandle<bool>(def);
+                _lastDeclarationFailed = true;
                 return this;
             }
             handle = new SettingHandle<bool>(entry);
+            _lastDeclarationFailed = false;
             _section.Settings.Add(
                 new SettingDef
                 {
@@ -103,9 +115,11 @@ namespace ModSettingsMenu.Settings
             if (entry == null)
             {
                 handle = new SettingHandle<float>(def);
+                _lastDeclarationFailed = true;
                 return this;
             }
             handle = new SettingHandle<float>(entry);
+            _lastDeclarationFailed = false;
             _section.Settings.Add(
                 new SettingDef
                 {
@@ -145,6 +159,7 @@ namespace ModSettingsMenu.Settings
             if (entry == null)
             {
                 handle = new SettingHandle<T>(def);
+                _lastDeclarationFailed = true;
                 return this;
             }
             T FromToken(string t)
@@ -155,6 +170,7 @@ namespace ModSettingsMenu.Settings
                 return def; // unknown/removed token → default
             }
             handle = new SettingHandle<T>(entry, FromToken, v => v.ToString());
+            _lastDeclarationFailed = false;
             _section.Settings.Add(
                 new SettingDef
                 {
@@ -174,9 +190,11 @@ namespace ModSettingsMenu.Settings
             if (entry == null)
             {
                 handle = new SettingHandle<int>(def);
+                _lastDeclarationFailed = true;
                 return this;
             }
             handle = new SettingHandle<int>(entry);
+            _lastDeclarationFailed = false;
             _section.Settings.Add(
                 new SettingDef
                 {
@@ -218,19 +236,27 @@ namespace ModSettingsMenu.Settings
             if (entry == null)
             {
                 handle = new SettingHandle<string[]>(ListTokenizer.Tokenize(declared).ToArray());
+                _lastDeclarationFailed = true;
                 return this;
             }
             if (ListAccess.ReconcilesDefaults(editing))
                 ReconcileWithDefaults(entry, declared, key, editing);
-            // AFTER the reconcile, and against the STORED value rather than the declared one. The
-            // two agree only when the write succeeded; if it threw, the declaration can be perfectly
-            // good while the list the player opens is still empty — which is exactly the case this
-            // warning exists to explain.
+            // AFTER the reconcile, and against the STORED value: that is what the player will
+            // actually open, so it is the honest thing to test.
+            //
+            // It is NOT a way to catch a failed reconcile write. CoreLib assigns the field before it
+            // saves (see ReconcileWithDefaults' own catch below), so a throwing write still leaves
+            // the reconciled, non-empty value in memory. Since ReconcilesDefaults is the exact
+            // complement of CanAdd, the reconcile always runs at these levels and its result
+            // contains every declared token — so this fires exactly when the declaration was empty,
+            // same as testing `declared` did. Kept in this form because it asks about the thing
+            // being described rather than about an input that usually matches it.
             if (!ListAccess.CanAdd(editing) && ListTokenizer.Tokenize(entry.Value).Count == 0)
                 Debug.LogWarning(
                     $"[ModSettingsMenu] List '{key}' is {editing} and has no entries — its editor cannot show one or gain one, so the row will refuse to open."
                 );
             handle = new SettingHandle<string[]>(entry, s => ListTokenizer.Tokenize(s).ToArray(), v => ListTokenizer.Join(v));
+            _lastDeclarationFailed = false;
             _section.Settings.Add(
                 new SettingDef
                 {
@@ -355,7 +381,7 @@ namespace ModSettingsMenu.Settings
                 // Same second loop as above, without the stored-order pass that seeds it. The two
                 // branches differ ONLY in whether the player's order gets a say — not in how
                 // membership is built, and not in whether duplicates collapse. A bare AddRange here
-                // would keep them, contradicting the duplicate warning WarnAboutUnusableDefaults
+                // would keep them, contradicting the duplicate warning WarnAboutDefaultsThatWillNotSurvive
                 // emits for exactly these levels.
                 foreach (var token in declaredTokens)
                 {
@@ -455,6 +481,16 @@ namespace ModSettingsMenu.Settings
         /// live value only matters at the next bake/launch (e.g. recipe rewrites).</summary>
         public SectionBuilder RequiresRestart()
         {
+            // Refuse rather than reach past a failed declaration: Settings[Count - 1] would be the
+            // setting declared BEFORE the one that failed, so this modifier would silently attach
+            // to an unrelated value and demand a restart for a change that applies immediately.
+            if (_lastDeclarationFailed)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': the setting it follows could not be bound (see the error above), and marking the one before it would be wrong."
+                );
+                return this;
+            }
             int n = _section.Settings.Count;
             if (n > 0)
                 _section.Settings[n - 1].RequiresRestart = true;
