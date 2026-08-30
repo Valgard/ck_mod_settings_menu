@@ -191,7 +191,7 @@ namespace ModSettingsMenu
             // flag mid-dialogue, and three frames later the restart prompt landed on CK's single
             // shared centerPopUpText while the delete dialogue still owned it: the restart text
             // appeared over the delete dialogue's own buttons, and confirming a deletion restarted
-            // the game. HasMenuInStack (Pug.Other:269774) asks the right question, and it resolves
+            // the game. HasMenuInStack (Pug.Other:269775) asks the right question, and it resolves
             // our menu types through TypeToMenu, which MenuPatch's prefix already answers.
             if (ModSettingsScreen.RestartPending)
             {
