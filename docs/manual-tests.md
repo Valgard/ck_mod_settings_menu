@@ -215,6 +215,11 @@ Run these with **both** devices in reach, alternating deliberately.
 
 - [ ] `LongReadOnly` shows no ↑/↓/✕ and no Add button.
 - [ ] Its rows are still navigable for reading, and scroll normally.
+- [ ] **Open it with the mouse, then press ↑ as the very first input.** Not ↓ —
+      the two enter the list from opposite ends, and only this end once landed
+      on an invisible control that then swallowed every further keypress until a
+      mouse hover rescued it. Nothing looked selected and nothing was logged.
+      Then keep navigating: every direction must keep working.
 - [ ] No row ever enters edit mode.
 
 ### Restart flag
