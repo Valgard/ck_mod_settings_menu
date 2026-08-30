@@ -56,7 +56,9 @@ by a section reset.
 | `testListOrderOnlySingle` | `OrderOnly` | one entry — the row with no neighbour to wrap to |
 | `testListReadOnly` | `ReadOnly` | declared inert, as opposed to inert through a scope |
 | `testListOrderOnlyEmpty` | `OrderOnly` | no entries and no way to add one — the drill-in must refuse to open |
-| `testListReadOnlyDuplicate` | `ReadOnly` | a repeated default — both reconciliation branches must keep only the first |
+| `testListReadOnlyDuplicate` | `ReadOnly` | a repeated default on the declared-order branch |
+| `testListOrderOnlyDuplicate` | `OrderOnly` | the same repeat on the player-order branch — the one the dedupe rewrite touched |
+| `testDupKey` | — | one key bound twice with different types: reaches the guarded-bind path with no filesystem fault |
 
 ## Before anything else
 
@@ -305,9 +307,20 @@ the two paths reach the drill-in with different things known about the value.
 
 ### Duplicates and hand-edited case
 
-- [ ] `testListReadOnlyDuplicate` shows **two** rows (`Alpha`, `Beta`), not three,
-      and `Player.log` names the duplicate at declaration time. Both branches of
-      the reconciliation collapse duplicates; they did not always agree on that.
+- [ ] `testListReadOnlyDuplicate` **and** `testListOrderOnlyDuplicate` each show
+      **two** rows (`Alpha`, `Beta`), not three, and `Player.log` names the
+      duplicate at declaration time. Two fixtures because the two levels take
+      different reconciliation branches and did not always agree on this.
+
+### A setting that cannot be bound
+
+- [ ] `testDupKey` appears **once**, as a toggle. The slider sharing its key is
+      absent, and `Player.log` carries `Could not bind setting 'testDupKey'`.
+- [ ] Everything declared **after** it is still there — that whole guard exists
+      so one failed setting does not take the rest of the section with it.
+- [ ] `Player.log` also carries `RequiresRestart() ignored`. Without that, the
+      modifier would attach to the toggle before it, and changing the HUD toggle
+      would ask you to restart the game for no reason.
 - [ ] **A differently-cased entry keeps its place.** In `config.cfg`, change one
       middle entry of `testListOrderOnly` to lower case and relaunch: it must
       still sit where it was, spelled as the mod declares it — not dropped and
@@ -376,4 +389,6 @@ routes behave *differently* here, which nothing on screen shows.
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly
       the order shown on screen — no stray commas, no empty tokens.
-- [ ] `Player.log` holds no exception and no warning from this mod.
+- [ ] `Player.log` holds no exception from this mod, and no warning **other than**
+the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
+duplicate fixtures, and `testDupKey`).
