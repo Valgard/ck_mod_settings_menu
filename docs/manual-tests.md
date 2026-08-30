@@ -41,6 +41,18 @@ own. The file to inspect after a write:
 | `ProseNotAList` | `This is a long sentence, and another one` | prose that must NOT be taken for a list |
 | `WithSpaces` | `Item One, Item Two, Big Chest` | tokens containing spaces |
 
+The same flag also declares four lists through the **public consumer API**, in
+this mod's own section (`AddDeclaredListFixtures`). They are the other path
+entirely: discovery can only ever produce a `FreeText` list, because a heuristic
+cannot know an entry set is closed, so the narrower levels exist nowhere else.
+
+| Fixture | `ListEditing` | What it is for |
+|---|---|---|
+| `testListFreeText` | `FreeText` | the declared path reaching the same behaviour discovery produces |
+| `testListOrderOnly` | `OrderOnly` | six entries: reordering with no add row, and the arrow columns |
+| `testListOrderOnlySingle` | `OrderOnly` | one entry — the row with no neighbour to wrap to |
+| `testListReadOnly` | `ReadOnly` | declared inert, as opposed to inert through a scope |
+
 ## Before anything else
 
 - [ ] The mod loads: `Player.log` has no `CompileFailed`, no exception from this
@@ -234,6 +246,53 @@ Run these with **both** devices in reach, alternating deliberately.
 
 - [ ] `ProseNotAList` still renders as a read-only info row with no drill-in.
       This slice must not move the list/prose heuristic.
+
+## The declared list path
+
+These run against the four fixtures in this mod's **own** section, not the
+detected one. They exist because every check above enters through discovery, and
+the two paths reach the drill-in with different things known about the value.
+
+### `FreeText` — the same as a detected list
+
+- [ ] `testListFreeText` behaves exactly like `Short` above: rows editable, add
+      row present, ↑/↓ and ✕ on every row. Anything that differs here is a
+      difference between the two paths, which is what this fixture is for.
+
+### `OrderOnly`
+
+- [ ] No add row at the bottom of the screen at all.
+- [ ] Every row shows ↑ and ↓ and **no** ✕.
+- [ ] Activating a row does **not** enter edit mode — no caret, no keyboard
+      capture, and the on-screen keyboard never appears on a controller.
+- [ ] ↑/↓ still reorder, and the value in `config.cfg` follows.
+- [ ] Down from the bottom row wraps to the top row **in the same column**, and
+      up from the top row wraps to the bottom — there is no add row to pass
+      through, so the column cycles onto itself.
+- [ ] Walk down through every row with a button focused: the selection never
+      lands on an invisible element and never gets stuck. (A ✕ left in the
+      navigation chain while switched off would show up exactly here.)
+- [ ] `testListOrderOnlySingle`: up and down from its single row do nothing at
+      all — no movement, and no selection sound.
+
+### `ReadOnly`
+
+- [ ] `testListReadOnly` shows every entry, with no add row and no row buttons.
+- [ ] It looks and behaves like `LongReadOnly`, which reaches the same state
+      through a `ViewOnly` scope instead of a declaration.
+
+### Defaults merged at bind
+
+Needs two builds, and is the only check here that cannot be done in one session.
+
+- [ ] Edit the order of `testListOrderOnly` in game, quit, and confirm
+      `config.cfg` holds the new order.
+- [ ] Add an entry to that fixture's declared defaults in
+      `ModSettingsMenuMod.AddDeclaredListFixtures`, rebuild, and reopen: the new
+      entry is present, **at the end**, and the order you set is otherwise
+      untouched.
+- [ ] Do the same for `testListFreeText`: the new entry must **not** appear —
+      that list can add entries itself, so merging would resurrect deleted ones.
 
 ## After the walk
 

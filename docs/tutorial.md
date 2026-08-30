@@ -93,7 +93,7 @@ Three moving parts, and that is the whole surface:
 | Concept | What it is |
 |---|---|
 | `ModSettings.Section(this)` | Begins a **section** (one box in the menu) for your mod. Returns a fluent builder. |
-| `.Toggle/.Slider/.Stepper/.Choice(...)` | Declares one **setting** and hands you a typed `SettingHandle<T>` via `out`. |
+| `.Toggle/.Slider/.Stepper/.Choice/.List(...)` | Declares one **setting** and hands you a typed `SettingHandle<T>` via `out`. |
 | `SettingHandle<T>.Value` | The **live value**. Read it where you use it; it reflects menu edits immediately. |
 
 Everything is declarative: the order you chain widgets is (by default) the order
@@ -1010,6 +1010,8 @@ b.Slider (out SettingHandle<float> h, string key, float min, float max, float de
           SliderDisplay display = SliderDisplay.Steps);   // Steps | Number | Percent(=position-in-range)
 b.Stepper(out SettingHandle<int>   h, string key, int min, int max, int def);
 b.Choice (out SettingHandle<T>     h, string key, T[] values, T def);   // token = value.ToString()
+b.List   (out SettingHandle<string[]> h, string key, string[] defaults,
+          ListEditing editing = ListEditing.FreeText);  // FreeText | OrderOnly | ReadOnly
 
 b.RequiresRestart();                    // marks the LAST-declared setting restart-required
 b.Build();                              // registers the section

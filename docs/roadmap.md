@@ -135,47 +135,44 @@ separator can sit between option 3 and 4).
 > free — not controller-hostile at all. See the next section for what is
 > actually still missing (a *consumer-facing* way to declare one).
 
-## Consumer-facing List declaration (`SectionBuilder.List`)
+## Entries chosen from a catalogue, not typed (`ListEditing.FromPicker`)
 
-`SettingKind.List` is currently produced **only** by `ForeignConfigDiscovery`'s
-auto-detection heuristic — `SectionBuilder` (the explicit consumer API:
-`Toggle`/`Slider`/`Stepper`/`Choice`/`Hint`/`SortOptions`/`RequiresRestart`)
-has no `.List(...)` or even a plain `.Text(...)` method. A mod author who
-*wants* a user-editable ordered/list (or just a free-text) value has no clean
-path today — only the indirect one of shipping a raw `ConfigFile` outside
-`ModSettings.Section` and letting `ForeignConfigDiscovery` auto-detect it as
-foreign, which is the mechanism built for mods that *don't* integrate with
-MSM, not ones that do.
+`SectionBuilder.List` shipped with three levels — `FreeText`, `OrderOnly`,
+`ReadOnly` — which between them cover a list whose entries the player writes and
+one whose entries are fixed. The gap they leave is the middle: a list whose
+entries come from a **known set too large to declare**, the obvious case being
+Core Keeper's own object IDs. Requested 2026-08-30, when the three levels were
+being cut.
 
-Surfaced 2026-08-08 while designing the sibling mod **auto-rail-bridges**:
-its author wanted the mod's bridge-type build order configurable, hit this
-exact gap (`SectionBuilder.cs` has no list/string declaration), and the mod
-shipped 1.0.0 with a **fixed** default order, deferring configurability to
-"v1.1, sobald Mod Settings Menu Listen- oder String-Werte kann." That mod is
-now a concrete, already-shipped consumer waiting on this.
+The player picks an entry from a list instead of typing it. That removes the
+failure the typed levels cannot avoid — a mod reading `ObjectID` out of a
+`FreeText` list gets whatever was typed, so `Stonebridge` for `StoneBridge`
+silently drops an entry, and the mod cannot tell a typo from a deliberate
+omission.
 
-A cheap intermediate step was designed at the time but not built — deferred
-to avoid a cross-repo merge conflict with the then-in-progress
-`list-widget-editing` worktree, since both touch `SettingModel`/
-`SectionBuilder` (no longer a concern now that branch is merged): a
-`.Text(out SettingHandle<string> h, key, default)` on `SectionBuilder`,
-rendering through the existing `SettingKind.Info` path as a read-only
-placeholder until the full declaration API lands — at which point a
-consumer declaring it as a proper `List` would need no migration on their
-side, just a call-site change.
+**It is also the one level that can afford a translation.** A row that is typed
+into must show its raw token, because the text on screen becomes the stored
+value on commit — which is why `List` has no label hook today, and why an
+earlier draft that gave it one was dropped rather than made non-editable. A
+picker row is never typed into: it can show `Glass Bridge` while storing
+`GlassBridge`. So the label hook belongs to this level, and only to it — through
+a **term**, resolved by the same `Loc.T(term, token)` chain the rest of the
+framework uses, so pointing at CK's own `Items/<ObjectID>` yields every language
+the game ships rather than the two a mod's own yaml would carry.
 
-> **Superseded 2026-08-13** as far as the free-text half goes: see
-> § "Text input for plain string settings" below. The read-only-placeholder
-> shortcut is no longer the cheapest route — a real editable field needs a visual
-> frame, and **since 2026-08-23 those sprites exist**: `field_border` and
-> `field_focus` in `ui_chrome`, already dressing the drill-in rows. The
-> `List`-declaration half of this gap stands unchanged.
+`ListEditing` was cut as an ordered scale for exactly this reason: a fourth value
+slots in between `FreeText` and `OrderOnly` without a second dimension, and
+`ListRowButton.ShowsRole` is already the single place deciding which row buttons
+a level offers.
 
-**One constraint comes from elsewhere:** the consumer driving this item wants an
-*ordered* list, so the API has to carry reorder as part of its own design rather
-than as a later bolt-on. Reordering itself has shipped — per-row arrows in the
-drill-in, ADR-008 — so what remains here is exposing order through the
-declaration API.
+**Open, and not researched yet:** whether CK has a usable picker or catalogue
+control to build on, or whether this needs its own screen. The dropdown section
+below is the nearest known candidate (`DropdownUIElement` is generic and brings
+its own scroll window), but its obstacles were mapped for a `Choice` widget, not
+for a set of this size, and nothing has been measured against a full object
+catalogue. Also open: where the *set* comes from — a consumer-supplied array is
+the simple answer and probably too big for one; anything smarter is a filter or
+a search, which is a screen, not a parameter.
 
 ## Text input for plain string settings (`SettingKind.Text`)
 
@@ -201,11 +198,12 @@ the same two sprites and the same field wiring** — see ADR-005 for the row mod
 they hang in, and `docs/ck/ui-framework.md` for the `PugText.maxWidth` trap that
 disables the capacity check if the text is allowed to wrap.
 
-This also **supersedes the cheap intermediate step** sketched under §
-"Consumer-facing List declaration" — a `.Text(...)` rendering through the `Info`
-path as a *read-only placeholder*. With the frame available, a real editable
-field is barely more work than the placeholder, and the placeholder would ship a
-row that looks editable-ish and isn't.
+An earlier plan for this was a `.Text(...)` rendering through the `Info` path as
+a *read-only placeholder*, to be replaced once a real field existed. With the
+frame available that shortcut has no reason left: a real editable field is barely
+more work, and the placeholder would ship a row that looks editable-ish and
+isn't. `SectionBuilder.List` has since closed the list half of the same gap; a
+scalar string still has no declaration of its own.
 
 ### What it needs beyond the drill-in row
 
@@ -643,6 +641,39 @@ first, which also clears `activeInputField` and thereby disarms CK's own `if
 `ListDetailItem`: that sequence is byte-for-byte the on-screen keyboard's own
 result handler, so only the call's *source* can separate "the player just typed
 this" from "the world just wiped it" — see that patch's comment.
+
+## A consumer-declared access level, for every widget
+
+`SettingDef.ReadOnly` exists and works, and **only the discovery path can set
+it**. `SectionBuilder` passes no `ConfigScope` to `_file.Bind`, so every declared
+setting is scope-less and always editable; a consumer who wants "the host may
+change this, a joining player may only look" has no way to say so.
+
+CoreLib already carries the mechanism — `ConfigFile.Bind` takes an optional
+`ConfigScope`, and one overload takes `ConfigAccessLevel` directly — and
+`ForeignConfigDiscovery.IsReadOnly` already reads it: `ViewOnly` locks
+unconditionally, `Client` never locks, `Server`/`Admin` ask `scope.Changeable()`
+and lock conservatively at the title screen where there is no player. So the
+work is not inventing a rule but letting the standard path reach the one that
+exists.
+
+Deliberately **not** folded into `SectionBuilder.List`, which is where the
+question came up (2026-08-30): it applies to all five widget kinds equally, and
+giving exactly one of them an access level would be the wrong shape. Note that
+`ListEditing.ReadOnly` is a different thing and stays — it says "this list is
+display-only by design", where a scope says "not by you, not right now".
+
+Two clean-ups come with it, and are the reason this is its own point rather than
+a parameter:
+
+- **`IsReadOnly` sits in the discovery path** as a `private static`. If the
+  declared path uses it, it belongs somewhere both can reach.
+- **`RequiresRestart` and `requireReload` already say the same thing twice.**
+  `ConfigScope` carries `requireReload`, which discovery reads
+  (`ForeignConfigDiscovery`) — while a declared setting sets an MSM-owned flag
+  through `.RequiresRestart()` instead. Introduce scope on the declared path and
+  the two meet: one of them has to win, or a consumer can state both and
+  contradict itself.
 
 ## Small fixes
 

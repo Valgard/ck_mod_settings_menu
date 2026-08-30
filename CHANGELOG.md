@@ -10,6 +10,13 @@ entry is the version published to mod.io; its body is the modfile changelog.
   controller alike. Deleting asks first — the confirmation names the entry and
   has to be held, not tapped — while an entry you only just added and never
   filled in disappears without a prompt.
+- **Mods can now offer a list setting of their own.** Until now a list only
+  ever appeared for a mod that did *not* integrate with this menu — it had to be
+  recognised in that mod's config file. A mod author can now declare one
+  directly, and say what you may do with it: edit entries freely, only reorder a
+  fixed set, or just read it. Where entries cannot be added, an entry the mod
+  introduces in a later release is added to your saved list instead of being
+  invisible, without disturbing the order you put the rest in.
 - **Any mod's settings can be restored to their defaults.** Select a row in that
   mod's box and press the reset button shown at the bottom of the screen; a
   confirmation names the mod before anything changes. Works for detected mods
