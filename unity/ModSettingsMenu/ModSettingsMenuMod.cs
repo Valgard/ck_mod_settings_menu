@@ -176,6 +176,9 @@ namespace ModSettingsMenu
             // inside base.Activate() before a key is ever pressed (see ListDetailScreen.Open).
             // The only fixture here whose expected outcome is a warning in Player.log.
             section.List(out _, "testListOrderOnlyEmpty", new string[0], ListEditing.OrderOnly);
+            // Duplicate defaults: both reconciliation branches must collapse them to the first, and
+            // the declaration must say so in the log. The two branches disagreed about this once.
+            section.List(out _, "testListReadOnlyDuplicate", new[] { "Alpha", "Beta", "Alpha" }, ListEditing.ReadOnly);
         }
 
         public void ModObjectLoaded(Object obj)

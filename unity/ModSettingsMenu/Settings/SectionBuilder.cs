@@ -22,6 +22,37 @@ namespace ModSettingsMenu.Settings
             _file = file;
         }
 
+        // Every widget method binds through here, because ConfigFile.Bind is not the harmless
+        // lookup it looks like: it ends in `if (SaveOnConfigSet) Save()`, i.e. a full serialize and
+        // an API.ConfigFilesystem write, on the first bind of each key in a session. That write has
+        // no exception handling anywhere along it — the Wine filesystem faults this project carries
+        // six IL patches for land exactly here.
+        //
+        // Unguarded, such a fault unwinds out of the widget method, so the consumer's remaining
+        // builder chain and its Build() never run and its WHOLE section vanishes from the menu —
+        // because one setting could not be written. Bind also casts the existing entry unchecked
+        // (`return (ConfigEntry<T>)rawEntry`), so a consumer that declares one key twice with
+        // different types gets an InvalidCastException with the same blast radius; naming the key
+        // turns that from an unattributed stack trace into a one-line fix.
+        //
+        // A failed bind yields null, and the caller then registers NO row and hands back a detached
+        // handle carrying the declared default. The setting is absent rather than broken: the
+        // consumer keeps running on its own default, and the log says which one and why.
+        private ConfigEntry<T> BindGuarded<T>(string key, T def, ConfigDescription description)
+        {
+            try
+            {
+                return _file.Bind("Settings", key, def, description);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"[ModSettingsMenu] Could not bind setting '{key}' for '{_section.ModId}'; it is left out of the menu and the mod keeps its own default: {ex}"
+                );
+                return null;
+            }
+        }
+
         /// <summary>Optional one-line hint shown under the section heading.</summary>
         public SectionBuilder Hint(string text)
         {
@@ -39,7 +70,12 @@ namespace ModSettingsMenu.Settings
 
         public SectionBuilder Toggle(out SettingHandle<bool> handle, string key, bool def)
         {
-            var entry = _file.Bind("Settings", key, def, new ConfigDescription(key));
+            var entry = BindGuarded(key, def, new ConfigDescription(key));
+            if (entry == null)
+            {
+                handle = new SettingHandle<bool>(def);
+                return this;
+            }
             handle = new SettingHandle<bool>(entry);
             _section.Settings.Add(
                 new SettingDef
@@ -63,7 +99,12 @@ namespace ModSettingsMenu.Settings
             SliderDisplay display = SliderDisplay.Steps
         )
         {
-            var entry = _file.Bind("Settings", key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)));
+            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)));
+            if (entry == null)
+            {
+                handle = new SettingHandle<float>(def);
+                return this;
+            }
             handle = new SettingHandle<float>(entry);
             _section.Settings.Add(
                 new SettingDef
@@ -100,7 +141,12 @@ namespace ModSettingsMenu.Settings
             for (int i = 0; i < values.Length; i++)
                 tokens[i] = values[i].ToString();
             // Store a string token (arbitrary T needs no CoreLib converter); validate it stays valid.
-            var entry = _file.Bind("Settings", key, def.ToString(), new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
+            var entry = BindGuarded(key, def.ToString(), new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
+            if (entry == null)
+            {
+                handle = new SettingHandle<T>(def);
+                return this;
+            }
             T FromToken(string t)
             {
                 for (int i = 0; i < values.Length; i++)
@@ -124,7 +170,12 @@ namespace ModSettingsMenu.Settings
 
         public SectionBuilder Stepper(out SettingHandle<int> handle, string key, int min, int max, int def)
         {
-            var entry = _file.Bind("Settings", key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)));
+            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)));
+            if (entry == null)
+            {
+                handle = new SettingHandle<int>(def);
+                return this;
+            }
             handle = new SettingHandle<int>(entry);
             _section.Settings.Add(
                 new SettingDef
@@ -162,10 +213,23 @@ namespace ModSettingsMenu.Settings
         public SectionBuilder List(out SettingHandle<string[]> handle, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)
         {
             string declared = ListTokenizer.Join(defaults);
-            WarnAboutUnusableDefaults(key, defaults, declared, editing);
-            var entry = _file.Bind("Settings", key, declared, new ConfigDescription(key));
+            WarnAboutDefaultsThatWillNotSurvive(key, defaults, editing);
+            var entry = BindGuarded(key, declared, new ConfigDescription(key));
+            if (entry == null)
+            {
+                handle = new SettingHandle<string[]>(ListTokenizer.Tokenize(declared).ToArray());
+                return this;
+            }
             if (ListAccess.ReconcilesDefaults(editing))
                 ReconcileWithDefaults(entry, declared, key, editing);
+            // AFTER the reconcile, and against the STORED value rather than the declared one. The
+            // two agree only when the write succeeded; if it threw, the declaration can be perfectly
+            // good while the list the player opens is still empty — which is exactly the case this
+            // warning exists to explain.
+            if (!ListAccess.CanAdd(editing) && ListTokenizer.Tokenize(entry.Value).Count == 0)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] List '{key}' is {editing} and has no entries — its editor cannot show one or gain one, so the row will refuse to open."
+                );
             handle = new SettingHandle<string[]>(entry, s => ListTokenizer.Tokenize(s).ToArray(), v => ListTokenizer.Join(v));
             _section.Settings.Add(
                 new SettingDef
@@ -192,12 +256,8 @@ namespace ModSettingsMenu.Settings
         // Comma and blank cases are warned about separately because they are silent rewrites: the
         // consumer's own constant stops matching its own stored value, and every symptom points
         // away from here.
-        private static void WarnAboutUnusableDefaults(string key, string[] defaults, string declared, ListEditing editing)
+        private static void WarnAboutDefaultsThatWillNotSurvive(string key, string[] defaults, ListEditing editing)
         {
-            if (!ListAccess.CanAdd(editing) && declared.Length == 0)
-                Debug.LogWarning(
-                    $"[ModSettingsMenu] List '{key}' is declared {editing} with no usable defaults — its editor would have no entries and no way to gain one."
-                );
             if (defaults == null)
                 return;
             // Collected and reported per LIST, not per entry: an array whose elements all carry the
@@ -273,10 +333,16 @@ namespace ModSettingsMenu.Settings
             var reconciled = new List<string>();
             if (ListAccess.CanReorder(editing))
             {
+                // Matched case-INSENSITIVELY, and the declared spelling is the one kept. A player
+                // who hand-edits the .cfg (the only way to touch these entries outside the menu)
+                // would otherwise have their entry dropped as "no longer declared" and the declared
+                // one appended at the end — losing the position this level exists to let them
+                // choose, which is the opposite of what the README promises them.
                 foreach (var token in stored)
                 {
-                    if (declaredTokens.Contains(token) && !reconciled.Contains(token))
-                        reconciled.Add(token);
+                    var match = FindIgnoringCase(declaredTokens, token);
+                    if (match != null && !reconciled.Contains(match))
+                        reconciled.Add(match);
                 }
                 foreach (var token in declaredTokens)
                 {
@@ -301,12 +367,17 @@ namespace ModSettingsMenu.Settings
             // hand-formatted ("Alpha, Beta"), and rewriting that would change their file to say the
             // same thing differently. CoreLib's own setter no-ops on an equal value, so this guard
             // is about not producing a different-looking equal value in the first place.
+            //
+            // It preserves formatting only while nothing else changes. Once a single token differs,
+            // the write goes through Join and normalises the whole value, so a player's spacing goes
+            // with it. That is accepted: the alternative is editing their string in place, which
+            // needs a formatting model this format does not have.
             if (SameTokens(stored, reconciled))
                 return;
             var dropped = new List<string>();
             foreach (var token in stored)
             {
-                if (!reconciled.Contains(token))
+                if (FindIgnoringCase(reconciled, token) == null)
                     dropped.Add(token);
             }
             // This is the extra write MSM makes on top of Bind's own, and only it is guarded — Bind
@@ -350,6 +421,19 @@ namespace ModSettingsMenu.Settings
                         + "If this list used to be FreeText, or was hand-edited, those were the player's own."
                         + (persisted ? "" : " The write above failed, so the file may still hold them until the next save.")
                 );
+        }
+
+        // The declared spelling of a token that matches ignoring case, or null. Used so a
+        // differently-cased stored entry re-anchors to its declared position instead of being
+        // dropped and re-appended.
+        private static string FindIgnoringCase(List<string> tokens, string token)
+        {
+            foreach (var candidate in tokens)
+            {
+                if (string.Equals(candidate, token, System.StringComparison.OrdinalIgnoreCase))
+                    return candidate;
+            }
+            return null;
         }
 
         private static bool SameTokens(List<string> a, List<string> b)

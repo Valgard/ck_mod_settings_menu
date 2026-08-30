@@ -184,6 +184,11 @@ namespace ModSettingsMenu.UI
         private void Populate()
         {
             _activeDef = _pending;
+            // The only branch in this method that used to fail silently, and it decides both what is
+            // shown and what may be done to it. Reached if Activate() runs without a fresh Open() —
+            // a re-activation after a popup pops, or a push this screen does not own.
+            if (_activeDef == null)
+                Debug.LogWarning("[ModSettingsMenu] The list drill-in was activated with no setting to show — it opens empty and inert.");
             _editing = _activeDef != null ? _activeDef.EffectiveEditing : ListEditing.ReadOnly;
             // Everything below marks the boundary to the previous session, and all of it must move
             // together: the generation stamp rows are bound with, the row list itself, and BOTH
@@ -411,33 +416,49 @@ namespace ModSettingsMenu.UI
                 return;
             }
 
+            // Each row's columns, built ONCE. Every wrap target is another row's list, and asking
+            // for it per column allocated a fresh List inside the inner loop for a single indexed
+            // read — three times per row for the neighbours, twice more per column for the wraps.
+            var columns = new List<List<UIelement>>(rows.Count);
+            foreach (var row in rows)
+                columns.Add(RowElements(row));
+
+            // A single row with no add row has nowhere to go: the wrap would resolve to the element
+            // already selected, a no-op that still plays the selection SFX. Empty lists say "no
+            // neighbour" properly. Hoisted out of the column loop, where it decided nothing that
+            // depended on the column.
+            if (!CanAdd && last == 0)
+            {
+                foreach (var element in columns[0])
+                {
+                    element.topUIElements = new List<UIelement>();
+                    element.bottomUIElements = new List<UIelement>();
+                }
+                return;
+            }
+
+            // Where a column goes when it runs off an end: through the add row when there is one —
+            // a single unambiguous target for every column — otherwise onto itself, bottom back to
+            // top. Decided once rather than re-derived per column.
+            var wrapUp = CanAdd ? null : columns[last];
+            var wrapDown = CanAdd ? null : columns[0];
+
             for (int i = 0; i <= last; i++)
             {
-                var elements = RowElements(rows[i]);
-                var prevElements = i > 0 ? RowElements(rows[i - 1]) : null;
-                var nextElements = i < last ? RowElements(rows[i + 1]) : null;
+                var elements = columns[i];
+                var above = i > 0 ? columns[i - 1] : wrapUp;
+                var below = i < last ? columns[i + 1] : wrapDown;
                 for (int col = 0; col < elements.Count; col++)
                 {
-                    // A single row with no add row has nowhere to go: the wrap would resolve to the
-                    // element already selected, a no-op that still plays the selection SFX. Empty
-                    // lists say "no neighbour" properly.
-                    if (!CanAdd && last == 0)
-                    {
-                        elements[col].topUIElements = new List<UIelement>();
-                        elements[col].bottomUIElements = new List<UIelement>();
-                        continue;
-                    }
-                    UIelement above = prevElements != null ? prevElements[col] : (CanAdd ? (UIelement)box.addRow : RowElements(rows[last])[col]);
-                    UIelement below = nextElements != null ? nextElements[col] : (CanAdd ? (UIelement)box.addRow : RowElements(rows[0])[col]);
-                    elements[col].topUIElements = new List<UIelement> { above };
-                    elements[col].bottomUIElements = new List<UIelement> { below };
+                    elements[col].topUIElements = new List<UIelement> { above != null ? above[col] : box.addRow };
+                    elements[col].bottomUIElements = new List<UIelement> { below != null ? below[col] : box.addRow };
                 }
             }
 
             if (CanAdd)
             {
-                box.addRow.topUIElements = new List<UIelement>(RowElements(rows[last]));
-                box.addRow.bottomUIElements = new List<UIelement>(RowElements(rows[0]));
+                box.addRow.topUIElements = new List<UIelement>(columns[last]);
+                box.addRow.bottomUIElements = new List<UIelement>(columns[0]);
             }
         }
 
@@ -453,18 +474,8 @@ namespace ModSettingsMenu.UI
         private List<UIelement> RowElements(ListDetailItem row)
         {
             var elements = new List<UIelement> { row };
-            if (row.RowButtons != null)
-            {
-                // Every other rowButtons walk in this file (AddItem, the button-search in Update)
-                // skips a null element the same way — a serialized array can carry one if a slot was
-                // left unassigned in the prefab, and AddRange would otherwise let it through as a
-                // null UIelement in the neighbour list.
-                foreach (var button in row.RowButtons)
-                {
-                    if (button != null && ListRowButton.ShowsRole(_editing, button.ButtonRole))
-                        elements.Add(button);
-                }
-            }
+            foreach (var button in row.OfferedButtons())
+                elements.Add(button);
             return elements;
         }
 
@@ -509,15 +520,10 @@ namespace ModSettingsMenu.UI
             // OrderOnly keeps its arrows and drops only ✕, so the decision is per role now. It is the
             // same call ListRowButton.Refresh and RowElements make, which is what keeps registration,
             // visibility and the navigation chain from disagreeing.
-            if (item.RowButtons != null)
+            foreach (var button in item.OfferedButtons())
             {
-                foreach (var button in item.RowButtons)
-                {
-                    if (button == null || !ListRowButton.ShowsRole(_editing, button.ButtonRole))
-                        continue;
-                    button.SetParentMenu(this);
-                    menuOptions.Add(button);
-                }
+                button.SetParentMenu(this);
+                menuOptions.Add(button);
             }
         }
 
@@ -584,8 +590,17 @@ namespace ModSettingsMenu.UI
                 return;
             }
             int index = row.RowIndex;
+            // Two different conditions, deliberately no longer sharing one silent guard. An unbound
+            // or out-of-range ROW is a fault — the same one OnRowTextCommitted reports below — while
+            // a target off either end is the ordinary edge case of an arrow on the first or last
+            // row, which is already disabled and simply does nothing.
+            if (index < 0 || index >= _rows.Count)
+            {
+                Debug.LogWarning($"[ModSettingsMenu] Ignoring a move from an unbound drill-in row (index {index}, {_rows.Count} rows) — nothing was moved.");
+                return;
+            }
             int target = index + delta;
-            if (index < 0 || index >= _rows.Count || target < 0 || target >= _rows.Count)
+            if (target < 0 || target >= _rows.Count)
                 return;
             (_rows[index], _rows[target]) = (_rows[target], _rows[index]);
             WriteValueFromRows();
@@ -631,8 +646,16 @@ namespace ModSettingsMenu.UI
                 return;
             }
             int index = row.RowIndex;
+            // Unlike MoveRow there is no legitimate no-op here: the delete button is never disabled,
+            // so a press that reaches this method and finds no row is a fault. Returning quietly
+            // would leave the player pressing a live control that does nothing, with no explanation.
             if (index < 0 || index >= _rows.Count)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] Ignoring a delete from an unbound drill-in row (index {index}, {_rows.Count} rows) — nothing was removed."
+                );
                 return;
+            }
             if (string.IsNullOrEmpty(_rows[index]))
             {
                 DeleteRow(index);

@@ -34,6 +34,20 @@ namespace ModSettingsMenu.Settings
             tokenEntry.SettingChanged += (s, a) => OnChanged?.Invoke(_get());
         }
 
+        // A handle with no store behind it, for a setting whose bind failed. It reports the
+        // declared default and swallows writes, so a consumer that reads its own setting in a hot
+        // path keeps working on the value it declared instead of dereferencing null. The setting is
+        // simply absent from the menu — SectionBuilder logs why, and does not register a row.
+        //
+        // Deliberately not throwing on write: the failure is CoreLib's or the filesystem's, not the
+        // consumer's, and a mod should not die in a setter because its config could not be created.
+        internal SettingHandle(T detachedDefault)
+        {
+            T value = detachedDefault;
+            _get = () => value;
+            _set = v => value = v;
+        }
+
         public T Value
         {
             get => _get();
