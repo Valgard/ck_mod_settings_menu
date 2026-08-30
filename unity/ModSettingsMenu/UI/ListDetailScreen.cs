@@ -9,8 +9,10 @@ namespace ModSettingsMenu.UI
     /// title plus one navigable row per entry, scrollable, each row a live text-input field
     /// (edit or clear an entry, committed on Enter/Escape/click-away — see ListDetailItem); adding
     /// goes through the trailing button (ListAddRow), not by typing into a row.
-    /// A genuinely read-only SettingDef (SettingDef.ReadOnly) still shows every row navigable for
-    /// viewing, just without the trailing add button and without ever entering edit mode. Controller/
+    /// What a player may do here is one of three levels (SettingDef.EffectiveEditing, which has
+    /// already folded any permission lock into the consumer's declaration): type/add/delete/reorder
+    /// freely, reorder only, or nothing at all. The two narrower ones still show every row navigable
+    /// for viewing and never enter edit mode; only the first has the trailing add button. Controller/
     /// keyboard navigation walks the rows and scroll-follow reaches the bottom (the overflow fix
     /// that motivated this screen over a single truncated Info preview).
     ///
@@ -32,6 +34,13 @@ namespace ModSettingsMenu.UI
         // Defaults to the most restrictive level, so a session that never reaches Populate shows an
         // inert list rather than an editable one.
         private ListEditing _editing = ListEditing.ReadOnly;
+
+        // Asked by RebuildRows (whether the add row is shown and registered) and by
+        // ChainRowsForUIElementNavigation (whether it is the wrap target of every column). One
+        // member rather than the same expression in both, because those two must agree: an add row
+        // that is visible but not wired, or wired but not visible, is the same class of fault as a
+        // button left in the navigation chain while switched off.
+        private bool CanAdd => ListAccess.CanAdd(_editing);
 
         // The rows this open session owns. While the drill-in is open THESE are the truth,
         // not the stored value: an empty row has to survive an edit to a different row, and
@@ -192,8 +201,9 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Destroys every current row — real tokens, plus the trailing add button for a FreeText list
-        // (no other level has one, see the canAdd guard below) — and rebuilds them fresh from
+        // Destroys every current row — the real tokens only. The trailing add button is a live
+        // object and survives (see the teardown's own ownership note below); it is re-registered
+        // rather than recreated. Rows are rebuilt fresh from
         // _rows, this open session's own row list (Populate seeds it from the stored value; commit
         // writes the edited row back into it). The SAME rebuild-from-_rows path serves the initial
         // open (Populate) and every post-edit refresh (OnRowTextCommitted, via the deferred Update
@@ -254,13 +264,11 @@ namespace ModSettingsMenu.UI
             // invisible to the stored value but must stay on screen until the drill-in closes.
             for (int i = 0; i < _rows.Count; i++)
                 AddItem(_rows[i], i);
-            // ...plus the permanent trailing button for adding a new token — a read-only list has
-            // nothing to add, so it is switched off entirely rather than left inert.
+            // ...plus the permanent trailing button for adding a new token. Only FreeText can add:
+            // the other two levels have no way to author an entry, so it is switched off entirely
+            // rather than left inert.
             //
-            // Only FreeText can add: OrderOnly and ReadOnly both have no way to author a new entry,
-            // and an add row that produces a row nobody can type into would be a dead control.
-            bool canAdd = _editing == ListEditing.FreeText;
-            box.addRow.gameObject.SetActive(canAdd);
+            box.addRow.gameObject.SetActive(CanAdd);
 
             // UNCONDITIONALLY, and before the canAdd branch — this is sibling ORDER, not
             // participation. The add row is a live object that lives in itemContainer and survives
@@ -279,7 +287,7 @@ namespace ModSettingsMenu.UI
             // visually last when it IS shown.
             box.addRow.transform.SetAsLastSibling();
 
-            if (canAdd)
+            if (CanAdd)
             {
                 // menuOptions was just cleared, so the button has to re-register even though the
                 // object itself survived.
@@ -334,15 +342,11 @@ namespace ModSettingsMenu.UI
             }
             int last = rows.Count - 1;
 
-            // Whether the add row takes part at all. It is the wrap target for every column when it
-            // is there; without it a column wraps onto itself, top row to bottom row.
-            bool canAdd = _editing == ListEditing.FreeText;
-
             if (rows.Count == 0)
             {
                 // Nothing to wrap to. With an add row it is the only control on screen; without one
                 // the screen is empty and there is nothing to wire.
-                if (canAdd)
+                if (CanAdd)
                 {
                     box.addRow.topUIElements = new List<UIelement>();
                     box.addRow.bottomUIElements = new List<UIelement>();
@@ -360,20 +364,20 @@ namespace ModSettingsMenu.UI
                     // A single row with no add row has nowhere to go: the wrap would resolve to the
                     // element already selected, a no-op that still plays the selection SFX. Empty
                     // lists say "no neighbour" properly.
-                    if (!canAdd && last == 0)
+                    if (!CanAdd && last == 0)
                     {
                         elements[col].topUIElements = new List<UIelement>();
                         elements[col].bottomUIElements = new List<UIelement>();
                         continue;
                     }
-                    UIelement above = prevElements != null ? prevElements[col] : (canAdd ? (UIelement)box.addRow : RowElements(rows[last])[col]);
-                    UIelement below = nextElements != null ? nextElements[col] : (canAdd ? (UIelement)box.addRow : RowElements(rows[0])[col]);
+                    UIelement above = prevElements != null ? prevElements[col] : (CanAdd ? (UIelement)box.addRow : RowElements(rows[last])[col]);
+                    UIelement below = nextElements != null ? nextElements[col] : (CanAdd ? (UIelement)box.addRow : RowElements(rows[0])[col]);
                     elements[col].topUIElements = new List<UIelement> { above };
                     elements[col].bottomUIElements = new List<UIelement> { below };
                 }
             }
 
-            if (canAdd)
+            if (CanAdd)
             {
                 box.addRow.topUIElements = new List<UIelement>(RowElements(rows[last]));
                 box.addRow.bottomUIElements = new List<UIelement>(RowElements(rows[0]));
@@ -708,9 +712,20 @@ namespace ModSettingsMenu.UI
         // gesture as pressing up from the first row, and both should land on the last one. (The
         // index path's own answer here is neither: `(-1 - 1 + Count) % Count` lands on the
         // second-to-last row, an arithmetic accident nobody would ask for.)
-        public override bool SelectNextIndex() => EnterListIfNothingSelected(0) || base.SelectNextIndex();
+        // The `Count > 0` guards are not redundant with EnterListIfNothingSelected's own: that one
+        // returns FALSE for an empty list, which hands control to base.SelectNextIndex() — and CK's
+        // SelectIndexInDirection (Pug.Other:342744) then takes the "nothing selected and this is not
+        // a keyboard-first system" path, calls SelectOptionIndex(DefaultOptionIndex = 0) with no
+        // count check, and dereferences menuOptions[0]. RadicalMenu.Activate and the index path both
+        // guard that; this one does not.
+        //
+        // An empty screen only became reachable with the levels that have no add row: a FreeText
+        // list always has that button, and a discovered list always has at least two entries because
+        // the heuristic needs them to call it a list at all. SectionBuilder warns about the
+        // declaration that gets here; these two stop it being a crash meanwhile.
+        public override bool SelectNextIndex() => menuOptions.Count > 0 && (EnterListIfNothingSelected(0) || base.SelectNextIndex());
 
-        public override bool SelectPrevIndex() => EnterListIfNothingSelected(menuOptions.Count - 1) || base.SelectPrevIndex();
+        public override bool SelectPrevIndex() => menuOptions.Count > 0 && (EnterListIfNothingSelected(menuOptions.Count - 1) || base.SelectPrevIndex());
 
         private bool EnterListIfNothingSelected(int index)
         {
@@ -930,10 +945,12 @@ namespace ModSettingsMenu.UI
             // Nothing to select is a legitimate outcome, and Mathf.Clamp cannot express it: with an
             // empty list the bounds invert (0 .. -1), and Clamp's `if (v < min) v = min; else if
             // (v > max) v = max;` then yields -1 for any non-negative target — or 0 for a negative
-            // one. Both index a list that has none. Unreachable as things stand (an editable list always
-            // has the add button, and a read-only one can never set _rebuildPending), which is
-            // exactly why it needs saying: the next row kind or a read-only rebuild path would make
-            // it reachable without anyone looking at this line.
+            // one. Both index a list that has none. Not reachable from here as things stand, though
+            // the reason is narrower than "editable lists have an add button": OrderOnly is editable,
+            // sets _rebuildPending (MoveRow), and has NO add button. What saves it is that reordering
+            // cannot change the row COUNT — a list that arrives with rows keeps them, and one that
+            // arrives empty has no control that could request a rebuild. A level that could delete
+            // without being able to add would break that, which is exactly why it needs saying.
             if (menuOptions.Count == 0)
                 return;
             // A pointer carries its own target every frame instead (UIMouse re-derives selection

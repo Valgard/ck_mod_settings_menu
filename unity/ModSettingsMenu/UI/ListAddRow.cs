@@ -68,9 +68,9 @@ namespace ModSettingsMenu.UI
         //     _owner can only ever point at the one instance that owns it, in any session;
         //   * RebuildRows re-Binds it on every rebuild, so it is refreshed at least as often as a
         //     cloned row is created.
-        // A read-only list skips Bind entirely (the button is switched off), which leaves _owner
-        // stale-but-identical — and the button is not in menuOptions there, so nothing can activate
-        // it anyway.
+        // Any level that cannot add skips Bind entirely (the button is switched off), which leaves
+        // _owner stale-but-identical — and the button is not in menuOptions there, so nothing can
+        // activate it anyway.
         private ListDetailScreen _owner;
 
         public void Bind(ListDetailScreen owner)

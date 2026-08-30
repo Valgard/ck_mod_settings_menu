@@ -43,7 +43,15 @@ namespace ModSettingsMenu.Settings
     ///
     /// This is the CONSUMER's declaration, not the effective state — a permission lock
     /// (SettingDef.ReadOnly) demotes any of these to ReadOnly at render time. Ask
-    /// SettingDef.EffectiveEditing, never this field directly.</summary>
+    /// SettingDef.EffectiveEditing, never SettingDef.DeclaredEditing directly.
+    ///
+    /// NEVER persist or [SerializeField] a value of this enum. Nothing does today, and the planned
+    /// insertion of a picker level BETWEEN FreeText and OrderOnly depends on that: the numeric
+    /// values shift, so a stored one would silently come back as a different level.
+    ///
+    /// Do not test against a member here to decide what the UI offers — ask ListAccess. Each of the
+    /// four capabilities is a separate question, and three of them are spelled identically today
+    /// (`!= FreeText`) purely because there are only three levels.</summary>
     public enum ListEditing
     {
         /// <summary>The player types entries: edit, add, delete, reorder.</summary>
@@ -54,6 +62,49 @@ namespace ModSettingsMenu.Settings
 
         /// <summary>Display only — every row is inert.</summary>
         ReadOnly,
+    }
+
+    /// <summary>
+    /// What each <see cref="ListEditing"/> level permits, as one named question per capability.
+    ///
+    /// This exists because the four decisions are NOT the same question, even though three of them
+    /// currently read as `!= FreeText`: whether a row can be typed into, whether the add row exists,
+    /// whether entries can be reordered, and whether one can be deleted. Written inline, each site
+    /// looked like a test of the level rather than of a capability, and a reader could not tell
+    /// which was meant.
+    ///
+    /// The cost of that was measured rather than imagined. Adding the planned picker level — which
+    /// CAN add entries but is NOT typed into — silently flips three of those sites to the wrong
+    /// answer, and the worst of them (the late-default merge below) would resurrect entries a player
+    /// deleted on purpose, on every launch. All three would compile cleanly, and no test in this
+    /// repo would fail, because verification here is a person walking the menu.
+    ///
+    /// So a new level is filled in here, in one screenful, instead of being audited across the
+    /// codebase. Deliberately expression-bodied one-liners rather than a switch: the point is that
+    /// all five answers are visible at once.
+    /// </summary>
+    internal static class ListAccess
+    {
+        /// <summary>The row is a text field the player edits.</summary>
+        internal static bool CanType(ListEditing level) => level == ListEditing.FreeText;
+
+        /// <summary>The drill-in offers a way to author a new entry.</summary>
+        internal static bool CanAdd(ListEditing level) => level == ListEditing.FreeText;
+
+        /// <summary>Entries can be moved up and down.</summary>
+        internal static bool CanReorder(ListEditing level) => level != ListEditing.ReadOnly;
+
+        /// <summary>An entry can be removed. Never offered where it could not be added back — the
+        /// only recovery would be the section-wide reset, which takes every other setting of that
+        /// mod with it.</summary>
+        internal static bool CanDelete(ListEditing level) => CanAdd(level);
+
+        /// <summary>Whether the stored value is reconciled against the consumer's declared defaults
+        /// at bind. Derived from CanAdd rather than restated: the reconciliation exists precisely
+        /// because a player who cannot author an entry can neither gain one the consumer adds later
+        /// nor drop one it removes — where they CAN, the stored value is theirs and must be left
+        /// alone.</summary>
+        internal static bool ReconcilesDefaults(ListEditing level) => !CanAdd(level);
     }
 
     /// <summary>
@@ -85,15 +136,26 @@ namespace ModSettingsMenu.Settings
         // before the next member, which made its tail read as documentation for Editing.)
         public bool ReadOnly;
 
-        public ListEditing Editing; // List only: what the CONSUMER declared. Read EffectiveEditing, not this.
+        /// <summary>List only: the level the CONSUMER asked for, before any permission lock.
+        /// Read <see cref="EffectiveEditing"/> instead — this one is only half the answer.
+        ///
+        /// Named "Declared" rather than plain "Editing" so that neither member is the short,
+        /// obvious one: with a bare name, reading the wrong member compiles AND returns the same
+        /// answer for every list that has no permission lock, so the mistake survives testing until
+        /// the first consumer combines a declared level with a locked scope.</summary>
+        public ListEditing DeclaredEditing { get; internal set; }
 
         /// <summary>What the drill-in may actually offer, once a permission lock is taken into
         /// account. ReadOnly demotes every declaration to ReadOnly; nothing ever promotes.
         ///
         /// It returns the same enum the consumer declares rather than a second, parallel one,
         /// because there is no state here the declaration cannot already express — a second type
-        /// would only create the question of which of the two a given call site meant.</summary>
-        public ListEditing EffectiveEditing => ReadOnly ? ListEditing.ReadOnly : Editing;
+        /// would only create the question of which of the two a given call site meant.
+        ///
+        /// Computed, not folded once at construction: ForeignConfigDiscovery.Discover() re-runs on
+        /// every screen build, so ReadOnly is recomputed per open (a Server-scoped setting is locked
+        /// at the title screen and editable in a session) and a snapshot would go stale.</summary>
+        public ListEditing EffectiveEditing => ReadOnly ? ListEditing.ReadOnly : DeclaredEditing;
     }
 
     /// <summary>

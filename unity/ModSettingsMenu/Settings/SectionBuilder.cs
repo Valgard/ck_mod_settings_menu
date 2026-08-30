@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using CoreLib.Data.Configuration;
+using UnityEngine;
 
 namespace ModSettingsMenu.Settings
 {
@@ -151,18 +154,18 @@ namespace ModSettingsMenu.Settings
         ///
         /// A blank entry is not a value: Tokenize drops it on read and Join drops it on write, so
         /// the handle never yields "" and a row left empty in the editor simply does not persist.
+        ///
+        /// Reading <c>handle.Value</c> decodes the stored string every time (split, list, array).
+        /// The sibling handles are plain field reads; this one is not, so cache it and refresh on
+        /// <c>OnChanged</c> rather than reading it inside a per-tick patch.
         /// </summary>
         public SectionBuilder List(out SettingHandle<string[]> handle, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)
         {
-            var entry = _file.Bind("Settings", key, ListTokenizer.Join(defaults), new ConfigDescription(key));
-            // Where the player cannot add entries, a default the consumer declares LATER would
-            // otherwise never reach them — their stored value predates it and they have no way to
-            // type it in. Merging at bind (rather than at render) keeps the file, the handle and
-            // the screen telling the same story from the first frame. Deliberately NOT done for
-            // FreeText: there, the same code would resurrect an entry the player deleted on
-            // purpose, every single launch.
-            if (editing != ListEditing.FreeText)
-                AppendMissingDefaults(entry, defaults);
+            string declared = ListTokenizer.Join(defaults);
+            WarnAboutUnusableDefaults(key, defaults, declared, editing);
+            var entry = _file.Bind("Settings", key, declared, new ConfigDescription(key));
+            if (ListAccess.ReconcilesDefaults(editing))
+                ReconcileWithDefaults(entry, declared, key);
             handle = new SettingHandle<string[]>(entry, s => ListTokenizer.Tokenize(s).ToArray(), v => ListTokenizer.Join(v));
             _section.Settings.Add(
                 new SettingDef
@@ -171,30 +174,113 @@ namespace ModSettingsMenu.Settings
                     Kind = SettingKind.List,
                     Term = Term(key),
                     Entry = entry,
-                    Editing = editing,
+                    DeclaredEditing = editing,
                 }
             );
             return this;
         }
 
-        // Appends every declared default the stored value does not already carry, in declaration
-        // order, and writes back only if something was actually missing — an unconditional write
-        // would touch the config file on every launch and, through CoreLib's SaveOnConfigSet, save
-        // it too. Order among the existing entries is the player's and is never rearranged.
-        private static void AppendMissingDefaults(ConfigEntry<string> entry, string[] defaults)
+        // A declaration the player could never use, reported at the moment it is made rather than
+        // discovered later as an empty screen. Matches what Choice does for a degenerate value set.
+        //
+        // The empty case is not merely useless, it is a crash: with no rows and no add row the
+        // drill-in's menuOptions is empty, and CK's SelectIndexInDirection (Pug.Other:342744) then
+        // calls SelectOptionIndex(DefaultOptionIndex = 0) without a count check and dereferences
+        // menuOptions[0]. ListDetailScreen guards its own entry points against that; this warning
+        // exists so the CAUSE is named in the log rather than only the effect.
+        //
+        // Comma and blank cases are warned about separately because they are silent rewrites: the
+        // consumer's own constant stops matching its own stored value, and every symptom points
+        // away from here.
+        private static void WarnAboutUnusableDefaults(string key, string[] defaults, string declared, ListEditing editing)
         {
+            if (!ListAccess.CanAdd(editing) && declared.Length == 0)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] List '{key}' is declared {editing} with no usable defaults — its editor would have no entries and no way to gain one."
+                );
             if (defaults == null)
                 return;
-            var tokens = ListTokenizer.Tokenize(entry.Value);
-            int before = tokens.Count;
             foreach (var raw in defaults)
             {
                 var token = ListTokenizer.Sanitize(raw);
-                if (token.Length > 0 && !tokens.Contains(token))
-                    tokens.Add(token);
+                if (token.Length == 0)
+                    Debug.LogWarning($"[ModSettingsMenu] List '{key}' declares a blank or comma-only default — it is dropped and will never appear.");
+                else if (token != raw)
+                    Debug.LogWarning(
+                        $"[ModSettingsMenu] List '{key}' default \"{raw}\" is stored as \"{token}\" (an entry cannot contain a comma, and is trimmed) — compare against the stored form."
+                    );
             }
-            if (tokens.Count != before)
-                entry.Value = ListTokenizer.Join(tokens);
+        }
+
+        // Brings a stored value back in line with what the consumer currently declares, in BOTH
+        // directions, for the levels whose entries the player cannot author.
+        //
+        // Appending alone was wrong, and wrong in a way nothing could correct: a default the
+        // consumer REMOVES in a later release stayed in every existing player's value forever — the
+        // player has no delete button at these levels and the consumer has no way to reach into the
+        // file, so the stored value drifted into the union of everything ever declared. Two players
+        // on the same version then held different lists, and the consumer's own code received a
+        // token it no longer has a case for.
+        //
+        // Membership belongs to whoever can change it. Here that is the consumer, so the declared
+        // set wins; what stays the player's is the ORDER, which is the whole point of OrderOnly and
+        // is preserved for every entry still declared. FreeText is excluded for the mirror-image
+        // reason: there the player owns membership too, and this same code would resurrect an entry
+        // they deleted on purpose, on every launch.
+        private static void ReconcileWithDefaults(ConfigEntry<string> entry, string declared, string key)
+        {
+            var declaredTokens = ListTokenizer.Tokenize(declared);
+            var stored = ListTokenizer.Tokenize(entry.Value);
+            var reconciled = new List<string>();
+            foreach (var token in stored)
+            {
+                if (declaredTokens.Contains(token) && !reconciled.Contains(token))
+                    reconciled.Add(token);
+            }
+            foreach (var token in declaredTokens)
+            {
+                if (!reconciled.Contains(token))
+                    reconciled.Add(token);
+            }
+            // Compared as TOKENS, not as the joined string: the two differ for a value a player
+            // hand-formatted ("Alpha, Beta"), and rewriting that would change their file to say the
+            // same thing differently. CoreLib's own setter no-ops on an equal value, so this guard
+            // is about not producing a different-looking equal value in the first place.
+            if (SameTokens(stored, reconciled))
+                return;
+            foreach (var token in stored)
+            {
+                if (!declaredTokens.Contains(token))
+                    Debug.LogWarning(
+                        $"[ModSettingsMenu] List '{key}' drops stored entry \"{token}\" — the mod no longer declares it and this list cannot be edited."
+                    );
+            }
+            // The merge is a convenience, not a correctness requirement, and it runs inside the
+            // consumer's IMod.Init. The write reaches API.ConfigFilesystem, which has no exception
+            // handling along the way (a Wine filesystem fault, or another mod's SettingChanged
+            // handler on this same file throwing). Unguarded, such a fault would unwind out of
+            // List(), so the consumer's remaining chain and its Build() never run and the WHOLE
+            // section vanishes from the menu — because a convenience could not persist.
+            try
+            {
+                entry.Value = ListTokenizer.Join(reconciled);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[ModSettingsMenu] Could not reconcile list '{key}' with its declared defaults — the stored value stands: {ex.Message}");
+            }
+        }
+
+        private static bool SameTokens(List<string> a, List<string> b)
+        {
+            if (a.Count != b.Count)
+                return false;
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
         }
 
         /// <summary>Marks the most-recently-declared setting as requiring a game restart to take effect.
