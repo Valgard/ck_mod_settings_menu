@@ -39,8 +39,8 @@ namespace ModSettingsMenu.UI
         // value becomes an initial row list, not what is on screen.
         private readonly List<string> _rows = new List<string>();
 
-        // A rebuild's explicit selection target, or RowSelection.None to keep the previous slot (clamped).
-        private RowSelection _pendingSelect = RowSelection.None;
+        // A rebuild's explicit selection target, or null to keep the previous slot (clamped).
+        private RowSelection? _pendingSelect;
 
         // Bumped once per open. This is the ONLY thing in the design that marks a session boundary:
         // the screen is a singleton reused for every list, so `_owner` cannot tell two sessions
@@ -51,7 +51,7 @@ namespace ModSettingsMenu.UI
         private int _rowGeneration;
         internal int RowGeneration => _rowGeneration;
 
-        private bool _rebuildPending; // set by OnRowTextCommitted and AddEmptyRow, consumed by Update
+        private bool _rebuildPending; // set by RequestRebuild, consumed by Update
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
 
@@ -131,7 +131,7 @@ namespace ModSettingsMenu.UI
             _rowGeneration++;
             _rows.Clear();
             _rebuildPending = false; // a stale deferred rebuild from a prior open can't apply here
-            _pendingSelect = RowSelection.None; // ...and neither can its selection target
+            _pendingSelect = null; // ...and neither can its selection target
             _scroll = GetComponent<UIScrollWindow>();
             if (box == null || box.itemContainer == null || box.itemTemplate == null || box.addRow == null)
             {
@@ -427,13 +427,29 @@ namespace ModSettingsMenu.UI
             }
         }
 
+        // The single authoritative way to ask for a deferred rebuild. _rebuildPending and
+        // _pendingSelect used to be two independent fields, written in the same breath at every call
+        // site — Populate's own comment already called out that BOTH must move together — which made
+        // "a landing target with no rebuild pending" a state the type system allowed and every writer
+        // had to avoid by discipline alone. One method makes it unrepresentable instead, and makes the
+        // coalescing rule explicit rather than an accident of write order: if two requests land in the
+        // same frame before Update() consumes one, the second simply overwrites the first, same as
+        // before, but now that is what the code says rather than what six scattered writes happened to
+        // do. Populate's own reset is deliberately NOT routed through here — it clears both fields to
+        // "nothing pending" on a completely different path (closing out the previous session), not on
+        // a request for a new rebuild.
+        private void RequestRebuild(RowSelection? landOn = null)
+        {
+            _rebuildPending = true;
+            _pendingSelect = landOn;
+        }
+
         // Called from the button's OnActivated, i.e. from inside a row's own callback — so the
         // rebuild is DEFERRED through _rebuildPending exactly like a commit is. Rebuilding here
         // would destroy the very row whose callback is still on the stack.
         internal void AddEmptyRow()
         {
             _rows.Add("");
-            _rebuildPending = true;
             // The new row lands last in _rows, and the button follows it — so this index is the
             // new row, not the button. Selected but NOT activated, and that choice is LOAD-BEARING
             // for the on-screen keyboard: entering edit mode here would raise it on a controller
@@ -444,7 +460,7 @@ namespace ModSettingsMenu.UI
             // (ListDetailItem.maxWidth is 0; see its class-level note). SeedText/RenderContent's
             // baseline-then-rebaseline against the (now hypothetical) trim is redundancy today, not a
             // second reason this line can't simply be reversed.
-            _pendingSelect = new RowSelection(_rows.Count - 1);
+            RequestRebuild(new RowSelection(_rows.Count - 1));
         }
 
         // Swap a row with its neighbour. Deferred through _rebuildPending exactly as AddEmptyRow is,
@@ -481,13 +497,13 @@ namespace ModSettingsMenu.UI
             WriteValueFromRows();
             // Unconditionally, ignoring the return value: swapping two identical tokens leaves the
             // stored value untouched, and the rows still have to redraw in their new order.
-            _rebuildPending = true;
+            //
             // The selection follows the ROW to its new position AND stays on the control that
             // caused the move, so pressing ↑ repeatedly walks one entry upward instead of moving it
             // once and then stepping the selection to the neighbouring row. landOn is null when the
             // move came from somewhere other than an in-row button, and then the row's field is the
             // right landing.
-            _pendingSelect = new RowSelection(target, landOn);
+            RequestRebuild(new RowSelection(target, landOn));
         }
 
         // Remove a row. An EMPTY row goes without asking — it never reached the owning mod's config
@@ -585,13 +601,12 @@ namespace ModSettingsMenu.UI
         {
             _rows.RemoveAt(index);
             WriteValueFromRows();
-            _rebuildPending = true;
             // Land on the delete button of whatever row moved up into this slot, so deleting
             // several entries in a row does not walk the selection away from ✕ after each one.
             // Deleting the last row lands on its predecessor, which Mathf.Min already produces from
-            // an out-of-range index.
+            // an out-of-range index. Deleting the ONLY row leaves nothing to land on at all.
             int next = Mathf.Min(index, _rows.Count - 1);
-            _pendingSelect = next >= 0 ? new RowSelection(next, ListRowButton.Role.Delete) : RowSelection.None;
+            RequestRebuild(next >= 0 ? new RowSelection(next, ListRowButton.Role.Delete) : null);
         }
 
         // Render the layout AFTER activation (children are active now, so the LinearLayout counts them
@@ -811,7 +826,9 @@ namespace ModSettingsMenu.UI
             _rows[index] = ListTokenizer.Sanitize(row.CommittedText);
             if (!WriteValueFromRows())
                 return;
-            _rebuildPending = true;
+            // No explicit landing target: an ordinary text commit wants the same numeric slot it
+            // had before, which RequestRebuild's own null default already means.
+            RequestRebuild();
         }
 
         // The one place the row list becomes the stored value. Extracted from OnRowTextCommitted so
@@ -863,8 +880,8 @@ namespace ModSettingsMenu.UI
                 return;
             _rebuildPending = false;
             int previousIndex = selectedIndex;
-            RowSelection explicitTarget = _pendingSelect;
-            _pendingSelect = RowSelection.None;
+            RowSelection? explicitTarget = _pendingSelect;
+            _pendingSelect = null;
             RebuildRows();
             // The initial open (Activate) renders AFTER RebuildRows for the same reason: a LinearLayout
             // only measures active children, so each row's height must be (re)computed here too, or the
@@ -872,11 +889,11 @@ namespace ModSettingsMenu.UI
             RenderContent();
             selectedIndex = -1; // stale index from before the rebuild — reset so SelectOptionIndex's
             // no-op guard and range check don't see a wrong/out-of-range value
-            // A caller that knows where the selection must land says so via _pendingSelect.
-            // AddEmptyRow names a row alone; MoveRow and DeleteRow additionally name the control
-            // that acted (RowSelection.Slot), so a repeated press stays on it. Everything else
-            // leaves RowSelection.None, meaning "keep the same numeric slot" (clamped), which is
-            // what an ordinary text-edit commit wants anyway.
+            // A caller that knows where the selection must land says so via RequestRebuild's landOn
+            // argument. AddEmptyRow names a row alone; MoveRow and DeleteRow additionally name the
+            // control that acted (RowSelection.Slot), so a repeated press stays on it. Everything
+            // else passes no argument, leaving _pendingSelect null — "keep the same numeric slot"
+            // (clamped), which is what an ordinary text-edit commit wants anyway.
             // Nothing to select is a legitimate outcome, and Mathf.Clamp cannot express it: with an
             // empty list the bounds invert (0 .. -1), and Clamp's `if (v < min) v = min; else if
             // (v > max) v = max;` then yields -1 for any non-negative target — or 0 for a negative
@@ -895,7 +912,10 @@ namespace ModSettingsMenu.UI
             // OnSelectedOptionChanged already uses to gate its own scroll-follow).
             if (Manager.input.SystemIsUsingMouse())
                 return;
-            if (explicitTarget.HasRow && _rows.Count > 0)
+            // Unwraps explicitTarget into `landing` rather than testing HasRow/Row separately —
+            // RowSelection has no such property any more (see its own comment): Row is always valid
+            // once the struct exists at all, so the only question left is whether one was passed.
+            if (explicitTarget is { } landing && _rows.Count > 0)
             {
                 // Every row now contributes several menuOptions entries (its field, plus its
                 // buttons — see AddItem), so a row index can no longer be clamped straight against
@@ -913,18 +933,18 @@ namespace ModSettingsMenu.UI
                 // leaving nothing selected.
                 //
                 // The branch condition above also requires _rows.Count > 0: with an empty list,
-                // Mathf.Clamp(explicitTarget.Row, 0, -1) yields -1 (its own upper-bound check fires
-                // for any non-negative input once max < min), and GetChild(-1) throws. Falling
-                // through to the else branch instead lands on whatever menuOptions still has (the
-                // add button, if this is an editable list) rather than crashing.
-                int clampedRow = Mathf.Clamp(explicitTarget.Row, 0, _rows.Count - 1);
+                // Mathf.Clamp(landing.Row, 0, -1) yields -1 (its own upper-bound check fires for any
+                // non-negative input once max < min), and GetChild(-1) throws. Falling through to
+                // the else branch instead lands on whatever menuOptions still has (the add button,
+                // if this is an editable list) rather than crashing.
+                int clampedRow = Mathf.Clamp(landing.Row, 0, _rows.Count - 1);
                 var targetRow = box.itemContainer.GetChild(clampedRow).GetComponent<ListDetailItem>();
                 UIelement target = targetRow;
-                if (targetRow != null && explicitTarget.Slot.HasValue && targetRow.RowButtons != null)
+                if (targetRow != null && landing.Slot.HasValue && targetRow.RowButtons != null)
                 {
                     foreach (var button in targetRow.RowButtons)
                     {
-                        if (button != null && button.ButtonRole == explicitTarget.Slot.Value && button.gameObject.activeInHierarchy)
+                        if (button != null && button.ButtonRole == landing.Slot.Value && button.gameObject.activeInHierarchy)
                         {
                             target = button;
                             break;

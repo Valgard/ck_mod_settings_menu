@@ -80,15 +80,16 @@ namespace ModSettingsMenu.UI
         // more). On this screen's own three-step open (Populate -> base.Activate -> RenderContent),
         // RebuildRows runs from INSIDE Populate — before base.Activate makes the row's ancestor
         // chain active — so a freshly cloned row's own Awake is deferred by Unity until later, well
-        // after Bind -> RefreshButtonStates -> SetDisabled has already run once on it. An Awake-only
-        // capture would then record whatever THIS call had already swapped icon.sprite to, not the
-        // pristine resting sprite — wrong for a button that starts disabled (the first row's ↑, the
-        // last row's ↓). Guarding the capture here instead of removing it there would not fix that:
-        // Awake still fires afterward and would unconditionally overwrite the correct value with the
-        // (by then swapped) one. Capturing only on the FIRST call, before this same call's own swap
-        // below, is what makes it always see the pristine sprite: nothing else ever writes
-        // icon.sprite before this method does.
-        public void SetDisabled(bool disabled)
+        // after Refresh has already called this once. An Awake-only capture would then record
+        // whatever THIS call had already swapped icon.sprite to, not the pristine resting sprite —
+        // wrong for a button that starts disabled (the first row's ↑, the last row's ↓). Guarding
+        // the capture here instead of removing it there would not fix that: Awake still fires
+        // afterward and would unconditionally overwrite the correct value with the (by then swapped)
+        // one. Capturing only on the FIRST call, before this same call's own swap below, is what
+        // makes it always see the pristine sprite: nothing else ever writes icon.sprite before this
+        // method does. private: Refresh is now the only caller, in the same method that decides
+        // disabled from the role, so there is no reason for anything else to reach in and flip it.
+        private void SetDisabled(bool disabled)
         {
             _disabled = disabled;
             if (icon == null)
@@ -103,29 +104,62 @@ namespace ModSettingsMenu.UI
                 icon.sprite = wanted;
         }
 
-        // Named after the object AND its role/row, not just the role: several buttons of the same
-        // role exist at once (one per row), so "ButtonMoveUp" alone would not say which is broken.
-        public void Bind(ListDetailItem row)
+        // One entry point per rebuild, replacing what used to be two calls a caller had to make in
+        // order (Bind, then ListDetailItem.RefreshButtonStates' own switch deciding this button's
+        // disabled state from outside it). Folding both here means "a bound button has a correct
+        // disabled state" is true by construction — there is no window between the two steps for a
+        // caller to skip the second, and no second place that has to agree with this one about what
+        // disables a MoveUp button.
+        //
+        // The switch below is the OTHER thing this fold buys, not just the sequencing: it used to
+        // live in ListDetailItem.RefreshButtonStates, a plain `switch (button.ButtonRole)` with no
+        // exhaustiveness check either there or in this class's own OnActivated — a fourth Role would
+        // have compiled cleanly with both silently unhandled. Moving it beside OnActivated's own
+        // switch over the same enum, in the same class, does not add a compiler guarantee neither
+        // switch had before, but it does mean the two decisions ("what does this role do" and "when
+        // is it disabled") are one grep apart instead of a file apart. Role.Delete's own case is
+        // never disabled — deliberately unconditional below, not merely never observed to need it,
+        // so a role that DID need conditional disabling could not silently fall into this one's case
+        // by omission.
+        //
+        // Re-evaluated on every rebuild, not wired once: an edge row's disabled state depends on
+        // both this row's own index and the current row count, and a structural edit (add, delete,
+        // reorder) can change either one.
+        internal void Refresh(ListDetailItem row, int rowIndex, int rowCount, bool readOnly)
         {
             _row = row;
             if (selectedMarker != null)
                 selectedMarker.SetActive(false);
             else
                 Debug.LogWarning(
-                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no selectedMarker assigned — it shows no focus frame on that column."
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {rowIndex}) has no selectedMarker assigned — it shows no focus frame on that column."
                 );
             if (fieldBorder == null)
                 Debug.LogWarning(
-                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no fieldBorder assigned — its click collider stays a 1x1 box at the origin, live and hittable in the wrong place."
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {rowIndex}) has no fieldBorder assigned — its click collider stays a 1x1 box at the origin, live and hittable in the wrong place."
                 );
             if (icon == null)
                 Debug.LogWarning(
-                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no icon assigned — it renders no glyph, and SetDisabled becomes a no-op (it never visually greys out)."
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {rowIndex}) has no icon assigned — it renders no glyph, and SetDisabled becomes a no-op (it never visually greys out)."
                 );
             else if (role != Role.Delete && iconDisabled == null)
                 Debug.LogWarning(
-                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no iconDisabled assigned — it never visually greys out when disabled, even though it correctly refuses activation."
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {rowIndex}) has no iconDisabled assigned — it never visually greys out when disabled, even though it correctly refuses activation."
                 );
+
+            switch (role)
+            {
+                case Role.MoveUp:
+                    SetDisabled(rowIndex <= 0);
+                    break;
+                case Role.MoveDown:
+                    SetDisabled(rowIndex >= rowCount - 1);
+                    break;
+                case Role.Delete:
+                    SetDisabled(false);
+                    break;
+            }
+            gameObject.SetActive(!readOnly);
         }
 
         // ACTIVE only for a live instance — and the test is `activeInHierarchy`, NOT `activeSelf`.
