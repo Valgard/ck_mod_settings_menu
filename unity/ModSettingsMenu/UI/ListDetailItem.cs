@@ -56,7 +56,7 @@ namespace ModSettingsMenu.UI
         // Refresh every button against this row's current position. Called on every rebuild, because
         // a row is a fresh clone each time and its buttons start unbound — an unbound button renders
         // normally and does nothing when pressed. What each button does with rowIndex/rowCount/
-        // readOnly (its own disabled state, its read-only visibility) is entirely its own decision
+        // access (its own disabled state, and whether its role is offered at all) is its own decision
         // now — see ListRowButton.Refresh; this loop only owns the null check over a serialized array
         // a prefab slot can leave empty.
         internal void RefreshButtonStates(int rowCount)
@@ -185,18 +185,21 @@ namespace ModSettingsMenu.UI
         // agree — true for a genuine read-only list (SettingDef.ReadOnly): view/scroll/navigate like
         // any other row, but OnActivated below never enters edit mode.
         //
-        // FreeText is the ONLY level whose rows are typed into, so anything else maps to the
-        // inherited readOnly flag — an OrderOnly row is as inert to the keyboard as a locked one,
-        // and differs only in the buttons beside it, which is ListRowButton's decision to make.
-        // The declared level is kept as well, because RefreshButtonStates has to pass it on and
-        // cannot recover it from a boolean that has already collapsed two levels into one.
+        // ListAccess.CanType is the named question the inherited readOnly flag answers — an
+        // OrderOnly row is as inert to the keyboard as a locked one, and differs only in the buttons
+        // beside it, which is ListRowButton's decision to make. Asking it by name rather than
+        // testing the level inline matters because three other decisions in this codebase are also
+        // spelled `!= FreeText` today and are NOT this question.
+        //
+        // The level is kept alongside, because RefreshButtonStates has to pass it on and cannot
+        // recover it from a boolean that has already collapsed two levels into one.
         public void Bind(ListDetailScreen owner, int rowIndex, ListEditing editing)
         {
             _owner = owner;
             _rowIndex = rowIndex;
             _generation = owner != null ? owner.RowGeneration : -1;
             _editing = editing;
-            this.readOnly = editing != ListEditing.FreeText;
+            this.readOnly = !ListAccess.CanType(editing);
             // A fresh row has never been the active input field, whatever the GameObject did in a
             // previous life. Without this reset a row that still held activeInputField when the
             // screen closed keeps the latch set, and can fire one more commit while being torn down
@@ -213,10 +216,16 @@ namespace ModSettingsMenu.UI
             _seededText = "";
             _textLastFrame = "";
             _edited = false;
-            // A frame promises "you can type here". A read-only list's rows stay navigable for
-            // reading but can never become activeInputField (OnActivated returns before
-            // base.OnActivated below), so they get no frame — the same line this class draws in
+            // A frame promises "you can type here", so only FreeText rows get one: at the other two
+            // levels a row stays navigable for reading but can never become activeInputField
+            // (OnActivated returns before base.OnActivated below) — the same line this class draws in
             // "no edit mode", and the screen draws in "no add button".
+            //
+            // The focus marker's renderer goes with it, which looks like it would leave a navigable
+            // OrderOnly row with no visible selection. It does not: the base class recolours the
+            // row's text on selection, so the selected entry is still evident. Verified in game
+            // 2026-08-30 against the OrderOnly fixture, because reading the marker path alone
+            // suggests the opposite.
             //
             // .enabled, never SetActive: the base class owns selectedMarker's active state and
             // toggles it on every select/deselect, so competing for that flag is a race it wins on

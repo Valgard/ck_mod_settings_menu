@@ -105,6 +105,43 @@ namespace ModSettingsMenu.UI
                 icon.sprite = wanted;
         }
 
+        // Whether a role is offered at all under a given access level — the ONE definition of that
+        // rule, asked by all three places that would otherwise each need their own copy: this class
+        // (whether the object is on screen), ListDetailScreen.AddItem (whether it registers as a
+        // menu option) and RowElements (whether it becomes a link in the navigation chain).
+        //
+        // Those three must agree or the screen breaks in a way no compiler catches: a button that is
+        // merely SetActive(false) but still registered stays reachable through SelectOptionIndex,
+        // which sets selectedIndex directly and consults no active state (see AddItem's own comment
+        // on the read-only path). A stale copy of this rule in one of the three would produce
+        // exactly that — an invisible row element the selection can land on and not move off.
+        //
+        // Deliberately a static function of (access, role) rather than a flag Refresh leaves behind:
+        // a flag would make the answer depend on whether Refresh has run yet, and the navigation
+        // chain is wired in a different pass than the rows are bound.
+        //
+        // It switches over ROLE and defers the level question to ListAccess — the inverse of how it
+        // was first written. Switching over the level put a `default:` here that would have absorbed
+        // the planned picker level into "no buttons at all", silently, which is the exact omission
+        // the block below makes a point of avoiding for Role. This way a new level is answered once,
+        // in ListAccess, and this method needs no edit.
+        internal static bool ShowsRole(ListEditing access, Role role)
+        {
+            switch (role)
+            {
+                case Role.MoveUp:
+                case Role.MoveDown:
+                    return ListAccess.CanReorder(access);
+                case Role.Delete:
+                    return ListAccess.CanDelete(access);
+                default:
+                    // Unlike the level axis, a new ROLE genuinely cannot be answered elsewhere — it
+                    // needs a decision here. Say so rather than hiding it.
+                    Debug.LogWarning($"[ModSettingsMenu] ListRowButton role {role} has no visibility rule — the button stays hidden.");
+                    return false;
+            }
+        }
+
         // One entry point per rebuild, replacing what used to be two calls a caller had to make in
         // order (Bind, then ListDetailItem.RefreshButtonStates' own switch deciding this button's
         // disabled state from outside it). Folding both here means "a bound button has a correct
@@ -126,36 +163,6 @@ namespace ModSettingsMenu.UI
         // Re-evaluated on every rebuild, not wired once: an edge row's disabled state depends on
         // both this row's own index and the current row count, and a structural edit (add, delete,
         // reorder) can change either one.
-        // Whether a role is offered at all under a given access level — the ONE definition of that
-        // rule, asked by all three places that would otherwise each need their own copy: this class
-        // (whether the object is on screen), ListDetailScreen.AddItem (whether it registers as a
-        // menu option) and RowElements (whether it becomes a link in the navigation chain).
-        //
-        // Those three must agree or the screen breaks in a way no compiler catches: a button that is
-        // merely SetActive(false) but still registered stays reachable through SelectOptionIndex,
-        // which sets selectedIndex directly and consults no active state (see AddItem's own comment
-        // on the read-only path). A stale copy of this rule in one of the three would produce
-        // exactly that — an invisible row element the selection can land on and not move off.
-        //
-        // Deliberately a static function of (access, role) rather than a flag Refresh leaves behind:
-        // a flag would make the answer depend on whether Refresh has run yet, and the navigation
-        // chain is wired in a different pass than the rows are bound.
-        internal static bool ShowsRole(ListEditing access, Role role)
-        {
-            switch (access)
-            {
-                case ListEditing.FreeText:
-                    return true;
-                case ListEditing.OrderOnly:
-                    // Reordering is the whole point of this level; deleting is not offered, because
-                    // nothing here can add an entry back — the only way would be the section-wide
-                    // reset, which would take every other setting of that mod with it.
-                    return role != Role.Delete;
-                default:
-                    return false;
-            }
-        }
-
         internal void Refresh(ListDetailItem row, int rowIndex, int rowCount, ListEditing access)
         {
             _row = row;
