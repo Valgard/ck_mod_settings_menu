@@ -67,10 +67,19 @@ The public entry point and section registry. `Section(IMod consumer)` resolves t
 ### `SectionBuilder`
 
 Fluent declaration. Each widget method (`Toggle`/`Slider`/`Stepper`/`Choice<T>`/`List`) binds a
-CoreLib `ConfigEntry` via `_file.Bind("Settings", key, def, desc)`, hands back a typed
-`SettingHandle<T>` via `out`, and records a `SettingDef`. `Hint`, `SortOptions`,
-`RequiresRestart` (marks the last-declared setting), and `Build` complete the chain. Loc
-term for a key is `<ModId>-Config/<key>`.
+CoreLib `ConfigEntry` through `BindGuarded`, hands back a typed `SettingHandle<T>` via `out`,
+and records a `SettingDef`.
+
+`BindGuarded` exists because `ConfigFile.Bind` is not a lookup: it ends in `Save()`, so
+the first bind of a key writes the file, and that write is unguarded all the way down to
+`API.ConfigFilesystem`. A fault there — the Wine filesystem faults this project carries
+IL patches for — used to unwind out of the widget method, so the consumer's remaining
+chain and its `Build()` never ran and its **whole section** vanished. Now a failed bind
+logs which key and why, registers no `SettingDef`, and returns a *detached*
+`SettingHandle<T>` holding the declared default. The setting is absent from the menu
+rather than broken, and the consumer keeps running on its own value. `Hint`,
+`SortOptions`, `RequiresRestart` (marks the last-declared setting), and `Build` complete
+the chain. Loc term for a key is `<ModId>-Config/<key>`.
 
 `List` differs in two ways from its neighbours. Its value is one comma-separated string
 rather than a typed scalar — `ListTokenizer` defines that format in both directions, and it is
@@ -264,6 +273,13 @@ net) — never on mere mouse hover, which CK's own `OnDeselected` also fires on.
 **Rebuilds must stay full teardown-and-recreate**: destroying a row is the only thing that resets
 `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid editing tint and
 nothing else reverts.
+
+`ListDetailItem.OfferedButtons()` answers which of a row's buttons exist at its access level,
+for the two callers that must agree — `ListDetailScreen.AddItem` (registration as a menu
+option) and `RowElements` (the navigation chain). If those disagree, a button is either
+invisible but selectable (the selection lands on it and cannot leave) or wired but absent.
+`RefreshButtonStates` deliberately does **not** use it: it must walk every button, because
+`Refresh` is what switches a hidden one off in the first place.
 
 ### `ListRowButton : RadicalMenuOption`
 
