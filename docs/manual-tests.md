@@ -307,6 +307,18 @@ the two paths reach the drill-in with different things known about the value.
       `SkimRight`, and only up/down reach the guard inside this screen.
 - [ ] The row itself still renders in the settings screen and previews
       `(empty)` — refusing the drill-in must not make the setting vanish.
+- [ ] **The row does not pretend to be activatable.** Selecting it plays no
+      activation sound, and the footer hint bar offers no select prompt. A row
+      that answers a press with silence and a log line is worse than one that
+      visibly cannot be pressed.
+- [ ] **The other half of the guard — a list emptied through a *scope*, not a
+      declaration.** This is the route the guard sits in `Open()` for, and no
+      declared fixture can reach it. Open `LongReadOnly` once so it is
+      classified, quit, edit `TestListFixtures/config.cfg` so `LongReadOnly`
+      has no value, relaunch: the row must still be a list row, preview
+      `(empty)`, and refuse to open. Here refusing is the only defence — the
+      value is read-only through its scope, so the player cannot repair it from
+      the screen.
 
 ### Defaults reconciled at bind
 
