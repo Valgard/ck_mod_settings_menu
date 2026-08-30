@@ -290,6 +290,11 @@ the two paths reach the drill-in with different things known about the value.
 
 ### `ReadOnly`
 
+- [ ] **An inert row does not pretend to be activatable.** In `testListReadOnly`
+      and in `testListOrderOnly`, selecting a row plays the ordinary selection
+      sound, but pressing Enter/Space produces **no** activation sound and the
+      footer offers no select prompt — the row cannot enter edit mode, so it
+      must not promise that it can. The arrows in `OrderOnly` still respond.
 - [ ] `testListReadOnly` shows every entry, with no add row and no row buttons.
 - [ ] It looks and behaves like `LongReadOnly`, which reaches the same state
       through a `ViewOnly` scope instead of a declaration.

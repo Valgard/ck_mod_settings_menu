@@ -137,6 +137,8 @@ Pick `OrderOnly` when the entries are a fixed set whose *order* is the setting �
 
 **At `OrderOnly` and `ReadOnly`, the stored value is reconciled against your declared defaults every time it is bound**, in both directions: a default you add in a later release appears, and one you remove disappears. That is what keeps membership yours at the levels where the player cannot change it — without it, a removed default would be stuck in every existing player's file forever, since neither of you can reach in and delete it.
 
+Entries are matched **ignoring case** when their position is restored, and your declared spelling wins: a player who hand-edits the `.cfg` (the only route to these entries outside the menu) keeps their position instead of having the entry dropped and re-appended.
+
 Order follows the same rule as membership, so it differs between the two: at `OrderOnly` the player can reorder, so **their** order is kept and new entries land at the end. At `ReadOnly` nobody can, so your declared order wins outright — otherwise the order from a player's very first launch would outlive every release you ship. Under `FreeText` none of this happens at all: there the entries are the player's, and the same code would resurrect one they deleted on purpose, on every launch.
 
 ⚠️ **Narrowing the level on an existing key is destructive.** Reconciliation keys on the level you declare *this* launch and has no record of the last one, so re-declaring a `FreeText` key as `OrderOnly` treats everything the player authored as "no longer declared" and deletes it. Use a new key if you need to change the level of a shipped setting. The same applies to a player who hand-edits the `.cfg` of a list they cannot add to — their additions are removed on the next launch, which is worth saying in your own mod's documentation.
@@ -144,6 +146,10 @@ Order follows the same rule as membership, so it differs between the two: at `Or
 Declaring `OrderOnly` or `ReadOnly` with no defaults at all gives you a drill-in with no entries and no way to gain one; the framework warns about it, so watch the log if a list comes up empty.
 
 `RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key", …).RequiresRestart()`) to mark that setting as needing a game restart to take effect (e.g. a bake-time / load-time value that is only read at world load). When a so-marked setting is actually changed and you leave the Mod settings screen, the framework raises Core Keeper's own *restart to apply mod changes* popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod subscriptions change. Settings whose value applies live (read every frame / tick) should **not** be marked. ⚠️ A bake-time setting consumed during world/database conversion must be registered in `IMod.EarlyInit`, not `Init` — that conversion runs before `Init` (see **Behaviour & gotchas**), so an `Init`-bound handle makes the bake read your hardcoded default instead of the saved value.
+
+**If a setting cannot be bound, your mod keeps running.** Binding writes the config file, and that write can fail (a read-only directory, a filesystem fault). Rather than let that take your whole builder chain down — and with it every setting after it, plus `Build()` — the framework logs which key failed, leaves that one setting out of the menu, and hands you a handle that reports your declared default and accepts writes without storing them. So a failed bind costs one setting's persistence, not your section. Watch `Player.log` for `[ModSettingsMenu] Could not bind setting` if a setting is missing from the screen.
+
+The same guard names the mistake when you declare **one key twice with different types** (say a `Toggle` and later a `List` on `"mode"`), which otherwise surfaced as an unattributed cast exception from inside the builder.
 
 ### `SettingHandle<T>` — reading and writing values
 

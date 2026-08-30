@@ -18,6 +18,10 @@ entry is the version published to mod.io; its body is the modfile changelog.
   step with what the mod currently offers — an entry it adds in a later release
   appears instead of staying invisible, one it drops disappears instead of being
   stuck there forever, and the order you put the rest in is left alone.
+- **One setting that cannot be saved no longer takes a whole mod's settings
+  with it.** If writing a value fails — a permission problem, a full disk — that
+  single setting is left out and the mod keeps its own default, instead of the
+  mod's entire section disappearing from this screen.
 - **Any mod's settings can be restored to their defaults.** Select a row in that
   mod's box and press the reset button shown at the bottom of the screen; a
   confirmation names the mod before anything changes. Works for detected mods
