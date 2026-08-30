@@ -151,7 +151,7 @@ Rebuilds every open (vanilla `PugText`s free their glyphs on disable). Sections 
 `SetActive(true)/SetActive(false)`. `Deactivate` consumes the restart-dirty flag and requests the
 deferred prompt.
 
-`UseCustomHelpButtons => true` plus an override of `GetHelpButtonsToShow()` surface CK's dormant
+`UseCustomHelpButtons => true` plus an override of `GetHelpButtonsToShow()` surface CK's
 `RESET_DEFAULTS` footer-hint slot whenever the selected row's section has anything resettable
 (`SectionReset.CanReset`); a same-frame `Update()` polls the reset input (keyboard `R`, Rewired
 action 223) while this screen is CK's top menu and, on press, opens a

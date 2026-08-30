@@ -7,11 +7,10 @@
 
 MSM lets a mod's settings change, but nothing lets them change back. A
 registered mod's only fallback is hand-editing its `config.cfg`; a merely
-*detected* mod (`ForeignConfigDiscovery`) has none at all — it ships no
-settings UI of its own. Writing a default back is trivial
-(`ConfigEntryBase` already stores it); the open questions are how much one
-reset touches, where the player triggers it, and whether detected mods
-count.
+*detected* mod (`ForeignConfigDiscovery`) has none at all — it ships no settings
+UI of its own. Writing a default back is trivial (`ConfigEntryBase` already
+stores it); the open questions are how much one reset touches, where the player
+triggers it, and whether detected mods count.
 
 ## Decision Drivers
 
@@ -45,7 +44,20 @@ the box, and **includes detected sections**.
   many.
 - **The existing hint slot, not a new control.** The `RESET_DEFAULTS` hint
   already ships a wired prefab, glyph and label that no vanilla screen
-  requests — free UI. Core Keeper queries it itself every frame
+  requests — free UI.
+
+  > **Correction (2026-08-30):** one vanilla screen does request it — the
+  > control-mapping menu, through a `[SerializeField]` list rather than from
+  > code, which is why a decompile grep found nothing
+  > (`ControlMappingMenu.prefab:2456-2457` → `Pug.ControlMapping:916-924`).
+  > The decision is unaffected: `GetHelpButtonsToShow()` is per-menu, the two
+  > screens never share a bar, and the label still means here what it means
+  > there. Only "no vanilla screen requests it" was wrong — as are the same
+  > premise's later restatements in this document ("dormant footer-hint slot",
+  > "unused vanilla slot", "dead vanilla surface"), left standing because a
+  > decision record documents what was believed at the time.
+
+  Core Keeper queries it itself every frame
   (`MenuManager.LateUpdate → UpdateHelperButtons`, twice once a row is
   selected); the check only asks "can this section be reset at all", never
   "does any value currently differ from its default" — the latter, a
