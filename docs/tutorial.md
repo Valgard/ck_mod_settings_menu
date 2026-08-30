@@ -47,8 +47,7 @@ Current framework version at time of writing: **1.1.0** (modId `6211950`).
 19. [RequiresRestart internals](#19-requiresrestart-internals)
 20. [The hard-won CK-UI gotchas](#20-the-hard-won-ck-ui-gotchas)
 
-[Appendix A: API cheat-sheet](#appendix-a-api-cheat-sheet) ·
-[Appendix B: glossary](#appendix-b-glossary)
+[Appendix A: API cheat-sheet](#appendix-a-api-cheat-sheet) · [Appendix B: glossary](#appendix-b-glossary)
 
 ---
 
@@ -94,7 +93,7 @@ Three moving parts, and that is the whole surface:
 | Concept | What it is |
 |---|---|
 | `ModSettings.Section(this)` | Begins a **section** (one box in the menu) for your mod. Returns a fluent builder. |
-| `.Toggle/.Slider/.Stepper/.Choice(...)` | Declares one **setting** and hands you a typed `SettingHandle<T>` via `out`. |
+| `.Toggle/.Slider/.Stepper/.Choice/.List(...)` | Declares one **setting** and hands you a typed `SettingHandle<T>` via `out`. |
 | `SettingHandle<T>.Value` | The **live value**. Read it where you use it; it reflects menu edits immediately. |
 
 Everything is declarative: the order you chain widgets is (by default) the order
@@ -254,9 +253,10 @@ an integer you step by ±1 with `←/→`, clamped to `[min, max]`. Use it for s
 integer counts (how many of something).
 
 ### Slider
-`Slider(out SettingHandle<float> h, string key, float min, float max, float def, float step, SliderDisplay display = SliderDisplay.Steps)`
-→ a float. `←/→` changes it by `step` (clamped). The `display` controls how the
-current value is *shown*:
+`Slider(out SettingHandle<float> h, string key, float min, float max, float def,
+float step, SliderDisplay display = SliderDisplay.Steps)` → a float. `←/→`
+changes it by `step` (clamped). The `display` controls how the current value is
+*shown*:
 
 | `SliderDisplay` | Shows | Example (`min=1,max=8,step=0.5,val=4`) |
 |---|---|---|
@@ -424,8 +424,8 @@ localization is entirely optional. Skip it and the menu simply shows your keys
 
 The section **heading** is your `displayName`, rendered as-is — mod names are
 proper nouns and are **not** localized. The Toggle on/off words and the "Mod
-Settings" screen title are supplied by the framework
-(`ModSettingsMenu-UI/On`, `/Off`, `/Title`) — you don't localize those.
+Settings" screen title are supplied by the framework (`ModSettingsMenu-UI/On`,
+`/Off`, `/Title`) — you don't localize those.
 
 ### Authoring the terms
 
@@ -877,13 +877,13 @@ MSM ships only its own three UI terms — `ModSettingsMenu-UI/Title`, `/On`, `/O
 ## 18. PreWarm: the first-open freeze fix
 
 Symptom: the **first** open of the menu froze up to ~1 s (worse on slower
-setups); every later open
-was instant. Measured (per-phase `Time.realtimeSinceStartup` logs around
-`Activate`): **~98 % of the time sits inside the instance's first
-`gameObject.SetActive(true)` `OnEnable` cascade** — first-time AssetBundle asset
-load / shader-variant compile. One-time per session, and **not** shared with
-vanilla menus (opening the identical-font vanilla `UISettings` first did *not*
-warm ours → the cost is instance-specific, not a global font atlas).
+setups); every later open was instant. Measured (per-phase
+`Time.realtimeSinceStartup` logs around `Activate`): **~98 % of the time sits
+inside the instance's first `gameObject.SetActive(true)` `OnEnable` cascade** —
+first-time AssetBundle asset load / shader-variant compile. One-time per
+session, and **not** shared with vanilla menus (opening the identical-font
+vanilla `UISettings` first did *not* warm ours → the cost is instance-specific,
+not a global font atlas).
 
 Crucially, "build the structure at startup" was measured **useless** (instantiate
 = 1.3 ms) — the expensive thing is the *enable cascade*, not the build. So the
@@ -1010,6 +1010,8 @@ b.Slider (out SettingHandle<float> h, string key, float min, float max, float de
           SliderDisplay display = SliderDisplay.Steps);   // Steps | Number | Percent(=position-in-range)
 b.Stepper(out SettingHandle<int>   h, string key, int min, int max, int def);
 b.Choice (out SettingHandle<T>     h, string key, T[] values, T def);   // token = value.ToString()
+b.List   (out SettingHandle<string[]> h, string key, string[] defaults,
+          ListEditing editing = ListEditing.FreeText);  // FreeText | OrderOnly | ReadOnly
 
 b.RequiresRestart();                    // marks the LAST-declared setting restart-required
 b.Build();                              // registers the section

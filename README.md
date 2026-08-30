@@ -1,10 +1,10 @@
 # Mod Settings Menu
 
-A framework mod for [Core Keeper](https://mod.io/g/corekeeper) that gives other
-mods an in-game settings screen. Consumer mods declare their settings in a few
-lines of `IMod.Init`; the framework renders them as a box of widgets under
-**Options → Mod settings** and persists every value through a CoreLib
-`ConfigFile`. No UI, prefab, or localization code on the consumer side.
+A framework mod for [Core Keeper](https://mod.io/g/corekeeper) that gives other mods an in-game settings
+screen. Consumer mods declare their settings in a few lines of `IMod.Init`; the
+framework renders them as a box of widgets under **Options → Mod settings** and
+persists every value through a CoreLib `ConfigFile`. No UI, prefab, or
+localization code on the consumer side.
 
 - **Players:** install this mod because a mod you use depends on it. There is
   nothing to configure here directly — each dependent mod adds its own section.
@@ -117,10 +117,25 @@ Each widget method binds a persisted CoreLib entry, hands you a typed
 | `Slider(out SettingHandle<float> h, string key, float min, float max, float def, float step, SliderDisplay display = SliderDisplay.Steps)` | slider bar | `float` | `step ≤ 0` → whole range as one step; bar segments = `(max-min)/step` |
 | `Choice<T>(out SettingHandle<T> h, string key, T[] values, T def)` | ←/→ cycle | `T` | any `T`; token = `value.ToString()` |
 | `Stepper(out SettingHandle<int> h, string key, int min, int max, int def)` | ←/→ integer | `int` | clamped to `[min, max]` |
+| `List(out SettingHandle<string[]> h, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)` | preview row → full-screen editor | `string[]` | see below |
 | `RequiresRestart()` | — | — | marks the **last-declared** setting as restart-required (see below) |
 | `Build()` | — | — | registers the section |
 
 `key` is the persistence key and the loc-term leaf (see **Localization**). Keep it stable across releases — changing it orphans the saved value.
+
+`List(...)` shows a compact preview row (`first, second, +7`) that opens a full-screen editor where each entry is its own row, navigable by mouse, keyboard and controller alike. `ListEditing` says what the player may do there:
+
+| `ListEditing` | The player can |
+|---|---|
+| `FreeText` *(default)* | type entries, add, delete, reorder |
+| `OrderOnly` | reorder only — no entry comes or goes |
+| `ReadOnly` | look, and nothing else |
+
+The value is stored as **one comma-separated string**, so an entry cannot itself contain a comma — one typed into a row is stripped when the row is committed, and a default declared with one is stripped when it is bound, so what you declare is what reads back. Blank entries are never stored: a row left empty in the editor simply does not persist, and the handle never yields `""`.
+
+Pick `OrderOnly` when the entries are a fixed set whose *order* is the setting — a priority or fallback sequence. Deleting is deliberately not offered there: nothing on that screen could add an entry back, so a mistake would only be undoable through the section-wide reset, which takes every other setting of your mod with it. If you want entries to be individually switchable, declare separate `Toggle`s — that reads clearer than a list you can empty.
+
+Because a player cannot add entries at those two levels, **defaults you add in a later release are merged into the stored value** when it is bound (appended in declaration order; the player's own order is never rearranged). Under `FreeText` this does not happen — there the same behaviour would resurrect an entry the player deleted on purpose, on every launch.
 
 `RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key", …).RequiresRestart()`) to mark that setting as needing a game restart to take effect (e.g. a bake-time / load-time value that is only read at world load). When a so-marked setting is actually changed and you leave the Mod settings screen, the framework raises Core Keeper's own *restart to apply mod changes* popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod subscriptions change. Settings whose value applies live (read every frame / tick) should **not** be marked. ⚠️ A bake-time setting consumed during world/database conversion must be registered in `IMod.EarlyInit`, not `Init` — that conversion runs before `Init` (see **Behaviour & gotchas**), so an `Init`-bound handle makes the bake read your hardcoded default instead of the saved value.
 

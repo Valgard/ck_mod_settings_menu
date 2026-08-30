@@ -66,11 +66,18 @@ The public entry point and section registry. `Section(IMod consumer)` resolves t
 
 ### `SectionBuilder`
 
-Fluent declaration. Each widget method (`Toggle`/`Slider`/`Stepper`/`Choice<T>`) binds a
+Fluent declaration. Each widget method (`Toggle`/`Slider`/`Stepper`/`Choice<T>`/`List`) binds a
 CoreLib `ConfigEntry` via `_file.Bind("Settings", key, def, desc)`, hands back a typed
 `SettingHandle<T>` via `out`, and records a `SettingDef`. `Hint`, `SortOptions`,
 `RequiresRestart` (marks the last-declared setting), and `Build` complete the chain. Loc
 term for a key is `<ModId>-Config/<key>`.
+
+`List` differs in two ways from its neighbours. Its value is one comma-separated string
+rather than a typed scalar — `ListTokenizer` defines that format in both directions, and it is
+the same format a discovered foreign list arrives in, which is why the drill-in needs no notion
+of where a list came from. And it carries a `ListEditing` level saying what the player may do
+with the entries; at the two levels that cannot add one, declared defaults missing from the
+stored value are appended at bind, since nothing on that screen could ever put them there.
 
 ### `SettingHandle<T>`
 
