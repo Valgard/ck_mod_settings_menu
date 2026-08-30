@@ -162,8 +162,10 @@ the game ships rather than the two a mod's own yaml would carry.
 
 `ListEditing` was cut as an ordered scale for exactly this reason: a fourth value
 slots in between `FreeText` and `OrderOnly` without a second dimension, and
-`ListRowButton.ShowsRole` is already the single place deciding which row buttons
-a level offers.
+`ListAccess` is already the single place answering what a level permits —
+`CanType`, `CanAdd`, `CanReorder`, `CanDelete`, `ReconcilesDefaults`. Adding the
+level means filling in those five, in one screenful, rather than auditing the
+call sites.
 
 **Open, and not researched yet:** whether CK has a usable picker or catalogue
 control to build on, or whether this needs its own screen. The dropdown section

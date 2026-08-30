@@ -41,7 +41,7 @@ own. The file to inspect after a write:
 | `ProseNotAList` | `This is a long sentence, and another one` | prose that must NOT be taken for a list |
 | `WithSpaces` | `Item One, Item Two, Big Chest` | tokens containing spaces |
 
-The same flag also declares four lists through the **public consumer API**, in
+The same flag also declares five lists through the **public consumer API**, in
 this mod's own section (`AddDeclaredListFixtures`). They are the other path
 entirely: discovery can only ever declare a `FreeText` list, because a heuristic
 cannot know an entry set is closed. So `OrderOnly` exists nowhere else, while
@@ -55,6 +55,7 @@ by a section reset.
 | `testListOrderOnly` | `OrderOnly` | six entries: reordering with no add row, and the arrow columns |
 | `testListOrderOnlySingle` | `OrderOnly` | one entry — the row with no neighbour to wrap to |
 | `testListReadOnly` | `ReadOnly` | declared inert, as opposed to inert through a scope |
+| `testListOrderOnlyEmpty` | `OrderOnly` | no entries and no way to add one — the drill-in must refuse to open |
 
 ## Before anything else
 
@@ -291,6 +292,21 @@ the two paths reach the drill-in with different things known about the value.
 - [ ] `testListReadOnly` shows every entry, with no add row and no row buttons.
 - [ ] It looks and behaves like `LongReadOnly`, which reaches the same state
       through a `ViewOnly` scope instead of a declaration.
+- [ ] **The declared order wins here, unlike at `OrderOnly`.** Reorder the
+      declared defaults of `testListReadOnly` in `AddDeclaredListFixtures`,
+      rebuild, reopen: the new order shows. Nobody can reorder this list in
+      game, so a stored order would otherwise outlive every release.
+
+### A list that cannot work
+
+- [ ] Opening `testListOrderOnlyEmpty` does **nothing** — no screen is pushed,
+      and `Player.log` says the list has no entries and no way to add one.
+- [ ] Try it with a **controller** as well, and with the keyboard, since the
+      three crash routes this guards differ by input device: `base.Activate()`
+      fires before any key is pressed, left/right go through `SkimLeft`/
+      `SkimRight`, and only up/down reach the guard inside this screen.
+- [ ] The row itself still renders in the settings screen and previews
+      `(empty)` — refusing the drill-in must not make the setting vanish.
 
 ### Defaults reconciled at bind
 
