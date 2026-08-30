@@ -157,6 +157,11 @@ keeps membership yours at the levels where the player cannot change it — witho
 it, a removed default would be stuck in every existing player's file forever,
 since neither of you can reach in and delete it.
 
+Entries are matched **ignoring case** when their position is restored, and your
+declared spelling wins: a player who hand-edits the `.cfg` (the only route to
+these entries outside the menu) keeps their position instead of having the entry
+dropped and re-appended.
+
 Order follows the same rule as membership, so it differs between the two: at
 `OrderOnly` the player can reorder, so **their** order is kept and new entries
 land at the end. At `ReadOnly` nobody can, so your declared order wins outright
@@ -189,6 +194,20 @@ world/database conversion must be registered in `IMod.EarlyInit`, not `Init` —
 that conversion runs before `Init` (see **Behaviour & gotchas**), so an
 `Init`-bound handle makes the bake read your hardcoded default instead of the
 saved value.
+
+**If a setting cannot be bound, your mod keeps running.** Binding writes the
+config file, and that write can fail (a read-only directory, a filesystem
+fault). Rather than let that take your whole builder chain down — and with it
+every setting after it, plus `Build()` — the framework logs which key failed,
+leaves that one setting out of the menu, and hands you a handle that reports
+your declared default and accepts writes without storing them. So a failed bind
+costs one setting's persistence, not your section. Watch `Player.log` for
+`[ModSettingsMenu] Could not bind setting` if a setting is missing from the
+screen.
+
+The same guard names the mistake when you declare **one key twice with different
+types** (say a `Toggle` and later a `List` on `"mode"`), which otherwise
+surfaced as an unattributed cast exception from inside the builder.
 
 ### `SettingHandle<T>` — reading and writing values
 
