@@ -257,17 +257,32 @@ namespace ModSettingsMenu.UI
             // ...plus the permanent trailing button for adding a new token — a read-only list has
             // nothing to add, so it is switched off entirely rather than left inert.
             //
-            // menuOptions was just cleared, so the button has to re-register even though the object
-            // itself survived; and it has to move back to the end, because the rows above were
-            // Instantiate()d into the container and therefore landed AFTER it. The LinearLayout
-            // stacks in hierarchy order, so sibling order is the row order.
             // Only FreeText can add: OrderOnly and ReadOnly both have no way to author a new entry,
             // and an add row that produces a row nobody can type into would be a dead control.
             bool canAdd = _editing == ListEditing.FreeText;
             box.addRow.gameObject.SetActive(canAdd);
+
+            // UNCONDITIONALLY, and before the canAdd branch — this is sibling ORDER, not
+            // participation. The add row is a live object that lives in itemContainer and survives
+            // every rebuild (RebuildRows destroys only ListDetailItem children), while rows are
+            // Instantiate()d into that container and therefore land AFTER it. Left where it is, it
+            // stays child 0 and pushes every row one place along.
+            //
+            // That matters even switched off, because Update()'s landing step indexes the container
+            // directly — box.itemContainer.GetChild(landing.Row) — on the premise that the rows are
+            // its first N children. Skipping this line for the two levels with no add row broke that
+            // premise and made every reorder land one row short: MoveDown appeared to leave the
+            // selection behind, MoveUp appeared to jump two rows. Found in game 2026-08-30; the
+            // symptom is a misplaced selection, which points nowhere near this line.
+            //
+            // The LinearLayout stacks in hierarchy order, so this is also what puts the add row
+            // visually last when it IS shown.
+            box.addRow.transform.SetAsLastSibling();
+
             if (canAdd)
             {
-                box.addRow.transform.SetAsLastSibling();
+                // menuOptions was just cleared, so the button has to re-register even though the
+                // object itself survived.
                 box.addRow.Bind(this);
                 box.addRow.SetParentMenu(this);
                 menuOptions.Add(box.addRow);
