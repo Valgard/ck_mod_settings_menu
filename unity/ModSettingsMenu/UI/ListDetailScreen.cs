@@ -363,7 +363,17 @@ namespace ModSettingsMenu.UI
         {
             var elements = new List<UIelement> { row };
             if (row.RowButtons != null)
-                elements.AddRange(row.RowButtons);
+            {
+                // Every other rowButtons walk in this file (AddItem, the button-search in Update)
+                // skips a null element the same way — a serialized array can carry one if a slot was
+                // left unassigned in the prefab, and AddRange would otherwise let it through as a
+                // null UIelement in the neighbour list.
+                foreach (var button in row.RowButtons)
+                {
+                    if (button != null)
+                        elements.Add(button);
+                }
+            }
             return elements;
         }
 
@@ -395,11 +405,17 @@ namespace ModSettingsMenu.UI
             }
             item.SetParentMenu(this);
             menuOptions.Add(item);
-            // Registered unconditionally, read-only rows included: a read-only row's buttons are
-            // simply INACTIVE (RefreshButtonStates -> SetActive(!readOnly)), which already reports
-            // GetActiveStateInCurrentScene() == INACTIVE and fails IsSelectionEnabled(), so they are
-            // unreachable by construction rather than by a check here.
-            if (item.RowButtons != null)
+            // A read-only row's buttons never register at all — not merely because they end up
+            // INACTIVE (RefreshButtonStates -> SetActive(!readOnly)) and fail IsSelectionEnabled().
+            // That guard only protects SelectIndexInDirection, which filters on it; SelectOptionIndex
+            // (Pug.Other:342813) sets selectedIndex directly and consults nothing. Opening with the
+            // mouse (selectedIndex stays -1) and then pressing an arrow first hands
+            // EnterListIfNothingSelected menuOptions.Count - 1 — the read-only list's ✕ of the last
+            // row, invisible and inactive — which GetSelectedMenuOption() would then happily report as
+            // selected, with nothing in its neighbour lists (ChainRowsForUIElementNavigation's own
+            // read-only branch never wires them) to move away to. Excluding them here matches that
+            // same branch, which already ignores them.
+            if (!_readOnly && item.RowButtons != null)
             {
                 foreach (var button in item.RowButtons)
                 {
@@ -440,8 +456,24 @@ namespace ModSettingsMenu.UI
         // through _rebuildPending, and a second, shortcutting path would have to swap both rows'
         // RowIndex bindings by hand. That is the class of special case ADR-005 split the row types
         // to be rid of.
-        internal void MoveRow(int index, int delta, ListRowButton.Role? landOn = null)
+        //
+        // Takes the ROW, not a bare index, for the same reason OnRowTextCommitted does: the caller
+        // could otherwise hand in a row's own RowIndex after that row has outlived this session (the
+        // drill-in is a singleton, reopened on a different setting), and WriteValueFromRows would
+        // then write straight into whatever THIRD-PARTY config is open now. The check has to happen
+        // here, not in ListRowButton — the button holds only a ListDetailItem reference, never the
+        // generation number, and duplicating the comparison at every call site is exactly the kind
+        // of drift a single guard exists to prevent.
+        internal void MoveRow(ListDetailItem row, int delta, ListRowButton.Role? landOn = null)
         {
+            if (row.Generation != _rowGeneration)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] Ignoring a move from a stale drill-in row (generation {row.Generation}, current {_rowGeneration}) — nothing was written."
+                );
+                return;
+            }
+            int index = row.RowIndex;
             int target = index + delta;
             if (index < 0 || index >= _rows.Count || target < 0 || target >= _rows.Count)
                 return;
@@ -475,8 +507,20 @@ namespace ModSettingsMenu.UI
         // Caption and flag are independent parameters — nothing enforces they agree — which is
         // exactly how they drifted apart here. accidentalInputBlockDuration (1 s by default) still
         // applies underneath the hold, covering the momentum of the click that opened the dialog.
-        internal void RequestDelete(int index)
+        //
+        // Takes the ROW, not a bare index — same reason as MoveRow: a stale row (the drill-in
+        // reopened on a different setting since this button was bound) must not be allowed to ask
+        // about, let alone delete, a row index that now belongs to someone else's list.
+        internal void RequestDelete(ListDetailItem row)
         {
+            if (row.Generation != _rowGeneration)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] Ignoring a delete request from a stale drill-in row (generation {row.Generation}, current {_rowGeneration}) — nothing was removed."
+                );
+                return;
+            }
+            int index = row.RowIndex;
             if (index < 0 || index >= _rows.Count)
                 return;
             if (string.IsNullOrEmpty(_rows[index]))
@@ -484,10 +528,11 @@ namespace ModSettingsMenu.UI
                 DeleteRow(index);
                 return;
             }
-            // The generation at the moment of ASKING. The popup is a pushed menu and the answer
-            // arrives in a callback, so the drill-in may have been closed and reopened on a
-            // different setting by then — the same hazard RowGeneration was introduced for, reached
-            // through a new route. A row index alone says WHERE in a list, never WHICH list.
+            // The generation at the moment of ASKING, separate from the check just above: that one
+            // guards the row that fired this call, this one guards the async POPUP RESPONSE, which
+            // can arrive after the drill-in has since closed and reopened on a different setting —
+            // the same hazard reached through a second route. A row index alone says WHERE in a
+            // list, never WHICH list.
             int askedGeneration = RowGeneration;
             string token = _rows[index];
             Manager.menu.centerPopUpText.StartNewDisplaySequence(
@@ -509,9 +554,19 @@ namespace ModSettingsMenu.UI
                     if (!response.IsConfirm)
                         return;
                     if (askedGeneration != RowGeneration)
+                    {
+                        Debug.LogWarning(
+                            $"[ModSettingsMenu] Ignoring a delete confirmation for \"{token}\" — the drill-in moved to a different session (generation {askedGeneration}, current {RowGeneration}) while the dialogue was open."
+                        );
                         return;
+                    }
                     if (index >= _rows.Count || _rows[index] != token)
+                    {
+                        Debug.LogWarning(
+                            $"[ModSettingsMenu] Ignoring a delete confirmation for \"{token}\" — the list changed underneath it while the dialogue was open, and it is no longer at row {index}."
+                        );
                         return;
+                    }
                     DeleteRow(index);
                 },
                 options: new List<string> { "cancelDialogue", "delete" },
@@ -554,15 +609,26 @@ namespace ModSettingsMenu.UI
                     continue;
                 // Each row type reports its own height through IListRow, measured from its frame
                 // rather than from its text — see ListDetailItem.RowHeightPx for why. The interface
-                // exists so a new row kind cannot be forgotten here: a row left unmeasured keeps the
-                // prefab's renderHeightPixels of 0, which the LinearLayout collapses to nothing.
+                // does not stop a new row kind from being forgotten here at compile time — GetComponent
+                // still compiles and returns null for any type that does not implement it — it only
+                // turns the silent renderHeightPixels-stays-0 collapse into a diagnosable one below.
                 var row = go.GetComponent<ListDetailItem>();
                 // The row has rendered by now, so the base class would have already trimmed anything
                 // too wide — moot since ListDetailItem.maxWidth is 0 (see its class-level note); this
                 // call is now redundancy rather than a correction. Re-baseline the edit detector
                 // against what is actually on screen anyway — see ListDetailItem.RebaselineEditDetector.
                 row?.RebaselineEditDetector();
-                int px = go.GetComponent<IListRow>()?.RowHeightPx ?? 0;
+                var listRow = go.GetComponent<IListRow>();
+                int px;
+                if (listRow != null)
+                {
+                    px = listRow.RowHeightPx;
+                }
+                else
+                {
+                    px = 0;
+                    Debug.LogWarning($"[ModSettingsMenu] \"{go.name}\" in the list drill-in has no IListRow — it renders with zero height.");
+                }
                 var wrap = go.GetComponent<WrapperUIComponent>();
                 if (px > 0 && wrap != null)
                     wrap.renderHeightPixels = px;
@@ -757,8 +823,19 @@ namespace ModSettingsMenu.UI
         // identical tokens changes nothing here and must redraw anyway, because the ROWS moved.
         private bool WriteValueFromRows()
         {
+            // Loud, unlike the no-op return below: this `false` means something different. A caller
+            // (MoveRow, DeleteRow) that discards the return value is relying on it meaning "swapping
+            // identical tokens changed nothing" — but reaching HERE means there was never an entry to
+            // write to at all, so _rows has already been mutated (a row swapped or removed) while the
+            // stored value stays untouched. The screen would show the change and the config file
+            // would not have it.
             if (_activeDef?.Entry == null)
+            {
+                Debug.LogWarning(
+                    "[ModSettingsMenu] WriteValueFromRows has no active entry to write to — the on-screen rows and the stored value have diverged."
+                );
                 return false;
+            }
             // Join through ListTokenizer, not by hand: dropping the empties is the same rule
             // Tokenize applies when reading, and the comparison below depends on both sides having
             // gone through it.
@@ -818,7 +895,7 @@ namespace ModSettingsMenu.UI
             // OnSelectedOptionChanged already uses to gate its own scroll-follow).
             if (Manager.input.SystemIsUsingMouse())
                 return;
-            if (explicitTarget.HasRow)
+            if (explicitTarget.HasRow && _rows.Count > 0)
             {
                 // Every row now contributes several menuOptions entries (its field, plus its
                 // buttons — see AddItem), so a row index can no longer be clamped straight against
@@ -834,6 +911,12 @@ namespace ModSettingsMenu.UI
                 // remembered column. A named button that no longer exists (the row rebuilt
                 // read-only, or the buttons are switched off) falls back to the field rather than
                 // leaving nothing selected.
+                //
+                // The branch condition above also requires _rows.Count > 0: with an empty list,
+                // Mathf.Clamp(explicitTarget.Row, 0, -1) yields -1 (its own upper-bound check fires
+                // for any non-negative input once max < min), and GetChild(-1) throws. Falling
+                // through to the else branch instead lands on whatever menuOptions still has (the
+                // add button, if this is an editable list) rather than crashing.
                 int clampedRow = Mathf.Clamp(explicitTarget.Row, 0, _rows.Count - 1);
                 var targetRow = box.itemContainer.GetChild(clampedRow).GetComponent<ListDetailItem>();
                 UIelement target = targetRow;

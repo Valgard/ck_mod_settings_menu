@@ -50,8 +50,9 @@ namespace ModSettingsMenu.UI
         [SerializeField]
         private Sprite iconDisabled;
 
-        // Captured in Awake rather than serialized a second time: the resting sprite is already on
-        // the renderer, and a duplicate field could be pointed somewhere else by accident.
+        // Captured lazily in SetDisabled rather than serialized a second time (the resting sprite is
+        // already on the renderer) or in Awake (see SetDisabled's own comment for why that runs too
+        // late on this screen).
         private Sprite _iconNormal;
 
         private bool _disabled;
@@ -67,13 +68,6 @@ namespace ModSettingsMenu.UI
 
         public Role ButtonRole => role;
 
-        protected override void Awake()
-        {
-            base.Awake();
-            if (icon != null)
-                _iconNormal = icon.sprite;
-        }
-
         // Deliberately NOT OptionActiveState.GRAYED_OUT. That state bundles four effects — tint,
         // click blocking, staying in the layout, and being SKIPPED by navigation — and the fourth is
         // broken on this screen: SelectIndexInDirection asks GetAdjacentUIElement BEFORE filtering,
@@ -81,11 +75,26 @@ namespace ModSettingsMenu.UI
         // applies only on the UIElement path, which is the path this screen has used since
         // 2026-08-24. Taking the look without the skip is also the better answer on its own terms: a
         // button that cannot be reached cannot explain why it does nothing.
+        //
+        // _iconNormal is captured HERE, lazily, rather than in Awake (there is no override any
+        // more). On this screen's own three-step open (Populate -> base.Activate -> RenderContent),
+        // RebuildRows runs from INSIDE Populate — before base.Activate makes the row's ancestor
+        // chain active — so a freshly cloned row's own Awake is deferred by Unity until later, well
+        // after Bind -> RefreshButtonStates -> SetDisabled has already run once on it. An Awake-only
+        // capture would then record whatever THIS call had already swapped icon.sprite to, not the
+        // pristine resting sprite — wrong for a button that starts disabled (the first row's ↑, the
+        // last row's ↓). Guarding the capture here instead of removing it there would not fix that:
+        // Awake still fires afterward and would unconditionally overwrite the correct value with the
+        // (by then swapped) one. Capturing only on the FIRST call, before this same call's own swap
+        // below, is what makes it always see the pristine sprite: nothing else ever writes
+        // icon.sprite before this method does.
         public void SetDisabled(bool disabled)
         {
             _disabled = disabled;
             if (icon == null)
                 return;
+            if (_iconNormal == null)
+                _iconNormal = icon.sprite;
             // A button with no disabled sprite keeps its own — the delete button, which is never
             // disabled anyway. Falling back to the resting sprite rather than blanking the renderer
             // means a missing assignment shows as "does not grey out", not as an invisible button.
@@ -94,11 +103,29 @@ namespace ModSettingsMenu.UI
                 icon.sprite = wanted;
         }
 
+        // Named after the object AND its role/row, not just the role: several buttons of the same
+        // role exist at once (one per row), so "ButtonMoveUp" alone would not say which is broken.
         public void Bind(ListDetailItem row)
         {
             _row = row;
             if (selectedMarker != null)
                 selectedMarker.SetActive(false);
+            else
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no selectedMarker assigned — it shows no focus frame on that column."
+                );
+            if (fieldBorder == null)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no fieldBorder assigned — its click collider stays a 1x1 box at the origin, live and hittable in the wrong place."
+                );
+            if (icon == null)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no icon assigned — it renders no glyph, and SetDisabled becomes a no-op (it never visually greys out)."
+                );
+            else if (role != Role.Delete && iconDisabled == null)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] ListRowButton ({role}, row {row.RowIndex}) has no iconDisabled assigned — it never visually greys out when disabled, even though it correctly refuses activation."
+                );
         }
 
         // ACTIVE only for a live instance — and the test is `activeInHierarchy`, NOT `activeSelf`.
@@ -159,20 +186,26 @@ namespace ModSettingsMenu.UI
             if (_disabled)
                 return;
             if (_row == null || _row.Owner == null)
+            {
+                // Worse than merely inert: CanBeActivated() is still true for an unbound button (it
+                // only checks _disabled), so CK plays its activation receipt and offers the SELECT
+                // hint for a press the mod is about to silently discard.
+                Debug.LogWarning($"[ModSettingsMenu] ListRowButton ({role}) activated while unbound — the press is discarded.");
                 return;
+            }
             switch (role)
             {
-                // Pass the role so the rebuild lands the selection back on THIS arrow: reordering is
-                // usually repeated, and walking the selection off the arrow after every press would
-                // cost a sideways step each time.
+                // Pass the role (not a literal) so the rebuild lands the selection back on THIS
+                // arrow: reordering is usually repeated, and walking the selection off the arrow
+                // after every press would cost a sideways step each time.
                 case Role.MoveUp:
-                    _row.Owner.MoveRow(_row.RowIndex, -1, Role.MoveUp);
+                    _row.Owner.MoveRow(_row, -1, role);
                     break;
                 case Role.MoveDown:
-                    _row.Owner.MoveRow(_row.RowIndex, +1, Role.MoveDown);
+                    _row.Owner.MoveRow(_row, +1, role);
                     break;
                 case Role.Delete:
-                    _row.Owner.RequestDelete(_row.RowIndex);
+                    _row.Owner.RequestDelete(_row);
                     break;
             }
         }
