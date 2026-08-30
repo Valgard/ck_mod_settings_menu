@@ -139,7 +139,33 @@ namespace ModSettingsMenu
         public void Init()
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
-            ModSettings.Section(this).Toggle(out ShowForeignConfigs, "showForeignConfigs", true).Build();
+            var section = ModSettings.Section(this).Toggle(out ShowForeignConfigs, "showForeignConfigs", true);
+            if (DevFlags.Is("TestFixtures"))
+                AddDeclaredListFixtures(section);
+            section.Build();
+        }
+
+        // Dev-only fixtures for the DECLARED list path — the counterpart to the raw ConfigFile
+        // fixtures in EarlyInit, which exercise discovery instead. Both are needed and neither
+        // stands in for the other: a discovered list is always FreeText (the heuristic cannot know
+        // an entry set is closed), so the two narrower levels are reachable through this path alone.
+        //
+        // Declared through the real public API, in this mod's own section, so what is being checked
+        // is the API a consumer actually calls rather than a SettingDef assembled by hand.
+        private static void AddDeclaredListFixtures(SectionBuilder section)
+        {
+            section.List(out _, "testListFreeText", new[] { "Alpha", "Beta", "Gamma" });
+            // Long enough that reordering has somewhere to travel, and that the arrow columns can be
+            // walked past the visible edge — the read-only fixture in EarlyInit covers a long list
+            // with no columns at all, which is a different chain.
+            section.List(out _, "testListOrderOnly", new[] { "First", "Second", "Third", "Fourth", "Fifth", "Sixth" }, ListEditing.OrderOnly);
+            // A single entry, because that is the shape whose navigation has no neighbour to wrap to
+            // and therefore takes ChainRowsForUIElementNavigation's empty-neighbour path.
+            section.List(out _, "testListOrderOnlySingle", new[] { "Alone" }, ListEditing.OrderOnly);
+            // Declared read-only, as opposed to the EarlyInit fixture that becomes read-only through
+            // a ViewOnly scope. Same rendering, opposite origin — and the one that proves a consumer
+            // can ask for it without any permission machinery.
+            section.List(out _, "testListReadOnly", new[] { "Alpha", "Beta", "Gamma" }, ListEditing.ReadOnly);
         }
 
         public void ModObjectLoaded(Object obj)

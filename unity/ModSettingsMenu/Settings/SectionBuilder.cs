@@ -137,6 +137,66 @@ namespace ModSettingsMenu.Settings
             return this;
         }
 
+        /// <summary>
+        /// An ordered list of string entries, shown as a compact preview row that drills into a
+        /// full-screen editor. <paramref name="editing"/> says what the player may do there; the
+        /// default lets them type, add, delete and reorder freely.
+        ///
+        /// The value is stored as ONE comma-separated string, not a list type: that is the format
+        /// <see cref="ListTokenizer"/> already defines for both directions, and the same one a
+        /// discovered foreign list arrives in — so the drill-in needs no notion of where a list
+        /// came from. Entries therefore cannot contain a comma; one typed into a row is stripped
+        /// on commit, and Join strips it here too, so a default declared with one is stored the
+        /// way it will read back rather than silently splitting in two.
+        ///
+        /// A blank entry is not a value: Tokenize drops it on read and Join drops it on write, so
+        /// the handle never yields "" and a row left empty in the editor simply does not persist.
+        /// </summary>
+        public SectionBuilder List(out SettingHandle<string[]> handle, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)
+        {
+            var entry = _file.Bind("Settings", key, ListTokenizer.Join(defaults), new ConfigDescription(key));
+            // Where the player cannot add entries, a default the consumer declares LATER would
+            // otherwise never reach them — their stored value predates it and they have no way to
+            // type it in. Merging at bind (rather than at render) keeps the file, the handle and
+            // the screen telling the same story from the first frame. Deliberately NOT done for
+            // FreeText: there, the same code would resurrect an entry the player deleted on
+            // purpose, every single launch.
+            if (editing != ListEditing.FreeText)
+                AppendMissingDefaults(entry, defaults);
+            handle = new SettingHandle<string[]>(entry, s => ListTokenizer.Tokenize(s).ToArray(), v => ListTokenizer.Join(v));
+            _section.Settings.Add(
+                new SettingDef
+                {
+                    Key = key,
+                    Kind = SettingKind.List,
+                    Term = Term(key),
+                    Entry = entry,
+                    Editing = editing,
+                }
+            );
+            return this;
+        }
+
+        // Appends every declared default the stored value does not already carry, in declaration
+        // order, and writes back only if something was actually missing — an unconditional write
+        // would touch the config file on every launch and, through CoreLib's SaveOnConfigSet, save
+        // it too. Order among the existing entries is the player's and is never rearranged.
+        private static void AppendMissingDefaults(ConfigEntry<string> entry, string[] defaults)
+        {
+            if (defaults == null)
+                return;
+            var tokens = ListTokenizer.Tokenize(entry.Value);
+            int before = tokens.Count;
+            foreach (var raw in defaults)
+            {
+                var token = ListTokenizer.Sanitize(raw);
+                if (token.Length > 0 && !tokens.Contains(token))
+                    tokens.Add(token);
+            }
+            if (tokens.Count != before)
+                entry.Value = ListTokenizer.Join(tokens);
+        }
+
         /// <summary>Marks the most-recently-declared setting as requiring a game restart to take effect.
         /// When such a setting is changed in the menu, leaving the Mod settings screen raises CK's own
         /// "restart to apply mod changes" prompt (Cancel/Yes → relaunch). Chain it right after the widget:
