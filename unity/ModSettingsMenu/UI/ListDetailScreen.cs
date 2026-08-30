@@ -100,8 +100,10 @@ namespace ModSettingsMenu.UI
             // DISCOVERED list edited down to nothing — ListKindStore keeps the List classification
             // after the value drops below the heuristic's threshold, and a Server-scoped entry then
             // reads ReadOnly at the title screen, where there is no player.
-            var pending = ListTokenizer.Tokenize(def?.Entry?.BoxedValue?.ToString() ?? "");
-            if (pending.Count == 0 && !ListAccess.CanAdd(def != null ? def.EffectiveEditing : ListEditing.ReadOnly))
+            // ListWidget.CanBeActivated asks the same question, so an unusable row does not offer
+            // itself in the first place. This stays the authority rather than belt-and-braces:
+            // Open() is public, and nothing stops another caller reaching it.
+            if (def == null || def.ListDetailWouldBeEmpty)
             {
                 Debug.LogWarning(
                     $"[ModSettingsMenu] List '{(def != null ? def.Key : "?")}' has no entries and its level offers no way to add one — not opening the drill-in, which would be an empty and unnavigable screen."
@@ -118,6 +120,20 @@ namespace ModSettingsMenu.UI
         public override void Activate()
         {
             Populate();
+            // Populate's own wiring bail-outs return before a single option is registered, and CK
+            // indexes menuOptions[selectedIndex] in Activate when rememberSelectedIndex is set (see
+            // Open for the full mechanism) — so a broken bundle would throw here rather than degrade
+            // to the "detail stays empty" those bail-outs promise. Open() covers the two data
+            // routes into an empty screen; this covers the ones inside this class.
+            //
+            // base.Activate() is SKIPPED rather than the menu popped: popping from inside Activate
+            // re-enters the menu stack mid-push, which is the same re-entrancy that orphaned the
+            // restart prompt's buttons. Escape still leaves, because that is handled a level up.
+            if (menuOptions.Count == 0)
+            {
+                Debug.LogWarning("[ModSettingsMenu] The list drill-in has no navigable options — leaving it inactive rather than activating an empty menu.");
+                return;
+            }
             base.Activate();
             RenderContent();
             _pending = null; // consumed by Populate (title + Value()) — clear so a stale def can't leak
@@ -758,7 +774,8 @@ namespace ModSettingsMenu.UI
         // SelectIndexInDirection (Pug.Other:342744) then takes the "nothing selected and this is not
         // a keyboard-first system" path, calls SelectOptionIndex(DefaultOptionIndex = 0) with no
         // count check, and dereferences menuOptions[0]. Only the INDEX path guards that
-        // (Pug.Other:342778); Activate does not, and neither do SkimLeft/SkimRight.
+        // (Pug.Other:342779, `if (menuOptions.Count <= 0) return false;`); Activate does not, and
+        // neither do SkimLeft/SkimRight.
         //
         // These two therefore close one of three routes into that fault, not all of it. Open()
         // refuses to show an empty list at all, which is what actually closes it — see the reasoning

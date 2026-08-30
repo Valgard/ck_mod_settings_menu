@@ -286,7 +286,16 @@ namespace ModSettingsMenu.Settings
             }
             else
             {
-                reconciled.AddRange(declaredTokens);
+                // Same second loop as above, without the stored-order pass that seeds it. The two
+                // branches differ ONLY in whether the player's order gets a say — not in how
+                // membership is built, and not in whether duplicates collapse. A bare AddRange here
+                // would keep them, contradicting the duplicate warning WarnAboutUnusableDefaults
+                // emits for exactly these levels.
+                foreach (var token in declaredTokens)
+                {
+                    if (!reconciled.Contains(token))
+                        reconciled.Add(token);
+                }
             }
             // Compared as TOKENS, not as the joined string: the two differ for a value a player
             // hand-formatted ("Alpha, Beta"), and rewriting that would change their file to say the
@@ -328,13 +337,18 @@ namespace ModSettingsMenu.Settings
                         + $"this mod's config will persist it with no further warning: {ex}"
                 );
             }
-            // Logged AFTER the write, so the log describes what happened rather than what was about
-            // to be attempted — the two used to contradict each other on a failed write.
-            if (dropped.Count > 0 && persisted)
+            // Logged AFTER the write so the wording can reflect what actually happened — but
+            // ALWAYS, including on the failure path. CoreLib assigns the field before it saves, so a
+            // failed write still means these entries are gone for this session, and the error above
+            // says the next successful save persists that silently. Withholding the list there would
+            // announce a pending deletion while hiding what is being deleted, in the one case where
+            // the file still holds it and someone could copy it back out.
+            if (dropped.Count > 0)
                 Debug.LogWarning(
                     $"[ModSettingsMenu] List '{key}' is declared {editing}, so its membership is the mod's: dropped {dropped.Count} stored "
                         + $"entr{(dropped.Count == 1 ? "y" : "ies")} it no longer declares ({string.Join(", ", dropped.ToArray())}). "
                         + "If this list used to be FreeText, or was hand-edited, those were the player's own."
+                        + (persisted ? "" : " The write above failed, so the file may still hold them until the next save.")
                 );
         }
 

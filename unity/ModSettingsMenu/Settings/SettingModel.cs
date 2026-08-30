@@ -159,6 +159,19 @@ namespace ModSettingsMenu.Settings
         /// every screen build, so ReadOnly is recomputed per open (a Server-scoped setting is locked
         /// at the title screen and editable in a session) and a snapshot would go stale.</summary>
         public ListEditing EffectiveEditing => ReadOnly ? ListEditing.ReadOnly : DeclaredEditing;
+
+        /// <summary>List only: the drill-in would have no rows AND no way to gain one, so opening it
+        /// can only produce an empty screen. Empty is not merely useless there — with no menu options
+        /// CK dereferences menuOptions[-1] in three separate places, one of them inside Activate()
+        /// before any key is pressed (see ListDetailScreen.Open).
+        ///
+        /// Lives here because two places need the same answer and must not drift: ListWidget, to stop
+        /// offering a row that does nothing, and ListDetailScreen.Open, to refuse the push. A second
+        /// copy of this condition is precisely the failure this branch has already paid for twice.</summary>
+        internal bool ListDetailWouldBeEmpty =>
+            Kind == SettingKind.List
+            && !ListAccess.CanAdd(EffectiveEditing)
+            && ListTokenizer.Tokenize(Entry != null && Entry.BoxedValue != null ? Entry.BoxedValue.ToString() : "").Count == 0;
     }
 
     /// <summary>

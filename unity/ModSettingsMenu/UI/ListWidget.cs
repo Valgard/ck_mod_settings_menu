@@ -107,6 +107,13 @@ namespace ModSettingsMenu.UI
             TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR); // start in the unselected grey
         }
 
+        // A row whose drill-in would be refused must not present itself as activatable: CK gates the
+        // menu-select SFX and the footer's select hint on this (MenuManager, and
+        // GetHelpButtonsToShow), so without it the player hears an activation, sees nothing happen,
+        // and the only explanation is in Player.log. The condition lives on SettingDef so this and
+        // ListDetailScreen.Open cannot answer it differently.
+        public override bool CanBeActivated() => base.CanBeActivated() && (_def == null || !_def.ListDetailWouldBeEmpty);
+
         public override void OnActivated()
         {
             base.OnActivated();
