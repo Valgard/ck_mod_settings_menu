@@ -179,6 +179,15 @@ namespace ModSettingsMenu
             // Duplicate defaults: both reconciliation branches must collapse them to the first, and
             // the declaration must say so in the log. The two branches disagreed about this once.
             section.List(out _, "testListReadOnlyDuplicate", new[] { "Alpha", "Beta", "Alpha" }, ListEditing.ReadOnly);
+            // The same duplicate at OrderOnly, which takes the OTHER reconciliation branch — the one
+            // that keeps the player's order and dedupes through the case-insensitive match. The
+            // ReadOnly fixture above cannot reach it.
+            section.List(out _, "testListOrderOnlyDuplicate", new[] { "Alpha", "Beta", "Alpha" }, ListEditing.OrderOnly);
+            // Reaches BindGuarded without needing a filesystem fault: binding one key twice with
+            // different types trips ConfigFile.Bind's unchecked cast. The Slider must be logged and
+            // left out, the Toggle and everything after must survive — and RequiresRestart() after a
+            // failed declaration must refuse rather than mark the setting before it.
+            section.Toggle(out _, "testDupKey", true).Slider(out _, "testDupKey", 0f, 10f, 5f, 1f).RequiresRestart();
         }
 
         public void ModObjectLoaded(Object obj)

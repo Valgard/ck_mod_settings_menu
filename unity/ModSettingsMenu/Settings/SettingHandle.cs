@@ -41,6 +41,13 @@ namespace ModSettingsMenu.Settings
         //
         // Deliberately not throwing on write: the failure is CoreLib's or the filesystem's, not the
         // consumer's, and a mod should not die in a setter because its config could not be created.
+        //
+        // NOT equivalent to a bound handle, in two ways a consumer could notice. It does not clamp
+        // (a real one routes writes through CoreLib's AcceptableValueRange/List, so `Value = 999` on
+        // a 0..10 slider reads back 999 here), and it raises no OnChanged, so a consumer that
+        // recomputes from that event never recomputes. Both are acceptable on a path that has
+        // already failed and is logged as such — the point is that the mod keeps running — but they
+        // are worth knowing before treating this handle as a drop-in.
         internal SettingHandle(T detachedDefault)
         {
             T value = detachedDefault;
