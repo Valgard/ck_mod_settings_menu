@@ -105,11 +105,20 @@ Adapting a vanilla `UISettings` prefab into a mod AssetBundle surfaced a series 
   wrap, which silently disables the text input's own capacity check entirely (mechanism
   and the general rule in `docs/ck/ui-framework.md` § "A text row in a menu").
 - **Core Keeper ships the `RESET_DEFAULTS` hint slot fully wired** (glyph plus the
-  localized `Menu/Reset` label) **but never uses it** — no vanilla code path returns
-  that `HelpButtonTypes` value. Its controller glyph sits on the same face-button
-  position as `openProfile`, which is why the reset poll binds Rewired action 223
-  (`OpenProfile`) rather than the more obviously-named `MenuSecondaryActivate` (221):
-  223 is the action actually reported by the button the glyph depicts.
+  localized `Menu/Reset` label) **and requests it in exactly one place** — the
+  control-mapping menu, through a `[SerializeField]` list rather than from code
+  (`ControlMappingMenu.prefab:2456-2457` → `Pug.ControlMapping:916-924`). No C# file
+  names the value, which is why this bullet used to call the slot unused; a grep over
+  the decompile cannot see a serialized list. Reusing it here is still correct — the
+  two screens are separate and `GetHelpButtonsToShow()` is per-menu — and the label
+  means what this menu does with it.
+- **The reset poll binds Rewired action 223 (`OpenProfile`)** rather than the more
+  obviously-named `MenuSecondaryActivate` (221): 223 is the action actually reported
+  by the button whose glyph the slot depicts. **Not** vanilla's own `ResetDefaults`
+  (300) — that one belongs to the `ControlMapperUI` category, whose maps serve the
+  Controls screen alone, whereas 223 is in `Menu`, the category that applies while any
+  menu is open (`docs/ck/ui-framework.md` § "Which input actions you can use inside a
+  menu").
 
 `docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info, Separator/Label) and out-of-scope items.
 
