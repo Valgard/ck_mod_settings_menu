@@ -609,6 +609,39 @@ read-only list's rows `ACTIVE` so they remain navigable for *reading*.
   of at the next selection change. A dependency-driven lock in this framework
   needs the same nudge on whatever row just became locked.
 
+### Nothing reaches a row that the player did not touch
+
+The lock has to appear **while the screen is open**, and today nothing can make
+that happen. A row is refreshed at exactly four places — on bind
+(`SettingWidget.cs`), on `OnParentMenuActivation`, after the player's *own*
+change, and after a section reset (`ModSettingsScreen.RefreshSection`) — and
+nothing polls: `ModSettingsScreen.Update` tests the reset key and returns. All
+four have one thing in common: they originate with the player or with the
+screen. Anything arriving from outside never reaches the row.
+
+**The load-bearing case is a permission change mid-session, not a value change.**
+Core Keeper's admin system runs independently of this mod — `NetworkCommand`
+carries `AddOrUpdateAdmin`, `RemoveAdmin` and `SetGuestMode` — so a player can be
+made an admin, or guest mode can be switched, while the options screen is open.
+`IsReadOnly` is evaluated once per `Discover()`, i.e. once per menu open, so rows
+stay locked that no longer are until the screen is closed and reopened. GMCM
+polls `adminPrivileges` and `guestMode` every frame for exactly this reason.
+
+**A value changing underneath is the same defect and the cheaper half.** A mod
+writing its own entry from gameplay code is possible — `SettingHandle.Value` has
+a setter — though no example is at hand in the installed set. It is cheap to fix
+because `SettingDef.Entry` is a live handle: the data is already right, only the
+rendered text is stale, so a `Refresh()` is enough and CoreLib supplies the
+trigger ready-made in `ConfigEntryBase.SettingChanged`, subscribable per entry
+for as long as the row lives.
+
+**The two halves are not equally cheap.** There is no `SettingChanged` for a lock:
+`adminPrivileges` is a property over a component and `guestMode` a field in a
+singleton, and nothing announces a write to either — which is why GMCM polls.
+Whether MSM must poll as well, or whether CK offers an event nobody has looked
+for, is unverified. *To check:* search `PugMod.SDK.Runtime` and `Pug.Other` for
+connect/permission events before assuming a poll is the only option.
+
 ## Escape does not cancel an edit
 
 Found 2026-08-23 by the `pr-review-toolkit:silent-failure-hunter` gate while
@@ -644,6 +677,115 @@ first, which also clears `activeInputField` and thereby disarms CK's own `if
 result handler, so only the call's *source* can separate "the player just typed
 this" from "the world just wiped it" — see that patch's comment.
 
+## A discovered entry's localisation term
+
+A discovered entry is rendered under its **raw key**:
+`ForeignConfigDiscovery` sets `Term = key`, so there is nothing for the lookup to
+find. That is a gap in one value, not in the mechanism — the two-stage resolution
+has been in place all along, `Loc.T(_def.Term, _def.Key)` for the label and
+`Loc.T(_def.Term + "/" + tok, tok)` per choice value.
+
+**MSM's own schema stays the default**; General Mod Config Menu's published
+convention becomes a second stage in front of the raw-text fallback:
+
+| Stage | Term | For whom |
+|---|---|---|
+| 1 | `<ModId>-Config/<key>` (`SectionBuilder`) | an author who targets MSM |
+| 2 | `<path>_<file>_<section>/<key>` | an author who already supports GMCM |
+| 3 | the raw key | an author who ships neither |
+
+Nobody who is correct today gains a burden, and a mod carrying GMCM terms becomes
+readable instead of having its existing translations ignored.
+
+- **It does need a small API change.** `Loc.T(term, fallback)` knows one term;
+  the chain needs a variant that tries several in order.
+  `API.Localization.GetLocalizedTerm` returns `null` for an unregistered term, so
+  the chain is a `??` sequence. (`I2.Loc` has a second `GetTranslation` that
+  returns `string.Empty` instead — it is the instance method on `LanguageSource`
+  and not the one in this path. Confusing the two breaks the chain silently.)
+- **One trap.** GMCM's value schema moves the key **in front of** the slash
+  (`…_Section_Key/Value`) where MSM's appends it (`…/key/token`). A second field
+  on `SettingDef` — the base for per-option terms, `null` meaning "use `Term`" —
+  keeps them apart without touching how registered consumers behave.
+- **Not included:** the hover description GMCM reads from `<key>Desc`; see
+  § "A description per entry" below.
+
+## `AcceptableValueList<string>` should render as a Choice
+
+A discovered entry constrained by anything other than a numeric range is routed
+to a read-only `Info` row — while `SectionBuilder` binds every declared `Choice`
+as exactly `AcceptableValueList<string>`. MSM therefore produces the shape its own
+discovery classifies as unrenderable, and for that shape the type parameter is
+known, so no reflection and no parsing is needed:
+
+```csharp
+if (av is AcceptableValueList<string> l) { d.Kind = SettingKind.Choice; d.Tokens = l.AcceptableValues; return d; }
+```
+
+- **Fallback for a foreign `T`:** parse `AcceptableValueBase.ToDescriptionString()`,
+  which every implementation formats as `"# Acceptable values: a, b, c"`. That is
+  the only sandbox-legal route — `AcceptableValues` is generic and
+  `System.Reflection.*` is denied — and it is what GMCM does.
+- **Worth it on its own:** it makes MSM's own declared settings legible to MSM's
+  own discovery path.
+
+## Group a mod's rows by its `.cfg`'s own sections
+
+Everything binds into the CoreLib section `"Settings"` today, so a discovered mod
+renders as one flat list. GMCM groups by the file's own sections. For a mod with
+twenty values that is the difference between a list and a structure.
+
+- **It rides on the planned Separator/Label widget** (§ "Planned widgets" #3): a
+  section header *is* that widget's `.Label(key)` — full width, no value column,
+  not interactive. So this point carries no Editor work of its own, and it
+  becomes the first real consumer of a widget that would otherwise ship
+  unexercised. Build the widget first; if a grouped header cannot be built from
+  it, the widget's spec is incomplete, and that is better learned here.
+- **Deliberately not collapsible.** Core Keeper has no expand/collapse idiom in
+  its menu UI at all — a search for `Expand`, `Collapse`, `Foldout`,
+  `SwitchExpandState`, `isExpanded` turns up only ECS collider pooling and two
+  inspector attributes. Vanilla uses tabs (`WorldSettingsTab`), sub-menus
+  swapped by `SetActive`, and scrolling. GMCM's accordion is its own invention.
+- **Loc: the same chain as above**, one level up — MSM's own schema, then GMCM's
+  `<path>_<file>/<section>`, then raw. No separate scheme for headers.
+- **Open:** whether a header applies to a *registered* mod at all. A consumer
+  binds everything into `"Settings"`, so there would be exactly one header
+  repeating the box heading. Either grouping stays limited to discovered mods, or
+  `SectionBuilder` gains a way to name sections.
+
+## A master switch with sub-values
+
+GMCM's `CombindConfigPage` is a public API a consuming mod registers against: a
+`bool` entry plus named sub-values bound underneath it, rendered as an indented
+group the switch collapses. MSM has no equivalent.
+
+- **What vanilla offers, and what it does not.**
+  `RadicalMenuOption_Toggle.relatedOption` is exactly the API shape — a
+  serialized reference rather than a callback — but propagates only `INACTIVE`,
+  so the dependent row *disappears*. The shape transfers, the behaviour must not;
+  see § "Locked settings".
+- **Open:** is this a `SectionBuilder` declaration (`.EnabledWhen(...)`, already
+  an open question there) or a group API like GMCM's? The difference is that
+  GMCM's can also *bind* the sub-values, not merely lock them.
+- **Depends on** the grouping point above for the indentation.
+
+## A description per entry — undecided, and deferred
+
+GMCM reads a description from the term `<key>Desc` and shows it as hover text.
+MSM shows none. **Neither whether this happens nor in what form is decided**, and
+the form is the harder half:
+
+- **Hover is controller-hostile.** This screen is controller-first; a text that
+  appears only under a mouse pointer never reaches half the audience. Copying
+  GMCM's solution one-for-one would be copying it for one input device.
+- **Alternatives, each with a price:** a line under the selected row (costs
+  space, changes row height per selection); the section's existing `Hint`,
+  repurposed (collides with its current meaning); a dedicated footer area (Editor
+  work, competes with the hint bar).
+- **Deferred, not rejected.** Worth discussing once the term chain above exists —
+  without a resolved term there is no text to show — and once it is clear whether
+  the grouping point rebuilds the screen anyway.
+
 ## A consumer-declared access level, for every widget
 
 `SettingDef.ReadOnly` exists and works, and **only the discovery path can set
@@ -665,8 +807,8 @@ giving exactly one of them an access level would be the wrong shape. Note that
 `ListEditing.ReadOnly` is a different thing and stays — it says "this list is
 display-only by design", where a scope says "not by you, not right now".
 
-Two clean-ups come with it, and are the reason this is its own point rather than
-a parameter:
+Three clean-ups come with it, and are the reason this is its own point rather
+than a parameter:
 
 - **`IsReadOnly` sits in the discovery path** as a `private static`. If the
   declared path uses it, it belongs somewhere both can reach.
@@ -676,6 +818,242 @@ a parameter:
   through `.RequiresRestart()` instead. Introduce scope on the declared path and
   the two meet: one of them has to win, or a consumer can state both and
   contradict itself.
+- **`SettingDef.ReadOnly` carries two unrelated claims** (`SettingModel.cs`):
+  "locked by permission right now" and "no editable widget exists for this
+  value's shape at all". Only the first is a lock worth showing a player, and
+  the § "Locked settings" feedback needs to tell them apart. Split it here,
+  where the vocabulary for the first one arrives.
+
+**The default is `Server`, and nobody chose it.** `SectionBuilder` binds without
+a `ConfigScope`, CoreLib falls back to `ConfigScope.Empty`, and that is `new()` —
+whose constructor defaults to `ConfigAccessLevel.Server`. Every setting declared
+through MSM is therefore formally server-scoped, MSM's own "show detected mod
+settings" toggle included. It is harmless only because nothing reads the level on
+the declared path today; the moment something does, a server would be entitled to
+decide whether a player's menu lists detected mods.
+
+Two consequences. The API needs a **deliberately chosen** default — `Client` is
+the honest one for a framework whose consumers are HUD and UI mods — and MSM's
+own toggle should state it rather than inherit it. The overload that takes a
+`ConfigAccessLevel` directly already defaults to `Client`, so switching to it may
+be the whole fix; the two entry points into the same structure disagree, which is
+worth knowing before writing either.
+
+**`Admin` belongs in the declaration too, and it pays off before any sync.**
+`IsReadOnly` already delegates to `Changeable()`, which for `Admin` asks
+`!guestMode && adminPrivileges > 0` — a *discovered* admin entry is already
+locked for a non-admin today. What is missing is only that a consumer can say the
+same. Without it, a foreign mod can express a level an integrated one cannot.
+
+The distinction only bites with a joined player: offline sessions report
+`int.MaxValue` and the host holds level 2, so `Server` and `Admin` behave
+identically in singleplayer and while hosting. A permission feature therefore
+cannot be tested alone. Details in `docs/ck/multiplayer-and-server.md`.
+
+## Server sync — one point, not three
+
+MSM reads the server's rules in full already (`ForeignConfigDiscovery.IsReadOnly`
+→ CoreLib's `ConfigScope.Changeable()`) and cannot send a change to the server.
+A change to a server-scoped value therefore takes effect locally and nowhere
+else. **That it should be built is settled** — MSM is meant to be able to replace
+General Mod Config Menu, and that is impossible without it. What is open is the
+how, below.
+
+**It is one point because its parts do not admit an order in which they make
+sense separately.** The call order (send → await → write) is not an addition to
+the transport but its shape: build the transport writing locally first, and the
+order has to dismantle that afterwards. `AdminOnly` is technically separable —
+the sync would run without it — but a server-authoritative config system the
+operator cannot tighten is not parity, so it belongs in.
+
+**Two prerequisites before any of it.** The access level above, because without a
+deliberately chosen scope default the sync inherits one from a constructor; and
+an **ADR**, because this contradicts ADR-001 in as many words (*"no server-sync
+reimplementation"*).
+
+**The point is large, but hardly because of the code.** Nearly every mechanism
+exists: transport, permission evaluation, change notification, disk access,
+serialisation, clamping, even a precedent for chunking a large message. See
+`docs/ck/multiplayer-and-server.md` for the RPC hash, the topology test and the
+permission substrate, and `docs/ck/persistence.md` for CoreLib's config
+semantics. What MSM adds is almost no mechanism and almost only policy — which
+key, which direction, when, who wins — and that is where the cost sits: each of
+those can be decided wrongly and then stay wrongly decided in silence.
+
+### Two directions, and the second is the one that gets forgotten
+
+| Direction | Trigger | Runs |
+|---|---|---|
+| Send a change, apply the verdict | the player edits something | only while the menu is open |
+| **Fetch everything (initial sync)** | a connection exists | **independent of the menu** |
+
+Without the second, the write rule below contradicts itself: on entering a world
+the client has changed nothing, so its memory would still hold its own
+preferences and only the entries the player touches would come from the server.
+
+GMCM has an initial sync — `RequestSyncAll()` on an edge of
+`Manager.networking.isConnected` — but it lives in `ModConfigMenu.Update`, i.e.
+**only while the menu is open**. For a display-only model that suffices: values
+are needed when they are looked at. Here they are meant to *apply* whether anyone
+is looking or not, so the initial sync has to leave the menu — and with it, MSM
+writes to memory outside the menu, which GMCM never does on a client at all.
+
+- **To check before deciding:** how MSM recognises "connected" and "session
+  ended". GMCM polls; `API.Client.OnWorldCreated` exists and GMCM uses it
+  elsewhere. **Whether a suitable pair of events exists is unverified** — that
+  GMCM polls proves nothing. *To check:* search `PugMod.SDK.Runtime` and
+  `Pug.Other`. It is the same pair that triggers the `Reload()` below: one
+  decision, not two.
+
+### Send first, then write — and one send method for both
+
+For a server-scoped value the order is **send → await → write**, not write
+locally and roll back on refusal. Whoever writes first creates a state that
+should never exist — a value in effect locally that the server does not know —
+and has to catch it again afterwards. Whoever asks first never has it: either the
+server accepts and it is written, or it refuses and nothing happened. There is
+nothing to roll back because nothing was written.
+
+**The send method is a façade, so call sites do not each decide where a value
+goes.** It asks two questions, not one — the scope, and whether anyone else is
+the authority. The second is `Manager.ecs.ServerWorld != null`: singleplayer and
+hosting both own the world and have nobody to ask, so they are one case, not two
+(`docs/ck/multiplayer-and-server.md`).
+
+| Scope | `ServerWorld` | What happens |
+|---|---|---|
+| `ViewOnly` | either | never written; refused without touching the network |
+| `Client` | either | written locally, disk and memory |
+| `Server` / `Admin` | ✓ | written locally and directly — this process *is* the server |
+| `Server` / `Admin` | ✗ | sent, awaited, and **only memory** is set |
+
+**That last row separates disk from memory on purpose.** The player's own `.cfg`
+stays their preference; the in-memory entry carries what is in effect, and while
+they are on someone else's server the memory belongs to the server. GMCM makes
+the same separation, only visibly, through two value columns; here it stays
+invisible and the row shows the memory value. Coming back is cheap:
+`ConfigFile.Reload()` re-reads the file, so leaving a session restores the
+player's own settings without MSM having buffered anything — the disk was never
+touched.
+
+**This is the write-side mirror of a rule that already exists.**
+`ForeignConfigDiscovery.IsReadOnly` makes exactly the same three-way distinction
+on the read side, title-screen case included. The access-level point pulls
+`IsReadOnly` out of the discovery path anyway; the façade would be its second
+caller.
+
+- **Open:** what the row shows while an answer is outstanding. GMCM uses a yellow
+  icon; going inert for the duration is equally possible. Something must be
+  visible — a row that answers a keypress a network round later reads as broken.
+  A locally answered value replies in the same frame, so the waiting state must
+  not flash there at all.
+- **Open:** what happens when no answer arrives. A timeout needs its own
+  decision, or the row hangs indefinitely.
+- **Open:** a value the server accepts is then in memory but not on the player's
+  disk, so it is gone at the next singleplayer start. That is consistent, but it
+  should surprise nobody.
+- **The refusal itself is § "Locked settings"** — the same feedback, a different
+  trigger.
+- **Collision rule: an incoming value beats your pending one.** If another player
+  changes the same entry while you wait, the server wins. GMCM decides it the
+  same way (`OnReceiveSync` drops the pending change) but does it **silently** —
+  the player's input vanishes without a word. Agree with the rule, not with the
+  silence.
+
+**Checked and rejected: send client-scoped values too and have the server echo
+them back.** It looks like the same unification and costs more. The branch does
+not disappear, it moves to the server — which would have to *not* apply such a
+value, since applying it would overwrite **its own** copy of that mod's setting.
+It spends a network round on a purely local setting, so a HUD toggle would visibly
+hang on a poor connection. Chunking comes along, so editing a local exclusion list
+would send dozens of RPCs for nothing. And with no connection there is no echo
+partner — the menu is reachable from the title screen, so the local path has to
+exist regardless, which is exactly where the unification was supposed to pay off.
+
+### The key on the wire must not be a list position
+
+Vanilla identifies everything that crosses the wire **at compile time**, and
+differently per direction: a `NetworkCommand` enum member for client → server, a
+`[GhostField]` name for server → client. There is no generic key→value channel
+anywhere — `guestMode` and `simulationDisabled` are fields, not entries. For a
+foreign mod's config entry neither an enum member nor a field can be declared, so
+vanilla has no answer here because it never has the problem.
+
+**GMCM's answer is the list position, and it does not hold.** Its id space is
+built by enumeration — `AllConfigFilesReadOnly` × `Entries.Values`, filtered on
+`ShouldSync` — and the index *is* the id. Only that number travels;
+`GetFullName()` is logged, never compared. A **client-only mod** with config
+entries — an ordinary thing to have — appears in the client's list and not the
+server's and shifts every subsequent id. The server then writes the value into
+the wrong entry without complaint, because an admin skips the scope check anyway;
+an id past the end throws `IndexOutOfRangeException` inside the server system,
+since the lookup is unchecked.
+
+**For dynamic identity CK uses hashes**, just not in RPC payloads —
+`StableTypeHash` per type, `TypeHash.CombineFNV1A64` for the RPC collection. A
+hash key is therefore the house pattern for this case, and **MSM already has the
+string**: `ListKindStore` addresses foreign entries as `"ModId/Section/Key"`.
+
+| | GMCM | proposed |
+|---|---|---|
+| Key | list position (`int`) | `FNV1A64` over `"ModId/Section/Key"` (`ulong`, 8 bytes) |
+| Resolution | unchecked indexing | dictionary lookup |
+| Unknown key | wrong entry, or an exception | refuse, and say which |
+| Differing mod sets | shifts every id silently | no effect |
+
+The gain is diagnosability more than robustness: "the other side does not know
+this entry" becomes an answer that can be named instead of a silent miswrite —
+and that case is the ordinary one, not the exotic one.
+
+- **To check before building the key:** "CK hashes *types*, not entries" is an
+  argument from absence; nobody searched systematically for a string-keyed hash
+  utility. If one exists it is preferable to a hand-rolled `FNV1A64`. *To check:*
+  grep for `FNV1A64`, `Hash128`, `StableTypeHash` and their string overloads.
+
+**Delivery to an open row is the subscription from § "Locked settings", not the
+id space.** GMCM needs a detour there because its menu is a singleton whose rows
+live permanently: a received value lands in a list, is drained in the menu's own
+`Update`, and is mapped to a row through a `Dictionary<ConfigEntryBase, …>`. MSM
+rebuilds its rows **per open**, so there is no row to update while the screen is
+closed, and on opening the current value is there anyway. Delivery is needed only
+for the one case where the screen is open, and a per-entry subscription covers
+it. No mailbox, no mapper, no id.
+
+**The ghost route is more expensive despite being vanilla's own.** Replicating
+state through a ghost component instead of RPCs would move the ghost collection
+hash **on top of** the RPC hash. Closer to vanilla, twice the protocol cost.
+
+### `AdminOnly` — the operator's switch
+
+GMCM binds an `AdminOnly` entry at `ConfigAccessLevel.Admin`, and the **server**
+evaluates it when judging a change: with it set, server-scoped values may be
+changed by admins only, no longer by every non-guest. That is why it has no place
+without the transport — it is not read locally but on the other side.
+
+**It is set through the ordinary path; there is no special mechanism.** GMCM's
+own config file appears as a page in its menu like any other, the entry is a row
+in it, an admin toggles it, and it travels the same sync as every other value. On
+a dedicated server the accepting write is saved, so the switch survives a
+restart. Arriving at the clients it is the one entry with a special case in the
+receive path: it re-evaluates every row's permission immediately.
+
+**It protects itself, so there is no lock-out.** The setting that governs who may
+change server settings is itself an `Admin`-scoped setting — a non-admin cannot
+toggle it — and `Admin` entries are not subject to the `adminOnly` branch at all,
+which tests `accessLevel == Server`. Even with the switch set, the switch stays
+reachable for admins.
+
+- **Effort:** small once the transport stands, and "small" here is not an
+  estimate: one `Bind(..., ConfigAccessLevel.Admin)` in MSM's own section plus one
+  `&& !adminOnly` in the server's accept check.
+- **Open:** whether MSM brings the switch itself or whether it belongs to
+  whatever carries the sync — if that turns out to be CoreLib, the switch
+  probably belongs there too.
+- **To check before building on it:** two pieces above come from a subagent
+  report and were not looked up first-hand — `PugSimulationSystemBase`/`isServer`
+  and, for serialising values, `Get`/`SetSerializedValue` with
+  `TomlTypeConverter`. Both are in use in GMCM and in MSM but were not opened in
+  the decompile or in CoreLib's source.
 
 ## Small fixes
 
@@ -744,3 +1122,15 @@ a parameter:
   is left-aligned, which it is — change that and the clamp silently stops short
   of the text end or overshoots it. `_text.dimensions.xMin + _text.dimensions.width
   - _fieldWidth` holds either way. Found by the review gate 2026-08-26.
+- **Prove that the reset poll's action id is the one that works.** The poll binds
+  Rewired action 223 (`OpenProfile`) rather than vanilla's own `ResetDefaults`
+  (300), and the reasoning is on paper rather than measured: 300 belongs to the
+  `ControlMapperUI` category and 223 to `Menu`, the category that applies while
+  any menu is open (`docs/ck/ui-framework.md`). What is established is that the
+  categories differ — **not** that a poll on 300 stays silent here. The
+  counter-test is cheap: poll 300 in this screen once and press the button.
+  Worth doing because `Manager.input.GetButtonDown(int)` returns **`false`
+  silently** for an action in no active map, so a wrong choice never surfaces as
+  an error, only as "the button does nothing" — the same combination that
+  already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
+  not in code.
