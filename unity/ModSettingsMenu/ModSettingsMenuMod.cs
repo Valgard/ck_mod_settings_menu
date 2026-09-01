@@ -40,14 +40,14 @@ namespace ModSettingsMenu
 
             // Dev-only test fixtures for exercising the discovery path (the list-widget drill-in, and
             // the Choice shapes further down) against something other than a real foreign mod's
-            // config — raw CoreLib ConfigFiles created OUTSIDE
-            // ConfigStore.ForMod, so ConfigStore.IsOwn doesn't recognize it and
-            // ForeignConfigDiscovery treats it exactly like a real 3rd-party mod's list setting.
+            // config — two raw CoreLib ConfigFiles created OUTSIDE ConfigStore.ForMod, so
+            // ConfigStore.IsOwn doesn't recognize them and ForeignConfigDiscovery treats them exactly
+            // like a real 3rd-party mod's settings.
             // Gated on DevFlags.Is("TestFixtures") (see DevFlags.generated.cs, regenerated from
             // the MOD_DEV_FLAGS env var by CLIBuildHelper.Build on every build) — OFF by default,
             // so a normal build never ships these into a real player's settings screen; opt in
-            // locally with `MOD_DEV_FLAGS=TestFixtures ../utils/build.sh` while iterating on this
-            // widget. See .envrc.example.
+            // locally with `MOD_DEV_FLAGS=TestFixtures ../utils/build.sh` while iterating on these
+            // widgets. What each fixture is for is in docs/manual-tests.md; see .envrc.example.
             if (DevFlags.Is("TestFixtures"))
             {
                 // Client scope (not CoreLib's Server default) so these stay editable at the title
@@ -136,9 +136,11 @@ namespace ModSettingsMenu
                 );
 
                 // Discovered Choice fixtures, in a file of their own so the two concerns stay legible
-                // as two "(detected)" sections while clicking through. No installed third-party mod
-                // binds an AcceptableValueList at all — MSM is the only user of one on this machine —
-                // so without these there is nothing to see the discovered Choice path against.
+                // as two "(detected)" sections while clicking through. Every AcceptableValueList on
+                // this machine lives in a config file MSM itself created — its consumers' own Choice
+                // widgets bind one each — and ConfigStore.IsOwn excludes exactly those from discovery.
+                // So without these there is nothing to see the discovered Choice path against, and that
+                // stays true for as long as no third-party mod binds one.
                 var choiceFile = new ConfigFile("TestChoiceFixtures/config.cfg", saveOnInit: true, info);
                 // The exact path: the type argument is string, so the values are read straight off the
                 // constraint.
@@ -149,14 +151,20 @@ namespace ModSettingsMenu
                     new ConfigDescription("A string choice.", new AcceptableValueList<string>("Low", "Medium", "High")),
                     clientScope
                 );
-                // Still the exact path, with a token containing the ", " the description format joins
-                // on — which is precisely what the reconstruction below cannot survive, and what this
-                // one is indifferent to. Also checks the value is stored raw, not TOML-escaped.
+                // Still the exact path, with two tokens the reconstruction could not handle and this
+                // branch is indifferent to. The comma is the separator the description format joins on.
+                // The quote is the one that discriminates the read paths: it is in Escape's set, so
+                // GetSerializedValue() would render it `Say \"hi\"` — the row would display backslashes
+                // and its own value would stop matching. Without it nothing here could tell the new read
+                // from the old one, since Escape leaves every other character in these tokens alone.
                 choiceFile.Bind(
                     "Settings",
                     "ChoiceComma",
                     "Alpha",
-                    new ConfigDescription("A string choice whose tokens contain commas.", new AcceptableValueList<string>("Alpha", "Beta, and more")),
+                    new ConfigDescription(
+                        "A string choice whose tokens contain a comma and a quote.",
+                        new AcceptableValueList<string>("Alpha", "Beta, and more", "Say \"hi\"")
+                    ),
                     clientScope
                 );
                 // The reconstruction path: int is not reachable through the exact branch, so these
@@ -170,13 +178,65 @@ namespace ModSettingsMenu
                 );
                 // An enum Choice carries no constraint (AcceptableValueList cannot hold one — its T is
                 // IEquatable, which no enum satisfies) and reaches Choice one case earlier, from its
-                // member names. Here to catch a regression in the read/write path the string cases
-                // above now share with it, which used to be enum-only.
+                // member names. Here to catch a regression in the member-name round trip: the read the
+                // string cases now share with it, which used to be enum-only, and the converted write.
+                // NOT the enum-only guard one line further on — this value always sits on a member
+                // name, so it never reaches it. ChoiceFlags below is what does.
                 choiceFile.Bind(
                     "Settings",
                     "ChoiceEnum",
                     TestChoice.Second,
                     new ConfigDescription("An enum choice, to check the member-name path still round-trips."),
+                    clientScope
+                );
+                // One acceptable value: the cycle has nowhere to go. The wrap arithmetic must survive a
+                // length of 1, and a write that changes nothing must not raise the restart flag.
+                // testListOrderOnlySingle covers the same shape on the list path.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceSingle",
+                    "Only",
+                    new ConfigDescription("A one-option choice.", new AcceptableValueList<string>("Only")),
+                    clientScope
+                );
+                // The read-only Choice, ViewOnly for the same reason LongReadOnly is: the one access
+                // level that reads read-only in every session. Worth its own fixture because a locked
+                // row takes a different path through the widget (MakeValueReadOnly, the early return in
+                // Adjust) while still having to DISPLAY the right token — and the display line is one of
+                // the two this change rewrote. It is also the shape a real foreign Choice usually has
+                // here: ConfigScope defaults to Server, which IsReadOnly treats as locked at the title
+                // screen, and the title screen is where this walk is easiest to run.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceReadOnly",
+                    "Medium",
+                    new ConfigDescription("A read-only copy of ChoiceStrings.", new AcceptableValueList<string>("Low", "Medium", "High")),
+                    new ConfigScope(ConfigAccessLevel.ViewOnly)
+                );
+                // The [Flags] combination the Choice case's `break` exists for. ChoiceEnum always sits ON
+                // a member name and so never reaches that guard; a combination has no member name, and
+                // Enum.GetNames never contains one, so idx is always -1 here. Without the guard one
+                // keypress would clobber "Alpha, Beta" down to "Alpha" in a foreign mod's own file.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceFlags",
+                    TestFlags.Alpha | TestFlags.Beta,
+                    new ConfigDescription("A [Flags] enum holding a combination; cycling must leave it untouched."),
+                    clientScope
+                );
+                // The reconstruction against a decimal separator, using a REAL constraint — so what it
+                // reports is how this machine actually behaves. Invariant culture: a normal three-option
+                // Choice. Comma-decimal culture: the description splits into fragments and this has to
+                // fall back to a read-only Info row rather than offer a cycle of halves. Either outcome
+                // is worth knowing; the deterministic version of the same trap is RefuseSplitValue below.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceFloats",
+                    1.5f,
+                    new ConfigDescription(
+                        "A float choice; shows how this machine's culture renders a decimal.",
+                        new AcceptableValueList<float>(0.5f, 1.5f, 2.5f)
+                    ),
                     clientScope
                 );
                 // The negative control: a constraint on a type no case handles, so nothing may promote
@@ -188,16 +248,107 @@ namespace ModSettingsMenu
                     new ConfigDescription("A range of an unhandled numeric type; must stay a read-only Info row.", new AcceptableValueRange<double>(0.0, 10.0)),
                     clientScope
                 );
+
+                // Four rejections that CoreLib's own constraint classes cannot produce — its ctor
+                // refuses an empty set, no supported T renders a blank token, and its Clamp corrects an
+                // off-set value at bind. Each needs DescriptionOnlyValues (below), which is also the
+                // "a third party's own subclass, judged by whether its description matches" case
+                // TryTokens documents and nothing else exercises. All four must stay read-only Info
+                // rows AND log one line each naming why.
+                choiceFile.Bind(
+                    "Settings",
+                    "RefuseEmptyToken",
+                    "Alpha",
+                    new ConfigDescription(
+                        "A value set with a blank entry; must stay read-only.",
+                        new DescriptionOnlyValues(typeof(string), "# Acceptable values: Alpha, , Gamma")
+                    ),
+                    clientScope
+                );
+                choiceFile.Bind(
+                    "Settings",
+                    "RefuseUnconvertible",
+                    1,
+                    new ConfigDescription(
+                        "A value set with a token that is not an int; must stay read-only.",
+                        new DescriptionOnlyValues(typeof(int), "# Acceptable values: 1, two, 3")
+                    ),
+                    clientScope
+                );
+                choiceFile.Bind(
+                    "Settings",
+                    "RefuseInvalid",
+                    "Alpha",
+                    new ConfigDescription(
+                        "A value set whose own constraint rejects the values it prints; must stay read-only.",
+                        new DescriptionOnlyValues(typeof(string), "# Acceptable values: Alpha, Beta", valid: false)
+                    ),
+                    clientScope
+                );
+                // The culture trap, reproduced deterministically: this is verbatim what a comma-decimal
+                // machine's ToDescriptionString() produces for a set of (0.5, 5.0, 0.0). Every fragment
+                // converts and every fragment is valid here, so only the set-level check catches it —
+                // the entry's own value is not among them.
+                choiceFile.Bind(
+                    "Settings",
+                    "RefuseSplitValue",
+                    0.5,
+                    new ConfigDescription(
+                        "A value set a decimal separator split into fragments; must stay read-only.",
+                        new DescriptionOnlyValues(typeof(double), "# Acceptable values: 0,5, 5, 0")
+                    ),
+                    clientScope
+                );
             }
         }
 
         /// <summary>Dev-only, for the ChoiceEnum fixture above. Three members so cycling has somewhere
-        /// to wrap, and deliberately not alphabetical so a sort would be visible.</summary>
+        /// to wrap, in an order no sort would produce — a Choice cycles in declaration order, and a
+        /// stray sort would be invisible against alphabetical members.</summary>
         private enum TestChoice
         {
-            First,
             Second,
+            First,
             Third,
+        }
+
+        /// <summary>Dev-only, for the ChoiceFlags fixture. A combination has no member name, which is
+        /// the state the Choice case's `break` exists for.</summary>
+        [System.Flags]
+        private enum TestFlags
+        {
+            None = 0,
+            Alpha = 1,
+            Beta = 2,
+            Gamma = 4,
+        }
+
+        /// <summary>Dev-only. The only way to reach TryTokens' rejections, because CoreLib's own
+        /// constraints cannot produce them: AcceptableValueList's constructor refuses an empty set, no
+        /// supported T renders a blank or unparseable token, and its Clamp corrects an off-set value at
+        /// bind — the ctor's own BoxedValue assignment runs it. Clamp is the identity here, so a bound
+        /// value survives exactly as written and the set-level check has something to catch.
+        ///
+        /// It doubles as the case TryTokens reasons about but nothing else exercises: a third party's
+        /// own AcceptableValueBase subclass, judged solely by whether its description happens to match
+        /// the prefix this file looks for.</summary>
+        private sealed class DescriptionOnlyValues : AcceptableValueBase
+        {
+            private readonly string _line;
+            private readonly bool _valid;
+
+            public DescriptionOnlyValues(System.Type valueType, string line, bool valid = true)
+                : base(valueType)
+            {
+                _line = line;
+                _valid = valid;
+            }
+
+            public override object Clamp(object value) => value;
+
+            public override bool IsValid(object value) => _valid;
+
+            public override string ToDescriptionString() => _line;
         }
 
         public void Init()
