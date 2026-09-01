@@ -1,7 +1,6 @@
 # List widget presentation: compact row + drill-in detail screen
 
-- Status: accepted; its list-detection rule superseded by
-  [ADR-006](006-list-detection-heuristic.md) (2026-08-23)
+- Status: accepted; its list-detection rule superseded by [ADR-006](006-list-detection-heuristic.md) (2026-08-23)
 - Date: 2026-07-23
 
 ## Context and Problem Statement

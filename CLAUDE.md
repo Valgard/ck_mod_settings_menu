@@ -1,16 +1,28 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in
+this repository.
 
 ## What this repo is
 
-A **framework** Core Keeper mod. Other mods register their settings into a shared Options-menu screen: a consumer calls `ModSettings.Section(this)` in its `IMod.Init` (or `EarlyInit` for bake-time settings), chains a few widget declarations, and Mod Settings Menu renders them as a labelled box under **Options → Mod settings** and persists every value through a CoreLib `ConfigFile`. The consumer writes no UI, prefab, or `System.IO` code.
+A **framework** Core Keeper mod. Other mods register their settings into a shared
+Options-menu screen: a consumer calls `ModSettings.Section(this)` in its `IMod.Init` (or
+`EarlyInit` for bake-time settings), chains a few widget declarations, and Mod Settings
+Menu renders them as a labelled box under **Options → Mod settings** and persists every
+value through a CoreLib `ConfigFile`. The consumer writes no UI, prefab, or `System.IO`
+code.
 
-Namespace / internal name `ModSettingsMenu`; displayName "Mod Settings Menu". `requiredOn: 3` (ClientAndServer). One runtime dependency: **CoreLib** (declared in the `.asset` `dependencies:` and the runtime asmdef). Consumers depend on **both** ModSettingsMenu and CoreLib. Personal-use, non-commercial (Pugstorm EULA).
+Namespace / internal name `ModSettingsMenu`; displayName "Mod Settings Menu".
+`requiredOn: 3` (ClientAndServer). One runtime dependency: **CoreLib** (declared in the
+`.asset` `dependencies:` and the runtime asmdef). Consumers depend on **both**
+ModSettingsMenu and CoreLib. Personal-use, non-commercial (Pugstorm EULA).
 
-The reference consumer is **Faster Talents**; in this mod family every other gameplay mod depends on it for its settings (all siblings except the standalone Simple Crafting Pool Extender). Distributed on mod.io (not Thunderstore/BepInEx).
+The reference consumer is **Faster Talents**; in this mod family every other gameplay
+mod depends on it for its settings (all siblings except the standalone Simple Crafting
+Pool Extender). Distributed on mod.io (not Thunderstore/BepInEx).
 
-The parent `../CLAUDE.md` holds the mod-agnostic SDK/CrossOver guidance shared by every mod under `core_keeper/`.
+The parent `../CLAUDE.md` holds the mod-agnostic SDK/CrossOver guidance shared by every
+mod under `core_keeper/`.
 
 ## Build and deploy
 
@@ -19,15 +31,32 @@ source .envrc           # exports UNITY_BIN, SDK_PATH, MOD_INSTALL_PATH, MOD_NAM
 ../utils/build.sh      # Unity batchmode build; on Darwin auto-runs install-macos.sh
 ```
 
-Unity Editor must be closed (it locks the shared SDK project). `utils/link.sh` symlinks the repo's `unity/` mirror into `$SDK_PATH/Assets/`: one **directory** symlink for `unity/ModSettingsMenu/`, plus file symlinks for the Assets-level files beside it (`ModSettingsMenu.asset`, `.asset.meta`, `.meta`). `build.sh` invokes it idempotently on every run, so worktree switches and repo moves self-heal.
+Unity Editor must be closed (it locks the shared SDK project). `utils/link.sh` symlinks
+the repo's `unity/` mirror into `$SDK_PATH/Assets/`: one **directory** symlink for
+`unity/ModSettingsMenu/`, plus file symlinks for the Assets-level files beside it
+(`ModSettingsMenu.asset`, `.asset.meta`, `.meta`). `build.sh` invokes it idempotently on
+every run, so worktree switches and repo moves self-heal.
 
-`unity/` is the canonical source — a 1:1 mirror of the SDK's `Assets/` tree holding **every** file the Editor generates for the mod: `.cs` sources, both `.asmdef` files, the ModBuilderSettings `.asset`, the prefab, the Art sprites, the generated localization `TextDataBlock`s, and all `.meta` GUID carriers. Edit in `unity/`; the SDK picks up the change on the next refresh.
+`unity/` is the canonical source — a 1:1 mirror of the SDK's `Assets/` tree holding
+**every** file the Editor generates for the mod: `.cs` sources, both `.asmdef` files,
+the ModBuilderSettings `.asset`, the prefab, the Art sprites, the generated localization
+`TextDataBlock`s, and all `.meta` GUID carriers. Edit in `unity/`; the SDK picks up the
+change on the next refresh.
 
-The runtime `ModSettingsMenu.asmdef` starts from the SDK "Create New Mod" wizard's comprehensive game-DLL reference set, plus one added reference: **CoreLib** (for the `ConfigFile` API). No manual game-DLL wiring is needed.
+The runtime `ModSettingsMenu.asmdef` starts from the SDK "Create New Mod" wizard's
+comprehensive game-DLL reference set, plus one added reference: **CoreLib** (for the
+`ConfigFile` API). No manual game-DLL wiring is needed.
 
-No automated tests — verification is a manual in-game check: with the reference consumer (Faster Talents, or another migrated sibling) installed, open **Options → Mod settings**, confirm the section box renders, edit a widget, and confirm the value persists across a relaunch.
+No automated tests — verification is a manual in-game check: with the reference consumer
+(Faster Talents, or another migrated sibling) installed, open **Options → Mod
+settings**, confirm the section box renders, edit a widget, and confirm the value
+persists across a relaunch.
 
-Localization is generated at build: `LocalizationGenerator` (shared editor helper) templates `localization/localization.yaml` (EN/DE for the framework's own UI terms) into native `TextDataBlock` assets under `unity/ModSettingsMenu/Localization/Generated/`, driven by `LOC_YAML`/`LOC_OUT`/`LOC_TABLE` in `.envrc`. `LOC_YAML` lives outside `unity/` so the ModBuilder doesn't pack the source yaml.
+Localization is generated at build: `LocalizationGenerator` (shared editor helper)
+templates `localization/localization.yaml` (EN/DE for the framework's own UI terms) into
+native `TextDataBlock` assets under `unity/ModSettingsMenu/Localization/Generated/`,
+driven by `LOC_YAML`/`LOC_OUT`/`LOC_TABLE` in `.envrc`. `LOC_YAML` lives outside
+`unity/` so the ModBuilder doesn't pack the source yaml.
 
 ## Architecture
 
@@ -41,7 +70,9 @@ build or a publish, neither of which needs any of it.
 
 ## Mod-specific gotchas
 
-Adapting a vanilla `UISettings` prefab into a mod AssetBundle surfaced a series of CK-UI traps, each verified in-game. Some carry fuller detail (with the code paths) in `docs/tutorial.md` §20; all of the following are load-bearing:
+Adapting a vanilla `UISettings` prefab into a mod AssetBundle surfaced a series of CK-UI
+traps, each verified in-game. Some carry fuller detail (with the code paths) in
+`docs/tutorial.md` §20; all of the following are load-bearing:
 
 - **"Red twin" — `SetText`, never `Render`, on a shared prefab template.** The
   Options-menu entries live on the **shared** `optionsMenuPrefab` that
@@ -120,15 +151,28 @@ Adapting a vanilla `UISettings` prefab into a mod AssetBundle surfaced a series 
   menu is open (`docs/ck/ui-framework.md` § "Which input actions you can use inside a
   menu").
 
-`docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info, Separator/Label) and out-of-scope items. Each point there carries a reference id — `MSM-01`, `MSM-02`, … — assigned once and never reused. Cite the id, not the heading, and never renumber: the ids do not follow the order of the file, and a point that ships takes its id with it.
+`docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info,
+Separator/Label) and out-of-scope items. Each point there carries a reference id —
+`MSM-01`, `MSM-02`, … — assigned once and never reused. Cite the id, not the heading,
+and never renumber: the ids do not follow the order of the file, and a point that ships
+takes its id with it.
 
 ## macOS / CrossOver
 
-The mod is deployed through the fake-mod.io workaround (see parent `../CLAUDE.md`). This mod's fake mod.io ID is **`9999991`**; the siblings use distinct IDs (`disable-durability` `9999999`, `faster-talents` `9999998`, `item-checklist` `9999997`, `caveling-divining-rod` `9999996`, `simple-crafting-pool-extender` `9999995`, `faster-pet-talents` `9999994`, `reusable-cattle-box` `9999993`, `rebalance-key-crafting` `9999992` — they must differ). Do not open the in-game Mods menu while installed; re-run `../utils/build.sh` to restore if the cache is wiped.
+The mod is deployed through the fake-mod.io workaround (see parent `../CLAUDE.md`). This
+mod's fake mod.io ID is **`9999991`**; the siblings use distinct IDs
+(`disable-durability` `9999999`, `faster-talents` `9999998`, `item-checklist` `9999997`,
+`caveling-divining-rod` `9999996`, `simple-crafting-pool-extender` `9999995`,
+`faster-pet-talents` `9999994`, `reusable-cattle-box` `9999993`,
+`rebalance-key-crafting` `9999992` — they must differ). Do not open the in-game Mods
+menu while installed; re-run `../utils/build.sh` to restore if the cache is wiped.
 
 ## Publishing to mod.io
 
-`../utils/upload.sh` publishes this mod. It runs the shared Editor class `CoreKeeperModUtils.CLIPublishHelper.Publish` (symlinked in from `../utils/`, alongside `CLIBuildHelper`) via Unity batchmode. The publish reads `MOD_REPO_ROOT` (set in `.envrc`) to locate `CHANGELOG.md`.
+`../utils/upload.sh` publishes this mod. It runs the shared Editor class
+`CoreKeeperModUtils.CLIPublishHelper.Publish` (symlinked in from `../utils/`, alongside
+`CLIBuildHelper`) via Unity batchmode. The publish reads `MOD_REPO_ROOT` (set in
+`.envrc`) to locate `CHANGELOG.md`.
 
 - `Editor/ModSettingsMenu.Editor.asmdef` references the mod.io plugin DLL via
   `overrideReferences: true` + `precompiledReferences: ["modio.UnityPlugin.dll"]`.

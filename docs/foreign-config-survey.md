@@ -212,10 +212,12 @@ MiscTools is genuinely user-data, not a settings schema.
 | OriginCoolDown<speed> | OffHand | float | <speed> | range 0.1–5 |
 | OriginCoolDown<speed> | Consume | float | <speed> | range 0.1–5 |
 
-Total: `MainSwitch` + 12 × 9 Speed-Keys (`Switch` + 8 weapon-class floats) = **109 entries**.
+Total: `MainSwitch` + 12 × 9 Speed-Keys (`Switch` + 8 weapon-class floats) =
+**109 entries**.
 
 ### Quality of Core Keeper (更好的体验) — mod ID 4786550 / "CoreEnhance", enum `EnhanceCategory`
-Same pattern; default `true` except the members overridden to `false` (some Admin/Server-scoped):
+Same pattern; default `true` except the members overridden to `false` (some
+Admin/Server-scoped):
 | Section | Keys (bool=true unless noted) |
 |---|---|
 | Infinity | Durability, Arena (+`int=1000`, 100–9999), Minion, BossScan; **Boulder=false** |
@@ -232,7 +234,8 @@ Same pattern; default `true` except the members overridden to `false` (some Admi
 | activeOn | string | comma-list of CK `TileType`/`ObjectID` names (e.g. Mining = `ore, wall`) |
 | priorityList | string | comma-list of CK `ObjectID` tool names (e.g. Mining = `LightningGun, LaserDrillTool, …, WoodMiningPick`) |
 
-Shape is static; the user may add further sections at runtime (instances dynamic, schema fixed).
+Shape is static; the user may add further sections at runtime (instances
+dynamic, schema fixed).
 
 ### MiscTools — not a settings schema
 File `MiscTools/UserMarkerLabels.cfg`. One fixed section with a dynamic key per placed map
@@ -276,14 +279,16 @@ Types seen (→ MSM widget):
 - **int** — counts / indices → Stepper
 - **float** — ranges / multipliers → Slider
 - **string** — comma-lists → List widget / Info
-- **enum** — `KeyboardKeyCode`, `ModifierKey`, `Tileset`, `WaterTileset` → `Choice<T>` (members via `Enum.GetNames` at runtime)
+- **enum** — `KeyboardKeyCode`, `ModifierKey`, `Tileset`, `WaterTileset` →
+  `Choice<T>` (members via `Enum.GetNames` at runtime)
 
 The enum and comma-list cases are where generic discovery must go beyond simple toggles.
 
 ## MSM coverage / gaps
 
 Cross-checked against MSM's current foreign-config discovery
-(`ForeignConfigDiscovery.BuildDef`): every type that occurs is rendered; one is not yet editable.
+(`ForeignConfigDiscovery.BuildDef`): every type that occurs is rendered; one is
+not yet editable.
 
 | Type | MSM kind | Editable? |
 |---|---|---|
@@ -294,16 +299,19 @@ Cross-checked against MSM's current foreign-config discovery
 | enum | Choice (`Enum.GetNames`) | yes |
 | string (comma-list) | List / Info | **no — read-only** |
 
-- **Enums are fully supported at runtime.** `BuildDef` maps `t.IsEnum → Choice` with
-  `Enum.GetNames(t)`, and the widget round-trips through `Get/SetSerializedValue` (Toml stores the
-  enum name). No CK decompile is needed for this; the decompile only helps *static* enumeration.
-- **The one type gap is editable `string`.** Comma-lists (PlacementPlus `ExcludeItems`, Secure
-  Attachment `additionalItems`, QuickToolSwap `activeOn`/`priorityList`, MiscTools labels) are
-  shown but read-only. The `ListWidget`'s item container is already the intended home for a future
-  edit UI (add/remove list members + free-text editing).
+- **Enums are fully supported at runtime.** `BuildDef` maps `t.IsEnum → Choice`
+  with `Enum.GetNames(t)`, and the widget round-trips through
+  `Get/SetSerializedValue` (Toml stores the enum name). No CK decompile is
+  needed for this; the decompile only helps *static* enumeration.
+- **The one type gap is editable `string`.** Comma-lists (PlacementPlus
+  `ExcludeItems`, Secure Attachment `additionalItems`, QuickToolSwap
+  `activeOn`/`priorityList`, MiscTools labels) are shown but read-only. The
+  `ListWidget`'s item container is already the intended home for a future edit
+  UI (add/remove list members + free-text editing).
 
 Non-type gaps this survey surfaced:
-- **Keybind-seed enums** (Close Keeper `[Input]`) would render as editable `Choice` dropdowns that
-  compete with the game's Controls menu — discovery should detect and skip/flag them (see above).
-- **Server/Admin-scoped** entries fall to read-only `Info` when the player can't change them —
-  a scope gate, not a type limit.
+- **Keybind-seed enums** (Close Keeper `[Input]`) would render as editable
+  `Choice` dropdowns that compete with the game's Controls menu — discovery
+  should detect and skip/flag them (see above).
+- **Server/Admin-scoped** entries fall to read-only `Info` when the player can't
+  change them — a scope gate, not a type limit.
