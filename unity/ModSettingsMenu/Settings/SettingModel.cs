@@ -129,10 +129,14 @@ namespace ModSettingsMenu.Settings
         public ConfigEntryBase Entry; // live handle; widget reads/writes via BoxedValue
         public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
 
-        // true → discovered (not API-registered): raw label instead of a loc term, and the section
-        // heading carries the "(detected)" marker. Deliberately NOT what decides how a Choice is read
-        // or written — that follows the entry's SettingType, which is the thing that actually differs
-        // (SettingWidget.Adjust). It used to decide it, back when every foreign Choice was an enum.
+        // true → this def came from discovery rather than from a consumer's SectionBuilder call. A
+        // statement of provenance and nothing more: no rendering reads it any more. It used to decide
+        // how a Choice was read and written, back when every foreign Choice was an enum and the two
+        // were coextensive; that now follows the entry's SettingType, which is what actually differs
+        // (SettingWidget.Adjust). Two neighbouring behaviours look like they might still be its doing
+        // and are not — the raw label is Term = key (ForeignConfigDiscovery) reaching Loc.T's
+        // fallback, and the "(detected)" heading is ModSection.Foreign, a different field on a
+        // different type. Do not add a reader here expecting either.
         public bool Foreign;
         public bool Unbounded; // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
 
