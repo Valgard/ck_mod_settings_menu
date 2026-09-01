@@ -125,7 +125,7 @@ namespace ModSettingsMenu.Settings
         public float Max; // Slider/Stepper only (ignored for Toggle)
         public float Step = 1f; // Slider only: increment per ←/→ (bar segments = (Max-Min)/Step)
         public SliderDisplay Display; // Slider only
-        public string[] Tokens; // Choice only: ordered value.ToString() list (cycle order)
+        public string[] Tokens; // Choice only: ordered value.ToString() list (cycle order); MSM's own, never a foreign constraint's live array
         public ConfigEntryBase Entry; // live handle; widget reads/writes via BoxedValue
         public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
 
