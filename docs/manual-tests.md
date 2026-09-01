@@ -580,6 +580,162 @@ routes behave *differently* here, which nothing on screen shows.
       `LongReadOnly` untouched (read-only through a `ViewOnly` scope, which the
       reset skips).
 
+## A detected mod's names
+
+Two terms are tried per row — this mod's own schema, then GMCM's — before the
+raw key is shown as a last resort; a heading gets the same, minus the first
+stage. Nothing installed here ships GMCM terms, so stage 2 has to be provoked:
+put the terms below into this mod's own `localization/localization.yaml`,
+rebuild, check, then take them out and rebuild again. That leaves nothing
+behind, because the install step deletes the game-wide `Localization.csv` on
+every run of a loc-shipping mod.
+
+**Pick the target mod from what LOADS, not from what is installed.** A `.cfg`
+under `mods/` only proves the mod ran once — CoreLib writes it on first launch
+and nothing removes it, so files outlive uninstalls (GMCM's own sits there
+still). A mod that does not load renders no box, and a check against it passes
+by rendering nothing. `Player.log`'s `Loading mod with ID` is the list that
+counts; the ids resolve through the cache directory names, `<modId>_<fileId>`:
+
+```bash
+grep "Loading mod with ID" "<bottle>/.../Core Keeper/Player.log"
+```
+
+Not loading is often a **choice**, though, and one worth reversing for a test:
+a mod's id in `existingUsers[<user>].disabledMods` in
+`…/Public/mod.io/5289/state.json` makes the loader skip it silently. Removing
+the id switches the mod back on without the in-game Mods menu — which must stay
+shut here, since it wipes the fake-id dev install. Edit that file only while the
+game is closed; it is rewritten on exit. Put the id back afterwards: what is
+switched off is switched off on purpose.
+
+**A mod of this family is not a target, however loaded it is** — for one of two
+reasons, and it is worth knowing which. Most ship no CoreLib config at all, so
+there is nothing to discover; the rest are registered consumers, and
+`ConfigStore.IsOwn` keeps those out of discovery. Either way their rows never
+reach the chain. Worse, a term aimed at one *appears* to work:
+MSM's own stage-1 schema is `<ModId>-Config/<key>`, which is exactly what
+`SectionBuilder` already builds for a consumer, so the term lands — on the old
+path, proving nothing. The tell is on screen: a consumer's box carries a hint
+line under its heading and **no `(detected)` marker**. Enumerate the family
+rather than recalling it; no list of them is kept anywhere, on purpose:
+
+```bash
+cd ../..   # the family lives beside this repo, not inside it
+find . -maxdepth 2 -name .git -not -path "./.git*" \
+  | sed 's|^\./||; s|/\.git$||' | grep -v "^CoreKeeperModSDK$" | sort
+```
+
+It lists `CoreKeeperModDocs` too, which is Pugstorm's docs clone rather than a
+mod of this family.
+
+That leaves **PlacementPlus** and the **fixtures**. The fixtures reach discovery
+through the very same path (see § Running the fixtures), so they are not a
+stand-in for a foreign mod but an instance of one — but they sit in a
+`[Settings]` section of a file called `config.cfg`, and **both of those values
+go into the term**. PlacementPlus differs in each: section `[General]`, and a
+file named after its mod. Without it, a hardcoded section or a mis-derived file
+name passes every other check here.
+
+```yaml
+PlacementPlus-Config:                   # stage 1, MSM's own schema - must WIN
+  MaxBrushSize:
+    en: "Brush size [stage 1]"
+    de: "Pinselgroesse [Stufe 1]"
+PlacementPlus:                          # heading where FILE == mod name
+  PlacementPlus:
+    en: "Placement Plus [heading]"
+    de: "Platzierung Plus [Ueberschrift]"
+PlacementPlus_PlacementPlus_General:    # section General, not Settings
+  MaxBrushSize:                         # stage 2 for the SAME key - must lose
+    en: "Brush size [stage 2 - WRONG if visible]"
+    de: "Pinselgroesse [Stufe 2 - FALSCH wenn sichtbar]"
+  ExcludeItems:                         # a LIST row, and its drill-in title
+    en: "Excluded items [list row]"
+    de: "Ausgeschlossene Gegenstaende [Listenzeile]"
+```
+
+Both languages, always — and note what goes wrong when you skip one, because it
+is not what you would expect. The generator writes one entry per language
+whether the yaml carries it or not, so a term with only `en:` ships an empty
+German title; I2 then answers the lookup with the first non-empty cell in **any**
+language, so the German run shows the **English** text and the check passes
+without testing anything. The German strings above therefore differ visibly from
+their English counterparts on purpose: the failure signature to watch for is
+English text in a German game, not blank text.
+
+The chain's remaining stage is a Choice's per-option **value**, and the choice
+fixtures carry one: `ChoiceEnum` is enum-typed, so discovery builds a Choice and
+`SettingWidget` asks `ValueLabel()` for the text beside it.
+
+```yaml
+TestChoiceFixtures:                              # heading, file named config.cfg
+  config:
+    en: "Choice Fixtures [heading]"
+    de: "Auswahl-Fixtures [Ueberschrift]"
+TestChoiceFixtures_config_Settings:              # stage 2, no stage-1 rival
+  ChoiceEnum:
+    en: "Enum choice [stage 2]"
+    de: "Enum-Auswahl [Stufe 2]"
+TestChoiceFixtures_config_Settings_ChoiceEnum:   # the VALUE, not the label
+  Second:
+    en: "Second [value stage 2]"
+    de: "Zweiter [Wert Stufe 2]"
+```
+
+Only one of the three tokens is translated on purpose: cycling with ←/→ must
+make the translation appear and disappear. A value term built per row rather
+than per token would leave every option reading the same.
+
+The second segment is the **file**, not the mod. The fixtures name theirs
+`config.cfg`, so their heading term is `TestChoiceFixtures/config`; one named
+after its mod reads the way you would expect, `PlacementPlus/PlacementPlus`.
+Both shapes are in the blocks above on purpose.
+
+- [ ] The MaxBrushSize row reads **"Brush size [stage 1]"**. Seeing the
+      `[stage 2 - WRONG if visible]` variant instead means the stages resolve
+      in the wrong order — the one failure no other check can show, because it
+      needs two terms competing for one key.
+- [ ] PlacementPlus is headed **"Placement Plus [heading] (detected)"**. Raw
+      text here with the other boxes translated is the signature of a file name
+      that is assumed rather than read.
+- [ ] Its ExcludeItems row reads **"Excluded items [list row]"**, and opening
+      that drill-in shows the same text as the screen's title. Those are two
+      further render paths — `ListWidget` and `ListDetailScreen` — that no other
+      check on this page reaches. That row is also the section proof: its term
+      names `General`, so raw text here while the heading is translated means
+      the section was assumed to be `Settings` rather than read.
+- [ ] Its MinHoldTime row stays raw. Untranslated rows sitting beside
+      translated ones in the same box is what stage 3 looks like.
+- [ ] The `(detected)` marker survives the translation. A translated name does
+      not make a detected mod curated, and the marker is the only thing that
+      still says so once the raw keys are gone.
+- [ ] The fixtures' box is headed **"Choice Fixtures [heading] (detected)"** —
+      the same heading path reached through a file named `config.cfg` rather
+      than after its mod.
+- [ ] In that box, the ChoiceEnum row reads **"Enum choice [stage 2]"** and its
+      VALUE reads **"Second [value stage 2]"**. The value is the half that would break
+      on its own — the two schemas put the key on opposite sides of the slash.
+- [ ] Cycle that value with ←/→: the other tokens stay raw, and the translation
+      returns on `Second`. A term built per row rather than per token would show
+      the same text for every option.
+- [ ] `TestListFixtures` keeps its raw heading. Two boxes down the same
+      discovery path, one translated and one not, is what ties the heading to
+      its term rather than to something applied per box.
+- [ ] The boxes are in alphabetical order **by what is on screen**: the fixtures
+      box now sorts under **C** ("Choice Fixtures"), where `TestChoiceFixtures`
+      sorted under T. PlacementPlus is no test of this — both its names begin
+      with P, so a build still ordering by the raw name looks identical.
+- [ ] Select a row in a translated box and press reset: the confirmation names
+      the mod as the box does. The regression to watch for is the untranslated
+      folder name (`TestChoiceFixtures`), not a path — a path is never rendered
+      anywhere.
+- [ ] Switch the game to German: every translated line follows, and each reads
+      as its German string rather than its English one. English text here means
+      a `de:` cell was never authored, not that the chain failed.
+- [ ] With the terms out and rebuilt, all of it is back to `PlacementPlus`,
+      `MaxBrushSize`, `ExcludeItems` and `ChoiceEnum`.
+
 ## After the walk
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly

@@ -9,8 +9,8 @@ namespace ModSettingsMenu.UI
     /// RadicalMenuOption so it joins menu navigation; labelText ("Label" child) +
     /// valueText ("Value" child) auto-assign in the base Awake. Left/right (or activate)
     /// adjusts the value via the type-agnostic ConfigEntryBase.BoxedValue; CoreLib clamps
-    /// + auto-saves. Value display is per-kind. Label and Choice value are localized through
-    /// Loc.T, each falling back to the raw key / token.
+    /// + auto-saves. Value display is per-kind. The label and a Choice's per-option text are
+    /// localized through SettingDef.Label() / ValueLabel(), which own the term chain.
     /// </summary>
     public sealed class SettingWidget : RadicalMenuOption, ISectionRow
     {
@@ -225,7 +225,7 @@ namespace ModSettingsMenu.UI
         {
             if (_def == null)
                 return;
-            SetText(labelText, Loc.T(_def.Term, _def.Key)); // localized; falls back to the raw key
+            SetText(labelText, _def.Label()); // localized; falls back to the raw key
             SetText(valueText, ValueString());
         }
 
@@ -251,7 +251,7 @@ namespace ModSettingsMenu.UI
                 case SettingKind.Choice:
                 {
                     string tok = e.BoxedValue?.ToString() ?? ""; // same read as Adjust — see there
-                    return Loc.T(_def.Term + "/" + tok, tok); // localized per-option; foreign -> raw token
+                    return _def.ValueLabel(tok); // localized per-option; falls back to the raw token
                 }
                 case SettingKind.Slider:
                 {

@@ -30,7 +30,7 @@ namespace ModSettingsMenu.Settings
             {
                 ModId = modId,
                 DisplayName = displayName,
-                HintTerm = $"{modId}-Config/_hint",
+                HintTerm = MsmTerms.Hint(modId),
             };
             var file = ConfigStore.ForMod(consumer, modId);
             return new SectionBuilder(section, file);
