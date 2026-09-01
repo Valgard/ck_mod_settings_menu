@@ -10,12 +10,22 @@ repos:
                 - pre-commit
                 - pre-push
 
-          # The checker lives in the parent repo, not here: this mod repo sits
-          # inside it and already reaches for ../utils/ to build and link. It
+          # Both checkers live in the parent repo, not here: this mod repo sits
+          # inside it and already reaches for ../utils/ to build and link. Each
           # takes this repo's root, so the scope is `git ls-files` here.
           - id: docs-links
             name: docs links
             entry: uv run --frozen --project .. ../utils/check_docs_links.py .
+            language: system
+            pass_filenames: false
+            files: \.md$
+            stages:
+                - pre-commit
+                - pre-push
+
+          - id: docs-wrapping
+            name: docs wrapping
+            entry: uv run --frozen --project .. ../utils/check_docs_wrapping.py .
             language: system
             pass_filenames: false
             files: \.md$
