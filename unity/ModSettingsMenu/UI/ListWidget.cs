@@ -102,7 +102,7 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning("[ModSettingsMenu] ListWidget has no ListWidgetBox — row renders blank.");
                 return;
             }
-            _box.label.RenderPlain(Loc.T(_def.Term, _def.Key));
+            _box.label.RenderPlain(_def.Label());
             _box.preview.RenderPlain(Preview());
             TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR); // start in the unselected grey
         }

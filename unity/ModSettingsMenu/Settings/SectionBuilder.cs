@@ -499,6 +499,6 @@ namespace ModSettingsMenu.Settings
 
         public void Build() => ModSettings.Register(_section);
 
-        private string Term(string key) => $"{_section.ModId}-Config/{key}";
+        private string Term(string key) => MsmTerms.Label(_section.ModId, key);
     }
 }

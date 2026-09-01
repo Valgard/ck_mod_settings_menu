@@ -217,7 +217,7 @@ namespace ModSettingsMenu.UI
             // Title = the setting's own label (the list's name).
             if (box.title != null && _activeDef != null)
             {
-                string label = Loc.T(_activeDef.Term, _activeDef.Key);
+                string label = _activeDef.Label();
                 box.title.RenderPlain(label);
                 // Keep the drop-shadow twin in sync (a sibling of the title), else it shows stale text.
                 var shadow = box.title.transform.parent != null ? box.title.transform.parent.Find("Title bigtext shadow") : null;

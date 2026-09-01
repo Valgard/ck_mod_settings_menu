@@ -693,38 +693,27 @@ first, which also clears `activeInputField` and thereby disarms CK's own `if
 result handler, so only the call's *source* can separate "the player just typed
 this" from "the world just wiped it" — see that patch's comment.
 
-## MSM-13 — A discovered entry's localisation term
+## MSM-28 — Say which naming stage answered, once per menu open
 
-A discovered entry is rendered under its **raw key**:
-`ForeignConfigDiscovery` sets `Term = key`, so there is nothing for the lookup to
-find. That is a gap in one value, not in the mechanism — the two-stage resolution
-has been in place all along, `Loc.T(_def.Term, _def.Key)` for the label and
-`Loc.T(_def.Term + "/" + tok, tok)` per choice value.
+A discovered mod's rows resolve through three stages, and a wrong one is
+**indistinguishable from a mod that ships no terms**: same raw keys, same
+silence. Two things can be wrong that way. MSM's own stage takes its owner from
+the config file's folder name, because a `ConfigFile` will not name its mod —
+so a mod whose folder differs from its internal name is never found under the
+published schema. And GMCM's stage reproduces another program's string
+function; a mis-port misses every lookup forever.
 
-**MSM's own schema stays the default**; General Mod Config Menu's published
-convention becomes a second stage in front of the raw-text fallback:
+Neither can be seen from the screen, and neither is a defect a player would
+report as one.
 
-| Stage | Term | For whom |
-|---|---|---|
-| 1 | `<ModId>-Config/<key>` (`SectionBuilder`) | an author who targets MSM |
-| 2 | `<path>_<file>_<section>/<key>` | an author who already supports GMCM |
-| 3 | the raw key | an author who ships neither |
-
-Nobody who is correct today gains a burden, and a mod carrying GMCM terms becomes
-readable instead of having its existing translations ignored.
-
-- **It does need a small API change.** `Loc.T(term, fallback)` knows one term;
-  the chain needs a variant that tries several in order.
-  `API.Localization.GetLocalizedTerm` returns `null` for an unregistered term, so
-  the chain is a `??` sequence. (`I2.Loc` has a second `GetTranslation` that
-  returns `string.Empty` instead — it is the instance method on `LanguageSource`
-  and not the one in this path. Confusing the two breaks the chain silently.)
-- **One trap.** GMCM's value schema moves the key **in front of** the slash
-  (`…_Section_Key/Value`) where MSM's appends it (`…/key/token`). A second field
-  on `SettingDef` — the base for per-option terms, `null` meaning "use `Term`" —
-  keeps them apart without touching how registered consumers behave.
-- **Not included:** the hover description GMCM reads from `<key>Desc`; see
-  MSM-17 below.
+- **Not per-failure logging.** Roughly two lookups per row across every
+  discovered mod, on the path that already needed `PreWarm` to stop freezing.
+- **One aggregate line per discovered section per open**, behind a diagnostic
+  toggle: which terms were tried, which stage won. That turns "my translations
+  are ignored and I cannot find out why" into something a foreign author can
+  answer alone.
+- The de-duplication this needs already exists here — `ForeignConfigDiscovery`
+  reports each degradation once, and `ListKindStore` remembers across opens.
 
 ## MSM-27 — Read a constrained set through `API.Reflection` instead of parsing its description
 
@@ -804,9 +793,11 @@ the form is the harder half:
   space, changes row height per selection); the section's existing `Hint`,
   repurposed (collides with its current meaning); a dedicated footer area (Editor
   work, competes with the hint bar).
-- **Deferred, not rejected.** Worth discussing once the term chain above exists —
-  without a resolved term there is no text to show — and once it is clear whether
-  the grouping point rebuilds the screen anyway.
+- **Deferred, not rejected.** The term it would hang off now resolves — a
+  discovered entry is looked up under MSM's own schema and then GMCM's, and
+  `GmcmTerms` already composes the label this one appends `Desc` to — so what is
+  left open is the form alone, plus whether the grouping point rebuilds the
+  screen anyway.
 
 ## MSM-18 — A consumer-declared access level, for every widget
 

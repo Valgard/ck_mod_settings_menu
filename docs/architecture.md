@@ -54,7 +54,10 @@ HealthBars' 19901): `SettingsMenuType = (RadicalMenu.MenuType)29314` for the set
 
 Resolves a loc term for the active language via `API.Localization.GetLocalizedTerm`; `T(term)` for
 framework-own strings (yaml guarantees a value) and `T(term, fallback)` for consumer strings (falls
-back to the raw key/token when the consumer ships no term).
+back to the raw key/token when the consumer ships no term). `TFirstOf(preferred, alternate,
+fallback)` tries two terms before the fallback — what a discovered entry needs, where a foreign
+schema follows MSM's own. It carries a name of its own rather than a third parameter on `T`,
+because `T(term, otherTerm)` compiles and would put the raw second term on screen.
 
 ## `ModSettingsMenu.Settings` — consumer API and persistence
 
@@ -104,13 +107,37 @@ fires on any change.
 ### `SettingModel.cs`
 
 The non-generic descriptors the UI reads: `ModSection` (per-consumer box) and `SettingDef` (one
-setting: `Kind`, numeric bounds, derived loc `Term`, `RequiresRestart`, `Foreign`/`Unbounded`
+setting: `Kind`, numeric bounds, its loc terms, `RequiresRestart`, `Foreign`/`Unbounded`
 markers, and the live `ConfigEntryBase Entry`).
+
+Both resolve their own displayed text rather than handing terms out: `SettingDef.Label()` and
+`ValueLabel(token)`, `ModSection.Heading()` and `Hint()`. Four places render a setting's name — the
+widget, the list row, the drill-in title and the `ByLabel` sort — so a chain assembled at each of
+them is a chain three of them can quietly be missing, and the sort would then order by text nobody
+sees. A section's name has the same problem in miniature: the box, the alphabetical order of the
+boxes, and the reset confirmation, which must name the mod the player is looking at.
+
+The stage-2 fields behind them (`GmcmTerm`, `GmcmValueTermPrefix`, `HeadingTerm`) are `internal`
+where their neighbours are public. A consumer can reach any `SettingDef` through the public
+`ModSettings.Sections`, so a public field there would be a back door that works — set it and
+`Label()` honours it — offered to an audience that cannot see `Label()` at all.
 
 The enums: `SettingKind {Toggle,Slider,Stepper,Choice,Info,List}`, `SliderDisplay
 {Steps,Number,Percent}`, `OptionSort {AsDeclared,ByKey,ByLabel}`. The last two kinds — `Info`
 (read-only value) and `List` (comma-list with a drill-in) — are produced only by
 `ForeignConfigDiscovery` (see below), never by the explicit consumer API.
+
+### `MsmTerms`
+
+This mod's own schema: `<Owner>-Config/<key>`, and the reserved `_hint`. A Choice option
+appends `/<token>` to the label, which `SettingDef.ValueLabel` does, since the token is
+the caller's. It exists because two callers compose it from opposite directions —
+`SectionBuilder` from a consumer's mod id, `ForeignConfigDiscovery` from a discovered
+config's folder name — and until they shared this they agreed only by being written the
+same way twice.
+
+A per-option term reaches three segments through a two-level generator by putting the first two in
+the yaml namespace: `<Owner>-Config/<key>:` with each token as a leaf beneath it.
 
 ### `ForeignConfigDiscovery`
 
@@ -133,6 +160,39 @@ Mounts the settings of mods that use CoreLib config but never called `ModSetting
 - otherwise → Info
 
 The routing decision lives here so the widgets stay dumb — only genuine lists reach `ListWidget`.
+
+It also fills in every loc term a discovered entry can be read under, since this is the only place
+that knows the config file's path and section: MSM's own schema (`<Owner>-Config/<key>`), so an
+author who never took the dependency can still name their rows here, and GMCM's below it.
+
+### `GmcmTerms`
+
+General Mod Config Menu's term schema, ported from its `MiscHelper.GetLocalKey` (GMCM 1.4.0), so
+that a mod already carrying GMCM terms is read under them instead of under its raw keys. GMCM is
+the other config menu for Core Keeper and reads the same CoreLib `ConfigFile`s, which makes its
+convention the one a foreign author most likely already follows.
+
+For PlacementPlus — file `PlacementPlus/PlacementPlus.cfg`, section `General`, key
+`MaxBrushSize`:
+
+| Method | Term |
+|---|---|
+| `File(path)` | `PlacementPlus/PlacementPlus` |
+| `Label(path, section, key)` | `PlacementPlus_PlacementPlus_General/MaxBrushSize` |
+| `ValueBase(path, section, key)` | `PlacementPlus_PlacementPlus_General_MaxBrushSize/` (+ token) |
+
+The second segment is the **file**, not the mod. A mod whose config is the usual `config.cfg`
+therefore gets `<Mod>_config_<Section>/<key>` and a heading term of `<Mod>/config` — odd to read,
+and still right: an author writing terms for GMCM wrote them against this.
+
+One rule produces all three: every segment but the last is joined with `_`, and the last follows a
+`/`. That is why the key sits *after* the slash in a label and *before* it in a value term — GMCM
+appends an empty final part for the latter, pushing the key one place left. MSM's own schema
+appends instead (`<term>/<token>`), which is why `SettingDef` keeps a separate field for the value
+base rather than deriving one from the other.
+
+The goal is to reproduce GMCM's output, not to improve on it: a term this builds that GMCM would
+not have built resolves to nothing, which is the same as having no second stage at all.
 
 ### `SectionReset`
 

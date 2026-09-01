@@ -68,6 +68,12 @@ namespace ModSettingsMenu.Settings
                 return section;
             }
 
+            // Composed after the guard above, not in the initializer: Populate() has none of its
+            // own, so anything thrown before that try reaches it and empties the settings screen
+            // for every mod at once. Compose is total today (see GmcmTerms), and a null HeadingTerm
+            // degrades to DisplayName — so the early return above stays correct either way.
+            section.HeadingTerm = GmcmTerms.File(cf.ConfigFilePath);
+
             foreach (var kv in entries)
             {
                 SettingDef def;
@@ -84,7 +90,9 @@ namespace ModSettingsMenu.Settings
                     // so never on an arbitrary foreign class. That is what changed, and this guard came
                     // with it. One bad entry costs its own row; without it,
                     // the throw would leave Populate() and empty the screen for every mod at once.
-                    UnityEngine.Debug.LogError($"[ModSettingsMenu] classifying '{kv.Key.Key}' from '{cf.ConfigFilePath}' threw — omitting that row: {ex}");
+                    UnityEngine.Debug.LogError(
+                        $"[ModSettingsMenu] building the row for '{kv.Key.Key}' from '{cf.ConfigFilePath}' threw — omitting that row: {ex}"
+                    );
                     continue;
                 }
                 if (def != null)
@@ -107,7 +115,27 @@ namespace ModSettingsMenu.Settings
             var d = new SettingDef
             {
                 Key = key,
-                Term = key, // no foreign loc term -> Loc.T(key, key) falls back to the raw key
+                // Two terms are tried for the label before the raw key is shown (SettingDef.Label):
+                // MSM's own schema, so an author who never took the dependency can still be read by
+                // name here, then GMCM's, so a mod already carrying ITS terms is read rather than
+                // ignored. The third field feeds ValueLabel instead — a Choice's per-option text.
+                //
+                // MSM's schema takes an OWNER, and here that owner is the config file's first path
+                // segment, because a ConfigFile does not expose the owning mod's name (see
+                // OwnerFromPath above; reflection is banned). The published schema names
+                // Metadata.name, so the two agree exactly while a mod follows CoreLib's own
+                // "<ModName>/<file>.cfg" convention — which is what ConfigStore.ForMod writes and
+                // what every mod surveyed does — and diverge for one that names its folder something
+                // else. Such a mod's own MSM-schema terms would not be found; its GMCM ones still
+                // are, since those are composed from the same path.
+                //
+                // All three are assigned unconditionally. Not because it is free — each Compose
+                // allocates, and the value prefix is read only for a Choice — but because Kind is
+                // not known at construction, and the alternative is repeating the assignment down
+                // this cascade's nine returns.
+                Term = MsmTerms.Label(OwnerFromPath(configFilePath), key),
+                GmcmTerm = GmcmTerms.Label(configFilePath, definition.Section, key),
+                GmcmValueTermPrefix = GmcmTerms.ValueBase(configFilePath, definition.Section, key),
                 Entry = e,
                 Foreign = true,
                 RequiresRestart = e.Scope != null && e.Scope.requireReload,
