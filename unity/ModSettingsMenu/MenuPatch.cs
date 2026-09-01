@@ -277,43 +277,74 @@ namespace ModSettingsMenu
             // Insert at the caret — which is what vanilla AppendString already does
             // (Pug.Other:343442). This prefix replaced the whole method in order to drop its width
             // rejection, so it has to carry the insertion point over too; an earlier draft appended
-            // at the end and was wrong for exactly that reason. The actual trade sits elsewhere and
-            // is worth naming, because it is where this can still go wrong: vanilla reads its own
-            // private currentCharIndex, while this reconstructs the index from the caret's POSITION.
-            // Not because reflection is out of reach — API.Reflection gets at a private member inside
-            // the sandbox — but because the offset needs that position anyway, so one source serves
-            // both. An authoritative source swapped for a derived one —
-            // exact only while PugText's glyph count and the string's character count agree, which
-            // every glyphless character breaks. TryCaretIndex is that agreement, checked rather than
-            // assumed (TextFieldViewport.IndexSpaceIsSound has the mechanisms).
+            // at the end and was wrong for exactly that reason. It reads the very counter vanilla
+            // inserts at, through API.Reflection (TextFieldViewport.TryCaretIndex), so nothing is
+            // approximated here any more: this used to reconstruct the index from the caret's
+            // on-screen POSITION, which was exact only while PugText's glyph count and the string's
+            // character count agreed, and every glyphless character broke that.
             //
-            // When it cannot vouch for the index, append at the END. That is not a made-up fallback:
-            // it is the shape vanilla's own AppendString takes whenever the caret sits at the end
+            // When the counter cannot be read at all — an unbound viewport, or a Core Keeper update
+            // that renames or reshapes the field — append at the END. That is not a made-up
+            // fallback: it is the shape
+            // vanilla's own AppendString takes whenever the caret sits at the end
             // (Pug.Other:343436-343438), and it is the only insertion point that can never REORDER
-            // what is already there. Inserting at a wrong index does — and the worst wrong index is
-            // the one an empty glyph list produces, 0, where every keystroke lands in front of the
-            // last and "abc" is stored as "cba" in a foreign mod's config file. Nothing is dropped on
-            // either path; only where the typed text lands differs, and that the player can see.
+            // what is already there. Nothing is dropped on either path; only where the typed text
+            // lands differs, and that the player can see.
             //
             // The 255-cap above applies to both paths on purpose — it is measured against the total
             // length, which is unaffected by WHERE the text goes in.
             //
-            // No clamp on `at`: the sound path already bounds it, because soundness is measured
-            // against `current` itself (the viewport is bound to this very PugText), and a clamp is
-            // exactly how an untrusted index turns into index 0 rather than into a refusal.
+            // The clamp bounds a TRUSTED value, which is the distinction that used to argue against
+            // having one here: while `at` came from a reconstruction, clamping was the very move
+            // that turned "no answer" into "the front of the string". vanilla guards the same
+            // overrun on its own way in (Pug.Other:343431-343434 — LogError, then correct), so the
+            // state is one to survive rather than to rule out: currentCharIndex tracks the text only
+            // as long as everything that writes that text also moves the marker. Unclamped, it is an
+            // ArgumentOutOfRangeException out of a Harmony prefix, for as long as that state holds.
+            // Only the upper bound defends anything — MoveCharMarker clamps at 0 (Pug.Other:343458)
+            // and Update's unclamped decrement is gated on maxWidth > 0, which these rows set to 0 —
+            // and the 0 is there because Mathf.Clamp takes two bounds, not because it is reachable.
+            //
+            // It also warns, because taking over vanilla's correction meant taking over its report:
+            // this prefix returns false, so vanilla's LogError above never runs again for these rows,
+            // and a silent clamp would leave a recurring caret/text desync looking exactly like a
+            // one-off mis-click while the value goes into a foreign mod's config file.
             //
             // MoveCharMarker is relative and clamped (Pug.Other:343455-343458), so the two paths need
             // different arguments. At the caret: the caret was at `at` and the text grew by s.Length
-            // there, so +s.Length lands on the right side of what was typed. At the end: vanilla's
-            // currentCharIndex is unknown and unreachable here, so a relative step cannot be aimed —
-            // a full-length forward move lets vanilla's own clamp put the caret on the text end,
-            // which is where the insertion happened. Same trick the Home/End handler below uses.
+            // there, so +s.Length lands on the right side of what was typed. At the end: the caret's
+            // index is precisely what could not be read, so a relative step cannot be aimed — a
+            // full-length forward move lets vanilla's own clamp put the caret on the text end, which
+            // is where the insertion happened. Same trick the Home/End handler below uses.
             bool atCaret = row.Viewport.TryCaretIndex(out int caret);
-            int at = atCaret ? caret : current.Length;
+            if (atCaret && caret > current.Length)
+                WarnCaretPastTextOnce(caret, current.Length);
+            int at = atCaret ? Mathf.Clamp(caret, 0, current.Length) : current.Length;
             text.SetText(current.Insert(at, s));
             text.Render(rewindEffectAnims: false);
             row.MoveCharMarker(atCaret ? s.Length : text.GetTextLength());
             return false;
+        }
+
+        // Latched for the session, like TextFieldViewport's two: the state that trips this holds
+        // across keystrokes, so an unlatched line would bury itself. No manual walk of the drill-in
+        // can provoke it — every path that writes a row's text also moves the marker — which is
+        // exactly why it has to say so when it happens rather than being left to inference.
+        private static bool _warnedCaretPastText;
+
+        private static void WarnCaretPastTextOnce(int caret, int textLength)
+        {
+            if (_warnedCaretPastText)
+                return;
+            _warnedCaretPastText = true;
+            Debug.LogWarning(
+                "[ModSettingsMenu] A row's caret counter reads "
+                    + caret
+                    + " for "
+                    + textLength
+                    + " characters of text — something changed the text without moving the marker. The keystroke was inserted at "
+                    + "the end of the value instead of at the caret; nothing was lost. Logged once per session."
+            );
         }
 
         // Cursor navigation (Home/End, Ctrl+Arrow word jumps) for a drill-in row, as a POSTFIX on
@@ -378,28 +409,24 @@ namespace ModSettingsMenu
                 : 0;
             if (direction == 0)
                 return;
-            // The blinker is only repositioned by RadicalMenuOptionTextInput.Update(), once per
-            // frame (Pug.Other:343386-343388), and MoveCharMarker never touches it — so the index
-            // recovered here is the one from BEFORE vanilla's arrow shift, which ran moments ago
-            // inside this same call (Pug.Other:269659-269666). That stale value is the right base
-            // for WordBoundary, but the wrong base for a relative move: MoveCharMarker will apply
-            // our delta on top of an index vanilla has already nudged by `direction` — UNLESS
-            // vanilla's own clamp (Pug.Other:343458) absorbed the shift, which happens exactly when
-            // the caret was already sitting at that end. `current` is that pre-shift index, so it is
-            // the right value to test: subtract the shift only where there was one, or a Ctrl+Left
-            // at index 0 would push the caret forward instead of leaving it put.
+            // Reading the caret's own counter rather than its on-screen position is what leaves this
+            // a plain subtraction, and the reason is weaker than "vanilla always shifted by ±1" — it
+            // does not always. Its arrow handling sits in an else-if chain that Backspace, Delete,
+            // Return and the menu back button preempt (Pug.Other:269628-269666), and its clamp
+            // absorbs the move at either end (Pug.Other:343458). What licenses the subtraction is
+            // that the counter reflects whatever actually happened, shift or none: `current` is
+            // where the caret IS, so the jump is the difference to the boundary and nothing else.
             //
-            // "Shifted, or clamped away — no third case" is not a guess: vanilla's arrow branch is
-            // reached only when Backspace, Delete, Return and the menu back button are all up — its
-            // else-if chain (Pug.Other:269628-269666) tests those first. Without that, `current`
-            // could not stand in for "did vanilla move" at all.
-            //
-            // One case escapes it: IsKeyDown counts a held key via a repeat timer, so a Backspace
-            // being auto-repeated in the same frame as our arrow keydown sends vanilla down the
-            // Backspace branch instead (Pug.Other:269628-269631) — it never reaches MoveCharMarker,
-            // so no shift happens at all, and this compensation then over-corrects by one. Not
-            // handled: it would cost a second guard for a two-key combination nobody performs
-            // deliberately, and the damage is a misplaced caret, not lost text.
+            // It was not always a subtraction. Recovering the index from the blinker gave the value
+            // from BEFORE that shift, because RadicalMenuOptionTextInput.Update repositions the
+            // blinker only once per frame (Pug.Other:343386-343388) and MoveCharMarker never touches
+            // it — so a compensation term had to subtract the shift, and had to infer from the
+            // pre-shift index whether vanilla's own clamp (Pug.Other:343458) had absorbed it. One
+            // case escaped that inference and cost a character: IsKeyDown counts a held key via a
+            // repeat timer, so a Backspace auto-repeating in the same frame as the arrow keydown
+            // sends vanilla down its Backspace branch instead (Pug.Other:269628-269631), where no
+            // shift happens at all and the correction then over-corrected. Reading the counter
+            // retires the term and that case with it.
             //
             // No index, no jump. Vanilla's own single-character move has already run for this frame
             // and stands on its own, so doing nothing here leaves the caret one character from where
@@ -409,8 +436,7 @@ namespace ModSettingsMenu
             // step, so the caret would land somewhere with no relation to any word.
             if (!row.Viewport.TryCaretIndex(out int current))
                 return;
-            int vanillaShift = (direction < 0 ? current > 0 : current < length) ? direction : 0;
-            row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current - vanillaShift);
+            row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current);
         }
     }
 }

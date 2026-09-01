@@ -738,10 +738,16 @@ known, so no reflection and no parsing is needed:
 if (av is AcceptableValueList<string> l) { d.Kind = SettingKind.Choice; d.Tokens = l.AcceptableValues; return d; }
 ```
 
-- **Fallback for a foreign `T`:** parse `AcceptableValueBase.ToDescriptionString()`,
-  which every implementation formats as `"# Acceptable values: a, b, c"`. That is
-  the only sandbox-legal route — `AcceptableValues` is generic and
-  `System.Reflection.*` is denied — and it is what GMCM does.
+- **Fallback for a foreign `T`:** parse
+  `AcceptableValueBase.ToDescriptionString()`, which every implementation
+  formats as `"# Acceptable values: a, b, c"`. It is what GMCM does, and it
+  needs no type parameter. It is **not** the only sandbox-legal route, which
+  this bullet used to claim on the grounds that `System.Reflection.*` is denied: [ADR-009](adrs/009-caret-index-from-the-counter.md)
+  establishes that a member is reachable through `API.Reflection` without naming
+  it, and `AcceptableValueList<T>.AcceptableValues` is one — the returned `T[]`
+  casts to `System.Array`, so `T` never has to be spelled. Which of the two is
+  preferable here is untested; only the reason for excluding one of them was
+  wrong.
 - **Worth it on its own:** it makes MSM's own declared settings legible to MSM's
   own discovery path.
 
@@ -1098,28 +1104,19 @@ reachable for admins.
   moment of typing. `ShakeAndClear` despite its name clears only its own
   coroutine handle, not the text. Carried over 2026-08-23 from the
   drill-in-frame work, which shipped the rest of that section.
-- **MSM-22 — Read `currentCharIndex` through `API.Reflection` instead of
-  reconstructing it.** The drill-in derives the caret's character index from the
-  blinker's position, which is exact only while `PugText`'s glyph count matches
-  the string's — and `TextFieldViewport.IndexSpaceIsSound` exists for no other
-  reason than to catch the four ways it does not. The counter itself turns out
-  to be reachable: `API.Reflection`'s `GetMembersChecked` / `GetValueChecked`
-  get at a private member legally inside the Roslyn sandbox
-  (`docs/ck/sandbox.md` § "Reaching a private member"), which the design took
-  for impossible. Reading it makes the index authoritative and the soundness
-  check unnecessary. Not free: three callers plus the guard, `API.Reflection` is
-  used nowhere in this repo yet, and it would run on every keystroke — measure
-  before committing to it. The blinker's position stays either way, because the
-  scroll offset needs it. Found 2026-08-27, after the feature shipped.
-- **MSM-23 — Holding a word-jump key crawls after the first jump.** Vanilla's arrow branch
-  repeats on a cooldown (`MenuManager.IsKeyDown` is `GetKeyDown(k) || (GetKey(k)
-  && cooldown elapsed)`), while the word-jump postfix triggers on
+- **MSM-23 — Holding a word-jump key crawls after the first jump.** Vanilla's
+  arrow branch repeats on a cooldown (`MenuManager.IsKeyDown` is `GetKeyDown(k)
+  || (GetKey(k) && cooldown elapsed)`), while the word-jump postfix triggers on
   `Input.GetKeyDown` alone — so holding the key jumps one word and then crawls
-  character by character at the repeat rate. Not a one-line change: that cooldown
-  is private and the sandbox forbids reflection, so the postfix needs a repeat
-  timer of its own carrying the same constants. Switching it to `GetKey` instead
-  would fire every frame while vanilla still moves only on its own ticks, which
-  breaks the `vanillaShift` compensation on every frame in between. Cursor
+  character by character at the repeat rate. Not a one-line change, though the
+  reason has changed: this used to say the cooldown could not be read at all,
+  which [ADR-009](adrs/009-caret-index-from-the-counter.md) disproves — a private field is legally readable through
+  `API.Reflection`, and `MenuManager.typingInputCooldown` is one
+  (`Pug.Other:269210`). What remains is that reading it is not the same as
+  sharing it: the postfix would still have to decide *its own* repeat behaviour
+  from a timer vanilla restarts on its own terms. Switching to `GetKey` instead
+  is the shape to avoid — it would fire every frame while vanilla still moves on
+  its own ticks, racing the caret through the string at frame rate. Cursor
   position only — no text is lost. Found by the review gate 2026-08-26.
 - **MSM-24 — The click collider's fallback reads a transform that moves every frame.**
   `UpdateClickCollider` falls back to the field mask's `localScale`/
