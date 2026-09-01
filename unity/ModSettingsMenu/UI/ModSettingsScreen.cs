@@ -163,9 +163,13 @@ namespace ModSettingsMenu.UI
         {
             Manager.menu.centerPopUpText.StartNewDisplaySequence(
                 "ModSettingsMenu-UI/ResetConfirm",
-                // The mod's display name is a LITERAL, not a loc term, so localizePlaceholders must
-                // be false below — otherwise CK looks the name up as a term and renders "<missing>".
-                new string[] { section.DisplayName },
+                // The name the box shows, not the identifier underneath it: this dialogue asks the
+                // player to confirm destroying settings, and naming something they cannot see on
+                // screen is the one place that must not happen. Still a LITERAL — Heading() returns
+                // resolved text — so localizePlaceholders must be false below, otherwise CK looks
+                // the name up as a term and renders "<missing>". (The Debug.LogError calls further
+                // down keep DisplayName on purpose: a log wants the untranslated name.)
+                new string[] { section.Heading() },
                 menuInputCooldown: true,
                 fadeTime: 0f,
                 staticTime: 1.5f,
@@ -274,16 +278,24 @@ namespace ModSettingsMenu.UI
             _sectionRoots.Clear();
             _listWidgets.Clear();
 
-            // Boxes render alphabetically by DisplayName — a stable, findable order regardless of mod
-            // load/registration order. Sort a LOCAL copy so the registry keeps its insertion order.
-            // Options WITHIN a box keep declaration order (the consumer's author intent).
+            // Boxes render alphabetically by the heading actually shown — a stable, findable order
+            // regardless of mod load/registration order, and one that follows the active language
+            // for a discovered mod carrying a heading term. Ordering by the raw DisplayName instead
+            // would put such a box somewhere its visible name does not explain, which is the same
+            // mistake OrderedSettings avoids one level down. Sort a LOCAL copy so the registry keeps
+            // its insertion order. Options WITHIN a box keep declaration order (author intent).
             var sortedSections = new List<ModSection>(ModSettings.Sections);
             // GMCM-style generic discovery: fold in every foreign CoreLib config, unless the user
             // turned it off via MSM's own master toggle (null before Init -> default on).
             bool showForeign = ModSettingsMenuMod.ShowForeignConfigs == null || ModSettingsMenuMod.ShowForeignConfigs.Value;
             if (showForeign)
                 sortedSections.AddRange(ForeignConfigDiscovery.Discover());
-            sortedSections.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, System.StringComparison.OrdinalIgnoreCase));
+            // Heading() reaches I2 through Loc, and List.Sort would rewrap a throw from a comparator
+            // as InvalidOperationException("Failed to compare two elements") — a first log line naming
+            // the sort rather than the cause. It is not a new hazard: RenderTitle below already calls
+            // Loc unconditionally, so a broken LocalizationManager fails there first, with its own
+            // stack. Recorded so the next reader need not re-derive it.
+            sortedSections.Sort((a, b) => string.Compare(a.Heading(), b.Heading(), System.StringComparison.OrdinalIgnoreCase));
 
             foreach (var section in sortedSections)
             {
@@ -532,8 +544,9 @@ namespace ModSettingsMenu.UI
         }
 
         // Order a section's options per its OptionSort: AsDeclared keeps the builder-chain order;
-        // ByKey/ByLabel sort a LOCAL copy by the raw key / the localized label (Loc.T(term,key) — so
-        // ByLabel follows the active language). The section's Settings list itself stays untouched.
+        // ByKey/ByLabel sort a LOCAL copy by the raw key / the localized label (SettingDef.Label() —
+        // the same text the row shows, so ByLabel follows the active language and cannot order by
+        // something nobody is looking at). The section's Settings list itself stays untouched.
         private static List<SettingDef> OrderedSettings(ModSection section)
         {
             var list = new List<SettingDef>(section.Settings);
@@ -543,14 +556,14 @@ namespace ModSettingsMenu.UI
                     list.Sort((a, b) => string.Compare(a.Key, b.Key, System.StringComparison.OrdinalIgnoreCase));
                     break;
                 case OptionSort.ByLabel:
-                    list.Sort((a, b) => string.Compare(Loc.T(a.Term, a.Key), Loc.T(b.Term, b.Key), System.StringComparison.OrdinalIgnoreCase));
+                    list.Sort((a, b) => string.Compare(a.Label(), b.Label(), System.StringComparison.OrdinalIgnoreCase));
                     break;
             }
             return list;
         }
 
         // Build one section (Option A): instantiate the sectionTemplate and render its heading
-        // (DisplayName) plus an optional hint ABOVE a bordered box. The section root stacks
+        // (Heading(), which may translate it) plus an optional hint ABOVE a bordered box. The section root stacks
         // [Header, Hint, Widgets] vertically; the caller nests the toggles into the Widgets box,
         // whose LinearLayout carries a 9-slice background (32x32_itemui_border) that auto-sizes
         // to them. Header (bright) and hint (dimmed) are distinct prefab-styled PugTexts, so
@@ -565,19 +578,26 @@ namespace ModSettingsMenu.UI
             var box = sGo.GetComponent<SectionBox>();
             if (box != null && box.header != null)
             {
-                // Auto-detected mods get a marker so their raw keys / inferred widgets read as
-                // "discovered", not author-curated.
-                string heading = section.Foreign ? section.DisplayName + " " + Loc.T("ModSettingsMenu-UI/AutoDetected") : section.DisplayName;
+                // Auto-detected mods get a marker so their inferred widgets read as "discovered",
+                // not author-curated — the name itself may well be localized (ModSection.Heading()),
+                // so the marker is what says the box was not curated, not the look of the text.
+                string name = section.Heading();
+                string heading = section.Foreign ? name + " " + Loc.T("ModSettingsMenu-UI/AutoDetected") : name;
                 box.header.RenderPlain(heading);
             }
             if (box != null && box.hint != null)
             {
-                // Hint is hidden unless the section declares one; the layout skips inactive
-                // children, so hint-less sections collapse.
-                bool hasHint = !string.IsNullOrEmpty(section.HintText);
+                // Hint is hidden unless the section has one to show; the layout skips inactive
+                // children, so hint-less sections collapse. Ask for the RESOLVED text, not for the
+                // literal: a consumer may ship a "<ModId>-Config/_hint" translation without ever
+                // passing a literal to Hint(), and gating on the literal would switch the line off
+                // before its term was ever consulted — the term resolves, nobody sees it, nothing
+                // logs.
+                string hint = section.Hint();
+                bool hasHint = !string.IsNullOrEmpty(hint);
                 box.hint.gameObject.SetActive(hasHint);
                 if (hasHint)
-                    box.hint.RenderPlain(Loc.T(section.HintTerm, section.HintText));
+                    box.hint.RenderPlain(hint);
             }
             return sGo;
         }

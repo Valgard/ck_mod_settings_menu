@@ -24,7 +24,8 @@ namespace ModSettingsMenu.Settings
 
     /// <summary>How the options WITHIN a section are ordered in the menu. Default AsDeclared keeps
     /// the consumer's builder-chain order; ByKey/ByLabel sort alphabetically by the raw key / the
-    /// localized label (`Loc.T(term, key)`, so ByLabel re-sorts per active language).</summary>
+    /// localized label (<see cref="SettingDef.Label"/>, so ByLabel re-sorts per active
+    /// language).</summary>
     public enum OptionSort
     {
         AsDeclared,
@@ -121,6 +122,29 @@ namespace ModSettingsMenu.Settings
         public string Key; // e.g. "xpMultiplier"
         public SettingKind Kind;
         public string Term; // e.g. "FasterTalents-Config/xpMultiplier"
+
+        /// <summary>Second term to try for the label, in a foreign convention this mod did not
+        /// invent — see <see cref="GmcmTerms"/>. Null for a registered consumer, which has no
+        /// second stage. Never read directly: ask <see cref="Label"/>.
+        ///
+        /// Internal, unlike its neighbours above, and deliberately: a consumer can reach any
+        /// SettingDef through the public ModSettings.Sections, so a public field here would be a
+        /// working back door — set it and Label() honours it — for an audience that cannot even
+        /// see Label(). Nothing outside this assembly has a reason to write it; SectionBuilder
+        /// offers no way to, and a registered consumer never reaches discovery at all.</summary>
+        internal string GmcmTerm;
+
+        /// <summary>Second stage for a Choice's per-option text: a PREFIX ending in '/', to which
+        /// the token is appended. Null for a registered consumer.
+        ///
+        /// Named for what it is rather than as a term, because it is not one — concatenating it
+        /// with a token is what produces a term, and a bare name would invite it being looked up
+        /// as it stands. A field of its own rather than something derived from
+        /// <see cref="GmcmTerm"/>, even though the derivation would work: the foreign schema puts
+        /// the key on the other side of the slash for a value than for a label, and that rule
+        /// belongs in the one class that knows the schema. Never read directly: ask
+        /// <see cref="ValueLabel"/>.</summary>
+        internal string GmcmValueTermPrefix;
         public float Min; // Slider/Stepper only (ignored for Toggle)
         public float Max; // Slider/Stepper only (ignored for Toggle)
         public float Step = 1f; // Slider only: increment per ←/→ (bar segments = (Max-Min)/Step)
@@ -134,9 +158,9 @@ namespace ModSettingsMenu.Settings
         // how a Choice was read and written, back when every foreign Choice was an enum and the two
         // were coextensive; that now follows the entry's SettingType, which is what actually differs
         // (SettingWidget.Adjust). Two neighbouring behaviours look like they might still be its doing
-        // and are not — the raw label is Term = key (ForeignConfigDiscovery) reaching Loc.T's
-        // fallback, and the "(detected)" heading is ModSection.Foreign, a different field on a
-        // different type. Do not add a reader here expecting either.
+        // and are not — a row falling back to its raw key is the term chain finding nothing at any
+        // stage (SettingDef.Label), and the "(detected)" heading is ModSection.Foreign, a different
+        // field on a different type. Do not add a reader here expecting either.
         public bool Foreign;
         public bool Unbounded; // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
 
@@ -181,20 +205,77 @@ namespace ModSettingsMenu.Settings
             Kind == SettingKind.List
             && !ListAccess.CanAdd(EffectiveEditing)
             && ListTokenizer.Tokenize(Entry != null && Entry.BoxedValue != null ? Entry.BoxedValue.ToString() : "").Count == 0;
+
+        /// <summary>This row's displayed name: MSM's own term, then the foreign one, then the raw
+        /// key. Four places render a setting's name — the widget, the list row, the drill-in title
+        /// and the ByLabel sort — and a chain assembled at each of them is a chain three of them
+        /// can silently be missing. The sort is the one that hides it best: it would order by text
+        /// nobody is shown.</summary>
+        internal string Label()
+        {
+            string label = Loc.TFirstOf(Term, GmcmTerm, Key);
+            if (!string.IsNullOrEmpty(label))
+                return label;
+            // Nothing MSM builds reaches here — a consumer's key comes from its own builder call.
+            // A foreign one can: CoreLib's ConfigDefinition rejects whitespace and eight characters
+            // but accepts an empty key, and with an empty value beside it the row would render at
+            // Rect.zero — reachable by arrow key, invisible, unclickable. A placeholder keeps it on
+            // screen, and the warning says why it has no name. Same call ForeignConfigDiscovery
+            // already makes for a blank Choice token, which it refuses for the same reason.
+            UnityEngine.Debug.LogWarning(
+                $"[ModSettingsMenu] a setting under '{Term}' resolved to no name at any stage and has no key to fall back on — showing a placeholder so the row stays reachable."
+            );
+            return "(unnamed)";
+        }
+
+        /// <summary>The displayed text for one Choice token, by the same chain. Unlike
+        /// <see cref="Label"/> this has a single call site, so drift is not the reason it lives
+        /// here: the two schemas compose a per-option term differently — one appends the token to
+        /// the label, the other to a prefix that moved the key — and a call site would have to
+        /// know which is which to write it out.</summary>
+        internal string ValueLabel(string token) => Loc.TFirstOf(Term + "/" + token, GmcmValueTermPrefix == null ? null : GmcmValueTermPrefix + token, token);
     }
 
     /// <summary>
-    /// One consumer mod's registered section. The menu renders DisplayName as the
-    /// heading (never the internal ModId), an optional hint, then a box of widgets.
+    /// One consumer mod's registered section. The menu renders <see cref="Heading"/> — which
+    /// resolves to DisplayName unless a discovered mod carries a term for it, and never to the
+    /// internal ModId — then an optional hint, then a box of widgets.
     /// </summary>
     public sealed class ModSection
     {
         public string ModId; // Metadata.name — internal id + term prefix
-        public string DisplayName; // Metadata.displayName — shown heading
+
+        // Heading fallback, and not always Metadata.displayName: a discovered section carries the
+        // config file's folder name here instead. Ask Heading(), which may translate it.
+        public string DisplayName;
         public string HintTerm; // "<ModId>-Config/_hint" (loc term, resolved in Phase 3)
         public string HintText; // optional literal hint shown under the heading (pre-loc)
         public OptionSort OptionSort = OptionSort.AsDeclared; // order of options within this box
         public bool Foreign; // true → auto-detected mod: heading gets the "(detected)" marker
         public readonly List<SettingDef> Settings = new List<SettingDef>();
+
+        /// <summary>Term to try for the heading before falling back to DisplayName, in the foreign
+        /// convention of <see cref="GmcmTerms"/>. Null for a registered consumer.
+        ///
+        /// Two stages where a setting's label gets three: MSM has never published a term schema for
+        /// a section heading — a registered consumer supplies the text itself — so there is no
+        /// first stage for a foreign author to have aimed at. Inventing one here would add a
+        /// lookup nothing can answer.
+        ///
+        /// Internal for the same reason as <see cref="SettingDef.GmcmTerm"/>: reachable from
+        /// outside through ModSettings.Sections, with no use there.</summary>
+        internal string HeadingTerm;
+
+        /// <summary>The heading as rendered, before the caller adds the "(detected)" marker. Every
+        /// place that shows this section's name asks here — the box, the alphabetical order of the
+        /// boxes, and the reset confirmation, which must name the mod the player is looking at
+        /// rather than the identifier underneath it.</summary>
+        internal string Heading() => Loc.T(HeadingTerm, DisplayName);
+
+        /// <summary>The hint line under the heading, or null when the section has none — the
+        /// one caller guards with IsNullOrEmpty.
+        /// Here rather than at the call site so that both of this type's rendered strings resolve
+        /// in the same place — a reader should not have to learn which of them is the exception.</summary>
+        internal string Hint() => Loc.T(HintTerm, HintText);
     }
 }

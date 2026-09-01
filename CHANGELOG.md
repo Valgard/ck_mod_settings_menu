@@ -5,6 +5,15 @@ entry is the version published to mod.io; its body is the modfile changelog.
 
 ## [2.0.0]
 
+- **Detected mods can show translated names.** A mod that ships translations for
+  its own settings now has them used here — for its heading, its setting names,
+  and the values of a multiple-choice setting alike. Both naming schemes are
+  understood: this menu's own, and the one General Mod Config Menu established,
+  so a mod that follows GMCM's naming convention needs nothing new. The translated
+  name is what the rest of the screen goes by, too: mods stay in alphabetical
+  order by the name you actually see, and the reset confirmation names a mod the
+  way its box does. A mod that ships no translations is unaffected and keeps
+  showing the plain names from its config file.
 - **A detected mod's setting that allows only certain values can now be
   changed.** Such a setting used to be shown but not editable, no matter what
   the mod itself permitted — it now works like any other choice, cycling through
