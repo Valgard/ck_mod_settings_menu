@@ -122,7 +122,10 @@ Mounts the settings of mods that use CoreLib config but never called `ModSetting
 - bool → Toggle
 - enum → Choice
 - ranged int/float → Stepper/Slider
-- an `AcceptableValueList` → Info
+- a closed set of acceptable values → Choice. `AcceptableValueList<string>` is read directly; any
+  other `T` hides its values behind a generic property only reflection could reach, so the set is
+  reconstructed from `ToDescriptionString()` and kept only if every token converts back to a value
+  the constraint calls valid (`TryTokens`) — otherwise the entry falls through to Info below
 - a bare numeric → unbounded Stepper
 - a raw string → `List`, when a heuristic judges it a genuine comma-list (≥2 tokens, none
   containing a `.` and none more than two words — ADR-006 replaced an underived 32-character cap

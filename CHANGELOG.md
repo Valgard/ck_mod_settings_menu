@@ -5,6 +5,11 @@ entry is the version published to mod.io; its body is the modfile changelog.
 
 ## [2.0.0]
 
+- **A detected mod's setting that allows only certain values can now be
+  changed.** Such a setting used to be shown but not editable, no matter what
+  the mod itself permitted — it now works like any other choice, cycling through
+  exactly the values that mod accepts and nothing else. Text and numeric value
+  sets alike.
 - **List entries can be reordered and deleted.** Every row in the drill-in now
   carries up/down arrows and a delete button, reachable by mouse, keyboard and
   controller alike. Deleting asks first — the confirmation names the entry and
