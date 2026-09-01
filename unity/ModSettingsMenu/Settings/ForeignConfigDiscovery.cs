@@ -308,7 +308,12 @@ namespace ModSettingsMenu.Settings
                     // Narrow by construction, not by filter: the type is known convertible, so what is
                     // left is this token, a foreign converter registered through
                     // TomlTypeConverter.AddConverter, or a genuine fault worth seeing named.
-                    return Degraded(id, $"\"{token}\" did not read back as {settingType.Name} ({ex.Message})");
+                    // The setting's type is deliberately not named here. Type.Name is inherited from
+                    // System.Reflection.MemberInfo, so reading it emits a call into a denied namespace
+                    // and the mod fails the load-time security verification — while System.Type itself,
+                    // typeof(...) and Type.IsEnum are all fine. The Unity build cannot catch this: it
+                    // compiles against the real assemblies, and the check runs in the game.
+                    return Degraded(id, $"\"{token}\" did not read back as the type the setting stores ({ex.Message})");
                 }
                 if (!av.IsValid(value))
                     return Degraded(id, $"\"{token}\" read back, but the setting's own constraint rejects it");
