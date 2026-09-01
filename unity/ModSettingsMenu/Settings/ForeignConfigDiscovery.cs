@@ -252,10 +252,16 @@ namespace ModSettingsMenu.Settings
         /// generic property, so `av is AcceptableValueList&lt;X&gt;` reaches them for any X written down
         /// here — the way TryRange below names int and float. String is written down because it is the
         /// shape MSM's own declared Choice binds and the one a foreign mod is likeliest to use. What
-        /// does not scale is the open set: naming every T a mod might pick is not possible, and
-        /// reaching an unnamed one needs reflection, which the sandbox forbids (docs/ck/sandbox.md).
-        /// So the fallback parses ToDescriptionString() — the same human-readable line CoreLib writes
-        /// into the .cfg — instead: "# Acceptable values: a, b, c".
+        /// does not scale is the open set: naming every T a mod might pick is not possible. So the
+        /// fallback parses ToDescriptionString() — the same human-readable line CoreLib writes into
+        /// the .cfg — instead: "# Acceptable values: a, b, c".
+        ///
+        /// That is a choice of SOURCE, not the only route, and the distinction is load-bearing because
+        /// every check below exists to compensate for it. `System.Reflection.*` is denied, but PugMod's
+        /// own `API.Reflection` is not (ADR-009, already load-bearing in this mod) and a `T[]` casts to
+        /// `System.Array` — so the values are reachable without ever naming T, and reading them would
+        /// make the whole guard sequence unnecessary. Which source is better here has not been
+        /// measured; see MSM-27. What ships is the parse.
         ///
         /// That line is documentation, not a serialization format, so the parse checks its own work at
         /// two levels. Per token: it counts only if <see cref="TomlTypeConverter"/> can turn it back
