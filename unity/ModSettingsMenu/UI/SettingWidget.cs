@@ -115,9 +115,9 @@ namespace ModSettingsMenu.UI
             return true;
         }
 
-        // Change the value one step in `dir` (Toggle flips regardless of sign). Numeric writes go
-        // through ConfigEntryBase.BoxedValue with type-exact casts; a Choice writes whichever way its
-        // SettingType allows (see the Choice case).
+        // Change the value one step in `dir` (Toggle flips regardless of sign). Integer writes go
+        // through ConfigEntryBase.BoxedValue with type-exact casts; an unbounded float Stepper and a
+        // Choice each convert first, for reasons local to their own case below.
         private void Adjust(int dir)
         {
             if (_def?.Entry == null)
@@ -173,14 +173,18 @@ namespace ModSettingsMenu.UI
                         break;
                     // Unknown/removed token -> snap to the first option; else step and wrap.
                     int next = idx < 0 ? 0 : ((idx + dir) % toks.Length + toks.Length) % toks.Length;
-                    // A string is its own storage form; everything else has to go back through the
-                    // converter. Safe because every token reached this point through it already:
-                    // ForeignConfigDiscovery.TryTokens only accepts a set it could convert AND validate,
-                    // and MSM's own declared Choice binds string tokens.
+                    // A string is its own storage form; every other type converts here. Both tokens
+                    // sources are known convertible: an enum's come from Enum.GetNames, which Toml
+                    // parses back by construction, and a foreign value set's were each converted once
+                    // already in ForeignConfigDiscovery.TryTokens. Deliberately NOT SetSerializedValue,
+                    // which would repeat that conversion inside a catch(Exception) that also wraps the
+                    // assignment — so a throwing foreign Clamp or SettingChanged subscriber would be
+                    // swallowed into a warning naming CoreLib, one line below a string branch where the
+                    // same fault is loud. Same write, same visibility, either way.
                     if (e.SettingType == typeof(string))
                         e.BoxedValue = toks[next];
                     else
-                        e.SetSerializedValue(toks[next]);
+                        e.BoxedValue = CoreLib.Data.Configuration.TomlTypeConverter.ConvertToValue(toks[next], e.SettingType);
                     break;
                 }
             }
