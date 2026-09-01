@@ -56,7 +56,21 @@ namespace ModSettingsMenu.Settings
             };
             foreach (var kv in cf.Entries)
             {
-                var def = BuildDef(cf.ConfigFilePath, kv.Key, kv.Value);
+                SettingDef def;
+                try
+                {
+                    def = BuildDef(cf.ConfigFilePath, kv.Key, kv.Value);
+                }
+                catch (System.Exception ex)
+                {
+                    // AcceptableValueBase is a public abstract class, so ToDescriptionString() and
+                    // IsValid() may be a third party's override — TryTokens calls both. Classification
+                    // used to touch no foreign method at all (it matched types and read auto-properties),
+                    // so this guard arrived with that call. One bad entry costs its own row; without it,
+                    // the throw would leave Populate() and empty the screen for every mod at once.
+                    UnityEngine.Debug.LogError($"[ModSettingsMenu] classifying '{kv.Key.Key}' from '{cf.ConfigFilePath}' threw — omitting that row: {ex}");
+                    continue;
+                }
                 if (def != null)
                     section.Settings.Add(def);
             }
@@ -71,6 +85,9 @@ namespace ModSettingsMenu.Settings
         private static SettingDef BuildDef(string configFilePath, ConfigDefinition definition, ConfigEntryBase e)
         {
             string key = definition.Key;
+            // Identifies this entry across menu opens — used by ListKindStore below, and to keep a
+            // classification warning from repeating on every open.
+            string id = configFilePath + "|" + definition.Section + "|" + key;
             var d = new SettingDef
             {
                 Key = key,
@@ -90,8 +107,11 @@ namespace ModSettingsMenu.Settings
                 return d;
             }
 
-            // 2. enum -> Choice over the enum names (Toml serializes an enum as its name, so
-            //    Get/SetSerializedValue round-trip these tokens exactly).
+            // 2. enum -> Choice over the enum names. Toml renders an enum as its name and parses one
+            //    back, and Enum.ToString() is the same name — so these tokens survive both the widget's
+            //    BoxedValue.ToString() read and its converted write, with no per-type code path. An
+            //    enum never carries a value-set constraint (see TryTokens: AcceptableValueList's T is
+            //    IEquatable, which no enum satisfies), so there is nothing narrower to prefer here.
             if (t.IsEnum)
             {
                 d.Kind = SettingKind.Choice;
@@ -124,17 +144,19 @@ namespace ModSettingsMenu.Settings
             // 3c. A closed set of acceptable values -> Choice, cycled by the same widget MSM's own
             //     declared Choice uses. See TryTokens for why one shape is exact and the rest are
             //     reconstructed, and for what happens when the reconstruction cannot be trusted.
-            if (av != null && TryTokens(av, t, out string[] tokens))
+            if (av != null && TryTokens(av, e, id, out string[] tokens))
             {
                 d.Kind = SettingKind.Choice;
                 d.Tokens = tokens;
                 return d;
             }
 
-            // 4. A constraint whose value set could not be established (a range of an unhandled numeric
-            //    type, or a list whose tokens did not survive the round trip in TryTokens) -> read-only
-            //    Info regardless of scope — there is no editable widget for this shape at all, not just
-            //    "not allowed to touch it right now".
+            // 4. A constraint whose value set could not be established -> read-only Info regardless of
+            //    scope: a range of an unhandled numeric type, a constraint whose description this file
+            //    does not recognise (a third party's own AcceptableValueBase subclass), or a list whose
+            //    tokens did not survive TryTokens. The first two are the designed route and silent; the
+            //    third is a degradation and says so in the log. Either way there is no editable widget
+            //    for this shape at all, not just "not allowed to touch it right now".
             if (av != null)
             {
                 d.Kind = SettingKind.Info;
@@ -172,7 +194,6 @@ namespace ModSettingsMenu.Settings
             if (t == typeof(string))
             {
                 string sval = e.BoxedValue?.ToString() ?? "";
-                string id = configFilePath + "|" + definition.Section + "|" + key;
                 bool isList = HeuristicSaysList(sval) || ListKindStore.WasEverList(id);
                 if (isList)
                     ListKindStore.MarkAsList(id);
@@ -207,41 +228,67 @@ namespace ModSettingsMenu.Settings
         /// cycles — or false when that set cannot be established, which leaves the caller with a
         /// read-only Info row.
         ///
-        /// One shape is exact and the rest are reconstructed, and the split is not a judgement about
-        /// them: <see cref="AcceptableValueList{T}"/> exposes its values through a generic property, so
-        /// they are reachable only where the type argument is known at compile time. For string that
-        /// is here. For any other T only reflection could reach them, which the Roslyn sandbox forbids
-        /// (docs/ck/sandbox.md), so the fallback reads the human-readable line CoreLib writes into the
-        /// .cfg instead — "# Acceptable values: a, b, c".
+        /// One shape is exact and the rest are reconstructed, and the split is about how many types a
+        /// pattern-match can name: <see cref="AcceptableValueList{T}"/> exposes its values through a
+        /// generic property, so `av is AcceptableValueList&lt;X&gt;` reaches them for any X written down
+        /// here — the way TryRange below names int and float. String is written down because it is the
+        /// shape MSM's own declared Choice binds and the one a foreign mod is likeliest to use. What
+        /// does not scale is the open set: naming every T a mod might pick is not possible, and
+        /// reaching an unnamed one needs reflection, which the sandbox forbids (docs/ck/sandbox.md).
+        /// So the fallback parses ToDescriptionString() — the same human-readable line CoreLib writes
+        /// into the .cfg — instead: "# Acceptable values: a, b, c".
         ///
-        /// That line is documentation, not a serialization format, so the parse checks its own work:
-        /// a token counts only if <see cref="TomlTypeConverter"/> can turn it back into a value AND the
-        /// constraint answers IsValid for it, and one failure discards the whole set rather than
-        /// offering a partial one. Which is what makes reading it safe rather than hopeful — the line
-        /// joins on ", ", so a value containing one arrives as fragments, and fragments fail IsValid.
+        /// That line is documentation, not a serialization format, so the parse checks its own work
+        /// twice over. Per token: it counts only if <see cref="TomlTypeConverter"/> can turn it back
+        /// into a value AND the constraint answers IsValid for it, and one failure discards the whole
+        /// set rather than offering a partial one. Per set: the result has to contain the value the
+        /// entry currently holds. The second check is the load-bearing one, because the first is a
+        /// likelihood and not a guarantee — fragments of a split value usually fail IsValid, but not
+        /// when the fragments are themselves acceptable values. See the comment on that check.
         ///
         /// An enum cannot reach the fallback at all: AcceptableValueList constrains T to
         /// IEquatable&lt;T&gt;, which no enum implements (CS0315), so no mod can restrict one this way.
         /// Enums are Choices already, from their member names, one case earlier.</summary>
-        private static bool TryTokens(AcceptableValueBase av, System.Type settingType, out string[] tokens)
+        private static bool TryTokens(AcceptableValueBase av, ConfigEntryBase e, string id, out string[] tokens)
         {
             tokens = null;
+            var settingType = e.SettingType;
 
             if (av is AcceptableValueList<string> exact)
             {
-                // Handed through rather than copied: nothing in this mod writes to SettingDef.Tokens,
-                // and a copy would only mask it if something ever did. The array is the foreign mod's.
-                tokens = exact.AcceptableValues;
-                return tokens != null && tokens.Length > 0;
+                var values = exact.AcceptableValues;
+                if (values == null || values.Length == 0)
+                    return false;
+                // The reconstruction below refuses a blank token, and this branch has to promise the
+                // same thing: a blank option is indistinguishable from an unset row, and cycling onto
+                // one writes it into what, for a real mod, is its own config file. A null is worse —
+                // it never matches the row's own read, so the row could never move off it again.
+                foreach (var value in values)
+                    if (string.IsNullOrEmpty(value))
+                        return Degraded(id, "one of the values it accepts is blank");
+                // Handed through rather than copied. Not because nothing writes to it today — that is a
+                // property of the current code, not of the design — but because a discovered SettingDef
+                // never leaves this screen: Discover() builds them into a local list per menu open
+                // (ModSettingsScreen.Populate) and drops them on the next rebuild, so no public surface
+                // can reach the foreign mod's array through it.
+                tokens = values;
+                return true;
             }
 
             // AcceptableValueRange describes itself as "# Acceptable value range: From x to y", so the
             // prefix alone tells CoreLib's two shipped constraints apart. A third party's own subclass
             // is judged by whether its description happens to match this one — which is the honest
-            // reading of a format that exists for a human opening the .cfg.
+            // reading of a format that exists for a human opening the .cfg. Not a degradation, so it is
+            // silent: this is the designed route for every unhandled range, the RangeDouble fixture
+            // included, and a warning here would fire on a healthy config at every menu open.
             const string prefix = "# Acceptable values: ";
             string description = av.ToDescriptionString();
             if (description == null || !description.StartsWith(prefix, System.StringComparison.Ordinal))
+                return false;
+
+            // A type with no converter is a shape MSM cannot reconstruct rather than a failure, and
+            // asking once here leaves the catch below with exactly one meaning: this token did not parse.
+            if (!TomlTypeConverter.CanConvert(settingType))
                 return false;
 
             var parts = description.Substring(prefix.Length).Split(',');
@@ -250,25 +297,56 @@ namespace ModSettingsMenu.Settings
             {
                 string token = part.Trim();
                 if (token.Length == 0)
-                    return false;
+                    return Degraded(id, "its list of values has a blank entry");
                 object value;
                 try
                 {
                     value = TomlTypeConverter.ConvertToValue(token, settingType);
                 }
-                catch
+                catch (System.Exception ex)
                 {
-                    return false; // no converter for this type, or this token is not one of its values
+                    // Narrow by construction, not by filter: the type is known convertible, so what is
+                    // left is this token, a foreign converter registered through
+                    // TomlTypeConverter.AddConverter, or a genuine fault worth seeing named.
+                    return Degraded(id, $"\"{token}\" did not read back as {settingType.Name} ({ex.Message})");
                 }
                 if (!av.IsValid(value))
-                    return false;
+                    return Degraded(id, $"\"{token}\" read back, but the setting's own constraint rejects it");
                 accepted.Add(token);
             }
 
-            if (accepted.Count == 0)
-                return false;
-            tokens = accepted.ToArray();
+            // The set must contain the value the entry is holding. CoreLib clamps at construction and on
+            // every write (ConfigEntryBase → AcceptableValueBase.Clamp), so a bound entry's value IS one
+            // of the acceptable ones — a reconstruction that lost or split something therefore fails
+            // this, whatever the cause. It is the guarantee the per-token checks cannot give, and the
+            // reason they cannot is worth naming: ToDescriptionString() renders with x.ToString() and no
+            // format provider while the converters back are pinned to InvariantInfo, so on a
+            // comma-decimal culture 0.5 is described as "0,5" and splits into "0" and "5" — fragments
+            // that both convert AND validate against a set that contains 0 and 5. Without this check the
+            // row would offer a set its own value is missing from, read idx < 0, and snap the player's
+            // value to the first token on the first keypress.
+            var reconstructed = accepted.ToArray();
+            if (System.Array.IndexOf(reconstructed, e.BoxedValue?.ToString() ?? "") < 0)
+                return Degraded(id, "the values it lists do not include the one it currently holds, so reading them back cannot have been faithful");
+
+            tokens = reconstructed;
             return true;
+        }
+
+        // Entries already reported on, so a rejection is stated once rather than at every menu open.
+        // Same shape as ListKindStore's per-entry memory, and for the same reason: Discover() re-runs
+        // per open, so anything said per entry has to be said once or it becomes log noise.
+        private static readonly HashSet<string> _degradationsReported = new HashSet<string>();
+
+        /// <summary>Reports a value set MSM recognised but could not trust, and returns false so the
+        /// caller leaves the entry read-only. Worth saying out loud because the player's symptom —
+        /// a setting they can see and cannot change — is identical to the designed outcome for a
+        /// shape MSM never claimed to render, and only the log can tell a mod author which they hit.</summary>
+        private static bool Degraded(string id, string reason)
+        {
+            if (_degradationsReported.Add(id))
+                UnityEngine.Debug.LogWarning($"[ModSettingsMenu] '{id}' states a fixed set of values, but {reason} — showing it as a read-only row instead.");
+            return false;
         }
 
         private static bool TryRange(AcceptableValueBase av, out float min, out float max)
