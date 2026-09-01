@@ -21,14 +21,16 @@ MOD_DEV_FLAGS=TestFixtures ../utils/build.sh
 Without that flag the fixtures do not exist and none of the list checks below
 can run — a normal build must never ship them.
 
-They are created through a raw CoreLib `ConfigFile` **outside**
+They are created through raw CoreLib `ConfigFile`s **outside**
 `ConfigStore.ForMod`, so `ConfigStore.IsOwn` does not recognise them and
 `ForeignConfigDiscovery` treats them exactly as it treats a third-party mod.
-They are not an imitation of the foreign path; they are that path with a file we
-own. The file to inspect after a write:
+They are not an imitation of the foreign path; they are that path with files we
+own. There are two, rendered as two `(detected)` sections, and either may need
+inspecting after a write:
 
 ```
 <bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestListFixtures/config.cfg
+<bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestChoiceFixtures/config.cfg
 ```
 
 | Fixture | Value | What it is for |
@@ -40,6 +42,34 @@ own. The file to inspect after a write:
 | `Overlong` | `Before, AncientGuardianStatueFragmentPolishedObsidianVariantLarge, After` | a 57-character token, far wider than the field, between two short neighbours |
 | `ProseNotAList` | `This is a long sentence, and another one` | prose that must NOT be taken for a list |
 | `WithSpaces` | `Item One, Item Two, Big Chest` | tokens containing spaces |
+
+`TestChoiceFixtures` covers the other thing discovery can produce: a setting
+constrained to a fixed set of values. Nothing on this machine produces one
+otherwise — every `AcceptableValueList` here lives in a file MSM created, which
+`ConfigStore.IsOwn` excludes from discovery.
+
+| Fixture | Value | What it is for |
+|---|---|---|
+| `ChoiceStrings` | `Medium` of Low/Medium/High | the exact path: `AcceptableValueList<string>` read directly |
+| `ChoiceComma` | `Alpha` of three | tokens holding the `", "` separator and a `"` — the quote is what tells the raw read from the escaped one |
+| `ChoiceInts` | `4` of 1/2/4/8 | the reconstruction path: tokens parsed back out of the description line |
+| `ChoiceEnum` | `Second` of three | the member-name round trip, always ON a member so never the guard |
+| `ChoiceFlags` | `Alpha, Beta` | a `[Flags]` combination — the value the guard exists to leave alone |
+| `ChoiceSingle` | `Only` | one option: the wrap arithmetic with nowhere to go |
+| `ChoiceReadOnly` | `Medium`, view-only | a locked Choice must still display the right token |
+| `ChoiceFloats` | `1.5` of 0.5/1.5/2.5 | how *this machine's* culture renders a decimal — outcome depends on it |
+| `RangeDouble` | `1.5`, range 0–10 | negative control: an unhandled constraint stays a read-only Info row |
+| `RefuseEmptyToken` | `Alpha` | a blank entry in the value list |
+| `RefuseUnconvertible` | `1` | a token that is not an `int` |
+| `RefuseInvalid` | `Alpha` | a constraint that rejects the values it prints |
+| `RefuseSplitValue` | `0.5` | a decimal separator that split the list into fragments |
+
+The four `Refuse*` fixtures use a dev-only `AcceptableValueBase` subclass
+(`DescriptionOnlyValues`), because CoreLib's own constraints cannot produce any
+of these states: its constructor refuses an empty set, no supported type renders
+a blank or unparseable token, and its `Clamp` corrects an off-set value at bind.
+They are also the only exercise of a third-party subclass, which is a case the
+code reasons about and nothing else reaches.
 
 The same flag also declares five lists through the **public consumer API**, in
 this mod's own section (`AddDeclaredListFixtures`). They are the other path
@@ -312,6 +342,87 @@ Run these with **both** devices in reach, alternating deliberately.
 - [ ] `ProseNotAList` still renders as a read-only info row with no drill-in.
       This slice must not move the list/prose heuristic.
 
+## Discovered Choice rows
+
+A detected setting whose mod restricted it to a fixed set of values. These run
+against the `TestChoiceFixtures` section. Two of them need the log as well as
+the screen — open `Player.log` after the walk and search for
+`[ModSettingsMenu]`.
+
+### Cycling
+
+- [ ] `ChoiceStrings` shows `Medium`; `→` steps to `High`, again wraps to `Low`,
+      and `←` walks back the same way.
+- [ ] `ChoiceInts` shows `4` and cycles `1 / 2 / 4 / 8`. This is the
+      reconstruction path — its tokens were parsed out of a description line
+      rather than read off the constraint, so the two paths must be walked
+      separately even though they look identical on screen.
+- [ ] `ChoiceEnum` shows `Second` and cycles `Second / First / Third` — the
+      declaration order, not alphabetical. Alphabetical output means something
+      is sorting the tokens.
+- [ ] `ChoiceSingle` shows `Only` and stays there. Pressing `←`/`→` must not
+      throw, must not raise the restart prompt, and must not write the file.
+- [ ] Every value above survives a relaunch.
+
+### The quote, and why it is the real check
+
+- [ ] `ChoiceComma` cycles to `Beta, and more` and then to `Say "hi"`, both
+      rendered exactly like that — **no backslashes**.
+- [ ] The `.cfg` holds `Say \"hi\"` while the row shows `Say "hi"`.
+
+Backslashes on screen, or a row that stops matching its own value, mean the read
+has fallen back to the serialized form. That is the whole point of this fixture:
+the escape set is small, so every other token here reads identically either way
+and would not catch a regression.
+
+### The value the row must not touch
+
+- [ ] `ChoiceFlags` shows `Alpha, Beta`. `←`, `→` and Enter all do nothing, and
+      the `.cfg` is unchanged afterwards. A combination has no member name to
+      cycle from, and snapping it to one flag would silently discard the other
+      in what, for a real mod, is its own file.
+
+### A locked Choice
+
+- [ ] `ChoiceReadOnly` shows `Medium` — the correct token, not a raw or escaped
+      one. It does not tint or pop in on selection, and no input changes it.
+
+### Culture
+
+- [ ] `ChoiceFloats` is either a working three-option Choice (`0.5 / 1.5 / 2.5`)
+      or a read-only Info row. Both are correct; which one says how this
+      machine's `CurrentCulture` renders a decimal. A cycle over `0`, `5`, `1`,
+      `2` is the failure — that is the split reaching the row.
+
+### Refused, and said out loud
+
+Each of these must render as a **read-only Info row** and log exactly one
+`[ModSettingsMenu]` warning naming the reason. Opening and closing the settings
+screen several times must not repeat the line — the report is once per entry,
+because discovery re-runs on every open.
+
+- [ ] `RefuseEmptyToken` — the value list has a blank entry.
+- [ ] `RefuseUnconvertible` — `two` is not an `int`.
+- [ ] `RefuseInvalid` — the constraint rejects the values it prints.
+- [ ] `RefuseSplitValue` — the list does not contain the value the setting
+      holds. This is the one that matters most: every fragment there converts
+      *and* validates, so only the set-level check catches it. Without that
+      check the row would offer `0 / 5` and the first keypress would overwrite
+      `0.5`.
+
+### The negative control
+
+- [ ] `RangeDouble` stays a read-only Info row showing `1.5`, and logs
+      **nothing**. It is not a degradation — an unhandled range is the designed
+      route to an Info row, and a warning here would fire on a healthy config at
+      every menu open.
+
+### Nothing else moved
+
+- [ ] The `TestListFixtures` section behaves exactly as the list checks above
+      describe. Discovery routes both, and a Choice case placed wrongly in the
+      cascade would take entries from the list path.
+
 ## The declared list path
 
 These run against the four fixtures in this mod's **own** section, not the
@@ -447,6 +558,12 @@ routes behave *differently* here, which nothing on screen shows.
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly
       the order shown on screen — no stray commas, no empty tokens.
+- [ ] `TestChoiceFixtures/config.cfg` carries, for every row cycled, the token
+      the row displayed — with `Say \"hi\"` as the one deliberate exception,
+      where the file holds the escaped form and the row does not.
+- [ ] The four `Refuse*` entries and `ChoiceFlags` are byte-identical to before
+      the walk. Nothing may write a value it refused to render, or one it
+      declined to cycle.
 - [ ] `Player.log` holds no exception from this mod, and no warning **other than**
 the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
-duplicate fixtures, and `testDupKey`).
+duplicate fixtures, `testDupKey`, and one line for each `Refuse*` entry).
