@@ -4,6 +4,24 @@ Planned, not-yet-built work. Shipped widgets (Toggle, Slider, Stepper,
 Choice) live in `SettingKind` and the fluent `SectionBuilder` API; this file
 tracks the **next** batch.
 
+Every point carries a reference id — `MSM-01`, `MSM-02`, … — so a commit, an ADR
+or a conversation can name one without quoting a heading. Quoting one is what
+goes wrong: the heading gets reworded, or its point ships and the section is
+deleted, and every reference to it stops resolving in silence — as happened to
+§ "Horizontal scrolling in a text field", cited from ADR-006 after it was
+removed here. No gate catches that, because a prose `§ "…"` is not a link.
+Three rules make the id worth more than the title it replaces:
+
+- **Assigned once, never reused.** A point that ships takes its id with it, so an
+  older reference can never come to mean a different point.
+- **Not derived from the position here.** Adding, removing or moving a point
+  changes nothing about the ids around it. Do not renumber.
+- **Cited bare.** Write `MSM-08`, not `MSM-08 ("Colour settings")` — repeating
+  the title beside the id reintroduces the staleness the id removes.
+
+A section without an id is not work: the out-of-scope list, the rationale for a
+widget split, and the HealthBars yardstick.
+
 ## Planned widgets
 
 Three new widget kinds, ordered by cost (cheapest first). All three stay
@@ -12,7 +30,7 @@ places them inline in the builder chain — the `SettingKind` drives which
 prefab + behaviour the renderer picks. See `docs/superpowers/plans/` history
 for how the existing widgets were built.
 
-### 1. Button / Action-Row
+### MSM-01 — Button / Action-Row
 
 A row that holds **no value** and fires a **consumer-supplied** callback on
 activate — the declaration-side counterpart to the value widgets, for actions a
@@ -41,7 +59,7 @@ mod author wants reachable from the settings screen.
   `docs/adrs/004-section-reset-to-defaults.md`) — this is a declaration API for
   a consumer's own callback, unrelated to that framework-owned logic.
 
-### 2. Info (read-only)
+### MSM-02 — Info (read-only)
 
 A row showing a **computed, non-editable** value in the normal option layout
 (label left, value right).
@@ -57,7 +75,7 @@ A row showing a **computed, non-editable** value in the normal option layout
   same widget, not a second kind. Default: focusable (consistent with sibling
   rows), revisit if it feels wrong.
 
-### 3. Separator / Label
+### MSM-03 — Separator / Label
 
 A **display-only** row rendered **full-width** (a heading or a divider),
 **not** the two-column option layout — for structuring long sections.
@@ -72,7 +90,7 @@ A **display-only** row rendered **full-width** (a heading or a divider),
   Editor**: a `-batchmode` build reserializes and drops hand-authored objects /
   nulls refs. So this is real Editor work, not a code-only change.
 
-## Why 2 and 3 are separate widgets
+## Why MSM-02 and MSM-03 are separate widgets
 
 Logically both are "silent" (non-interactive) rows, but the split is driven by
 **layout topology at the prefab layer**, not by intent:
@@ -92,14 +110,13 @@ separator can sit between option 3 and 4).
 - **Keybind capture** — attractive for action mods, but real input-capture
   breaks the skim-row model and Core Keeper already owns a rebinding system.
   Only if a consumer actually needs it.
-- ~~**Colour picker**~~ — **moved out of this list 2026-08-13**, see
-  § "Colour settings — HealthBars' gradient-glyph slider". The entry used to
-  read "model as a `Choice<T>` over preset swatches instead", on the unstated
-  assumption that a colour picker needs a 2D area the row raster cannot give.
-  The installed foreign mod **HealthBars** disproves it: an HSV picker is four
-  scalars, and a scalar with a gradient is a `PugText` with per-glyph colours.
-  Not promoted to a planned widget yet — it needs its own design pass — but it
-  is no longer out of scope on the layout argument.
+- ~~**Colour picker**~~ — **moved out of this list 2026-08-13**, see MSM-08. The
+  entry used to read "model as a `Choice<T>` over preset swatches instead", on
+  the unstated assumption that a colour picker needs a 2D area the row raster
+  cannot give. The installed foreign mod **HealthBars** disproves it: an HSV
+  picker is four scalars, and a scalar with a gradient is a `PugText` with
+  per-glyph colours. Not promoted to a planned widget yet — it needs its own
+  design pass — but it is no longer out of scope on the layout argument.
 - **Multi-select / flags** — N separate toggles already cover it and read
   clearer.
 - **Dual-range (min–max) slider** — too niche to build for. **Reason narrowed
@@ -135,7 +152,7 @@ separator can sit between option 3 and 4).
 > free — not controller-hostile at all. See the next section for what is
 > actually still missing (a *consumer-facing* way to declare one).
 
-## Entries chosen from a catalogue, not typed (`ListEditing.FromPicker`)
+## MSM-04 — Entries chosen from a catalogue, not typed (`ListEditing.FromPicker`)
 
 `SectionBuilder.List` shipped with three levels — `FreeText`, `OrderOnly`,
 `ReadOnly` — which between them cover a list whose entries the player writes and
@@ -176,7 +193,7 @@ catalogue. Also open: where the *set* comes from — a consumer-supplied array i
 the simple answer and probably too big for one; anything smarter is a filter or
 a search, which is a screen, not a parameter.
 
-## Text input for plain string settings (`SettingKind.Text`)
+## MSM-05 — Text input for plain string settings (`SettingKind.Text`)
 
 A **genuinely editable** single-line string row in the main settings screen —
 the widget a consumer needs for a plain `string` value (a name, a prefix, a
@@ -209,8 +226,8 @@ scalar string still has no declaration of its own.
 
 ### What it needs beyond the drill-in row
 
-The geometry differs, and by this file's own rule (§ "Why 2 and 3 are separate
-widgets") divergent geometry means a divergent prefab:
+The geometry differs, and by this file's own rule (§ "Why MSM-02 and MSM-03 are
+separate widgets") divergent geometry means a divergent prefab:
 
 - **Two-column, not full-width.** A drill-in row *is* the value and spans the
   row; a settings row is `label` left / `value` right. The text field has to
@@ -226,7 +243,7 @@ widgets") divergent geometry means a divergent prefab:
   being a `ListDetailItem` — they need to gate on the new row type too, or the
   main screen reproduces the exact bug they were written for.
 
-### Masked values (a secret setting)
+### MSM-06 — Masked values (a secret setting)
 
 The eye icon in the *Join Game* screenshots is not a bespoke control: it is a
 `RadicalMenuOption_Toggle` assigned to the text input's own
@@ -264,7 +281,7 @@ the mask.
   character; marking it restart-dirty on every keystroke would be wrong. The
   dirty flag should be set on commit, not on change.
 
-## Dropdown lists — CK's `DropdownUIElement`
+## MSM-07 — Dropdown lists — CK's `DropdownUIElement`
 
 An **expanding dropdown** instead of `←/→` step-through, for a `Choice` whose
 option count outgrows the skim model, and as a value-suggestion list on an
@@ -388,7 +405,7 @@ dropdown.
   `Choice`'s value handling; a flag on `Choice` (`.AsDropdown()`, or automatic
   above N options) keeps one value path and one loc convention. The flag looks
   right, but it means one `SettingKind` maps to two prefabs — which is exactly
-  the coupling § "Why 2 and 3 are separate widgets" argues against. Resolve
+  the coupling § "Why MSM-02 and MSM-03 are separate widgets" argues against. Resolve
   before coding.
 - **Does it belong in the drill-in, the main screen, or both?** Obstacle 1 has
   to be solved per screen.
@@ -397,7 +414,7 @@ dropdown.
   is achievable — but it is the part most easily left half-done, and this
   framework's own driver is "Core Keeper is controller-first".
 
-## Colour settings — HealthBars' gradient-glyph slider
+## MSM-08 — Colour settings — HealthBars' gradient-glyph slider
 
 A colour-valued setting, rendered inside the ordinary row raster. Surfaced
 2026-08-13 from the installed foreign mod **HealthBars** (mod.io id `4164578`),
@@ -444,7 +461,7 @@ C# 9 records with `with` expressions evidently pass the Roslyn sandbox.
 - **Does the gradient need the `boldLarge` atlas?** The `Steps` slider's `♦/♢`
   already forced a per-widget font switch; `|` may have the same constraint.
 
-## Slider interaction & write amplification
+## MSM-09 — Slider interaction & write amplification
 
 Three findings from the same mod that apply to **MSM's existing sliders**, not
 just to a future colour one:
@@ -481,10 +498,9 @@ the **order of operations**, because it is counter-intuitive:
 features.** Its stored options are seven booleans plus four `HsvColor` values
 and a reset row. MSM covers the booleans and, since 2026-08-16, resetting too
 (though as a per-section footer-hint action, not a row — see
-`docs/adrs/004-section-reset-to-defaults.md`): there is no colour kind (this
-file's own § above is the plan, not an implementation), and the slider
-interaction its colour rows depend on is the § above. Asking now would mean
-asking a working mod to regress.
+`docs/adrs/004-section-reset-to-defaults.md`): there is no colour kind (MSM-08
+is the plan, not an implementation), and the slider interaction its colour rows
+depend on is MSM-09. Asking now would mean asking a working mod to regress.
 
 **It is also invisible to ADR-001 discovery.** `ForeignConfigDiscovery` finds
 mods that use a CoreLib `ConfigFile`; HealthBars persists its own JSON through
@@ -507,7 +523,7 @@ options menu** rather than a screen of its own —
 `AddOptionFromPath`. Menu id `19901` is one of the two ids MSM's own 29314/29315
 were deliberately chosen to avoid.
 
-## Locked settings — CK's `GRAYED_OUT` convention
+## MSM-10 — Locked settings — CK's `GRAYED_OUT` convention
 
 Core Keeper has a **shipped convention for a setting that exists but cannot be
 changed right now**: the whole row (label *and* value) renders in a dull red,
@@ -577,9 +593,9 @@ outright. Two things it does **not** buy:
 and its red is a signal that something is being withheld. It is *not* the model
 for a permanently display-only row: `SettingKind.Info` and the planned
 `Separator/Label` are inert by nature, and their "focusable or skipped?"
-question (see § Planned widgets #2) stays their own. The read-only-list
-precedent already goes the other way on purpose — `ListDetailItem` keeps a
-read-only list's rows `ACTIVE` so they remain navigable for *reading*.
+question (see MSM-02) stays their own. The read-only-list precedent already goes
+the other way on purpose — `ListDetailItem` keeps a read-only list's rows
+`ACTIVE` so they remain navigable for *reading*.
 
 ### Open design questions — locked settings
 
@@ -609,7 +625,7 @@ read-only list's rows `ACTIVE` so they remain navigable for *reading*.
   of at the next selection change. A dependency-driven lock in this framework
   needs the same nudge on whatever row just became locked.
 
-### Nothing reaches a row that the player did not touch
+### MSM-11 — Nothing reaches a row that the player did not touch
 
 The lock has to appear **while the screen is open**, and today nothing can make
 that happen. A row is refreshed at exactly four places — on bind
@@ -642,7 +658,7 @@ Whether MSM must poll as well, or whether CK offers an event nobody has looked
 for, is unverified. *To check:* search `PugMod.SDK.Runtime` and `Pug.Other` for
 connect/permission events before assuming a poll is the only option.
 
-## Escape does not cancel an edit
+## MSM-12 — Escape does not cancel an edit
 
 Found 2026-08-23 by the `pr-review-toolkit:silent-failure-hunter` gate while
 reviewing the drill-in row model. **Pre-existing** — not introduced by that work.
@@ -677,7 +693,7 @@ first, which also clears `activeInputField` and thereby disarms CK's own `if
 result handler, so only the call's *source* can separate "the player just typed
 this" from "the world just wiped it" — see that patch's comment.
 
-## A discovered entry's localisation term
+## MSM-13 — A discovered entry's localisation term
 
 A discovered entry is rendered under its **raw key**:
 `ForeignConfigDiscovery` sets `Term = key`, so there is nothing for the lookup to
@@ -708,9 +724,9 @@ readable instead of having its existing translations ignored.
   on `SettingDef` — the base for per-option terms, `null` meaning "use `Term`" —
   keeps them apart without touching how registered consumers behave.
 - **Not included:** the hover description GMCM reads from `<key>Desc`; see
-  § "A description per entry" below.
+  MSM-17 below.
 
-## `AcceptableValueList<string>` should render as a Choice
+## MSM-14 — `AcceptableValueList<string>` should render as a Choice
 
 A discovered entry constrained by anything other than a numeric range is routed
 to a read-only `Info` row — while `SectionBuilder` binds every declared `Choice`
@@ -729,18 +745,18 @@ if (av is AcceptableValueList<string> l) { d.Kind = SettingKind.Choice; d.Tokens
 - **Worth it on its own:** it makes MSM's own declared settings legible to MSM's
   own discovery path.
 
-## Group a mod's rows by its `.cfg`'s own sections
+## MSM-15 — Group a mod's rows by its `.cfg`'s own sections
 
 Everything binds into the CoreLib section `"Settings"` today, so a discovered mod
 renders as one flat list. GMCM groups by the file's own sections. For a mod with
 twenty values that is the difference between a list and a structure.
 
-- **It rides on the planned Separator/Label widget** (§ "Planned widgets" #3): a
-  section header *is* that widget's `.Label(key)` — full width, no value column,
-  not interactive. So this point carries no Editor work of its own, and it
-  becomes the first real consumer of a widget that would otherwise ship
-  unexercised. Build the widget first; if a grouped header cannot be built from
-  it, the widget's spec is incomplete, and that is better learned here.
+- **It rides on the planned Separator/Label widget** (MSM-03): a section header
+  *is* that widget's `.Label(key)` — full width, no value column, not
+  interactive. So this point carries no Editor work of its own, and it becomes
+  the first real consumer of a widget that would otherwise ship unexercised.
+  Build the widget first; if a grouped header cannot be built from it, the
+  widget's spec is incomplete, and that is better learned here.
 - **Deliberately not collapsible.** Core Keeper has no expand/collapse idiom in
   its menu UI at all — a search for `Expand`, `Collapse`, `Foldout`,
   `SwitchExpandState`, `isExpanded` turns up only ECS collider pooling and two
@@ -753,7 +769,7 @@ twenty values that is the difference between a list and a structure.
   repeating the box heading. Either grouping stays limited to discovered mods, or
   `SectionBuilder` gains a way to name sections.
 
-## A master switch with sub-values
+## MSM-16 — A master switch with sub-values
 
 GMCM's `CombindConfigPage` is a public API a consuming mod registers against: a
 `bool` entry plus named sub-values bound underneath it, rendered as an indented
@@ -763,13 +779,13 @@ group the switch collapses. MSM has no equivalent.
   `RadicalMenuOption_Toggle.relatedOption` is exactly the API shape — a
   serialized reference rather than a callback — but propagates only `INACTIVE`,
   so the dependent row *disappears*. The shape transfers, the behaviour must not;
-  see § "Locked settings".
+  see MSM-10.
 - **Open:** is this a `SectionBuilder` declaration (`.EnabledWhen(...)`, already
   an open question there) or a group API like GMCM's? The difference is that
   GMCM's can also *bind* the sub-values, not merely lock them.
 - **Depends on** the grouping point above for the indentation.
 
-## A description per entry — undecided, and deferred
+## MSM-17 — A description per entry — undecided, and deferred
 
 GMCM reads a description from the term `<key>Desc` and shows it as hover text.
 MSM shows none. **Neither whether this happens nor in what form is decided**, and
@@ -786,7 +802,7 @@ the form is the harder half:
   without a resolved term there is no text to show — and once it is clear whether
   the grouping point rebuilds the screen anyway.
 
-## A consumer-declared access level, for every widget
+## MSM-18 — A consumer-declared access level, for every widget
 
 `SettingDef.ReadOnly` exists and works, and **only the discovery path can set
 it**. `SectionBuilder` passes no `ConfigScope` to `_file.Bind`, so every declared
@@ -821,8 +837,8 @@ than a parameter:
 - **`SettingDef.ReadOnly` carries two unrelated claims** (`SettingModel.cs`):
   "locked by permission right now" and "no editable widget exists for this
   value's shape at all". Only the first is a lock worth showing a player, and
-  the § "Locked settings" feedback needs to tell them apart. Split it here,
-  where the vocabulary for the first one arrives.
+  the MSM-10 feedback needs to tell them apart. Split it here, where the
+  vocabulary for the first one arrives.
 
 **The default is `Server`, and nobody chose it.** `SectionBuilder` binds without
 a `ConfigScope`, CoreLib falls back to `ConfigScope.Empty`, and that is `new()` —
@@ -850,7 +866,7 @@ The distinction only bites with a joined player: offline sessions report
 identically in singleplayer and while hosting. A permission feature therefore
 cannot be tested alone. Details in `docs/ck/multiplayer-and-server.md`.
 
-## Server sync — one point, not three
+## MSM-19 — Server sync — one point, not three
 
 MSM reads the server's rules in full already (`ForeignConfigDiscovery.IsReadOnly`
 → CoreLib's `ConfigScope.Changeable()`) and cannot send a change to the server.
@@ -952,8 +968,7 @@ caller.
 - **Open:** a value the server accepts is then in memory but not on the player's
   disk, so it is gone at the next singleplayer start. That is consistent, but it
   should surprise nobody.
-- **The refusal itself is § "Locked settings"** — the same feedback, a different
-  trigger.
+- **The refusal itself is MSM-10** — the same feedback, a different trigger.
 - **Collision rule: an incoming value beats your pending one.** If another player
   changes the same entry while you wait, the server wins. GMCM decides it the
   same way (`OnReceiveSync` drops the pending change) but does it **silently** —
@@ -1010,14 +1025,14 @@ and that case is the ordinary one, not the exotic one.
   utility. If one exists it is preferable to a hand-rolled `FNV1A64`. *To check:*
   grep for `FNV1A64`, `Hash128`, `StableTypeHash` and their string overloads.
 
-**Delivery to an open row is the subscription from § "Locked settings", not the
-id space.** GMCM needs a detour there because its menu is a singleton whose rows
-live permanently: a received value lands in a list, is drained in the menu's own
+**Delivery to an open row is the subscription from MSM-11, not the id space.**
+GMCM needs a detour there because its menu is a singleton whose rows live
+permanently: a received value lands in a list, is drained in the menu's own
 `Update`, and is mapped to a row through a `Dictionary<ConfigEntryBase, …>`. MSM
 rebuilds its rows **per open**, so there is no row to update while the screen is
-closed, and on opening the current value is there anyway. Delivery is needed only
-for the one case where the screen is open, and a per-entry subscription covers
-it. No mailbox, no mapper, no id.
+closed, and on opening the current value is there anyway. Delivery is needed
+only for the one case where the screen is open, and a per-entry subscription
+covers it. No mailbox, no mapper, no id.
 
 **The ghost route is more expensive despite being vanilla's own.** Replicating
 state through a ghost component instead of RPCs would move the ghost collection
@@ -1057,46 +1072,46 @@ reachable for admins.
 
 ## Small fixes
 
-- **Format-override toggle / misclassification confirmation for editable lists.**
-  `ForeignConfigDiscovery`'s `HeuristicSaysList` can misclassify a foreign plain
-  string as a list; in the read-only drill-in (ADR-002) that was harmless, but
-  the `list-widget-editing` slice makes the drill-in write `BoxedValue` back
-  into the foreign `ConfigEntry` on commit — a misclassification now risks a
-  lossy, comma-rejoined overwrite of a third-party mod's real config value.
-  ADR-002 §7's format-override toggle (or a lighter one-time confirmation
-  before the first write to an unconfirmed entry) is the fix; deliberately not
-  built in that slice (see ADR-003's "Consequences" section — the risk this
-  bullet describes). Flagged by the `pr-review-toolkit:review-pr` gate,
-  requested 2026-08-12.
-- **`Shake()` is inherited and unused.** `RadicalMenuOptionTextInput` ships shake
-  feedback (0.4 s, 20/s, already configured on the row template) for exactly the
-  case where it silently discards input, and the drill-in has two such cases: a
-  typed comma is stripped at commit, and a row whose text already fills the
-  255-character cap refuses every keystroke (`room == 0` in the `AppendString`
-  prefix). The second case used to be vanilla's width rejection; horizontal
-  scrolling removed that one and moved the same silence to a different, much
-  rarer threshold — reachable since ADR-006 let long identifiers through as list
-  tokens. Both vanish without a word today. **Not the field flip
+- **MSM-20 — Format-override toggle / misclassification confirmation for
+  editable lists.** `ForeignConfigDiscovery`'s `HeuristicSaysList` can
+  misclassify a foreign plain string as a list; in the read-only drill-in
+  (ADR-002) that was harmless, but the `list-widget-editing` slice makes the
+  drill-in write `BoxedValue` back into the foreign `ConfigEntry` on commit — a
+  misclassification now risks a lossy, comma-rejoined overwrite of a third-party
+  mod's real config value. ADR-002 §7's format-override toggle (or a lighter
+  one-time confirmation before the first write to an unconfirmed entry) is the
+  fix; deliberately not built in that slice (see ADR-003's "Consequences"
+  section — the risk this bullet describes). Flagged by the
+  `pr-review-toolkit:review-pr` gate, requested 2026-08-12.
+- **MSM-21 — `Shake()` is inherited and unused.** `RadicalMenuOptionTextInput`
+  ships shake feedback (0.4 s, 20/s, already configured on the row template) for
+  exactly the case where it silently discards input, and the drill-in has two
+  such cases: a typed comma is stripped at commit, and a row whose text already
+  fills the 255-character cap refuses every keystroke (`room == 0` in the
+  `AppendString` prefix). The second case used to be vanilla's width rejection;
+  horizontal scrolling removed that one and moved the same silence to a
+  different, much rarer threshold — reachable since ADR-006 let long identifiers
+  through as list tokens. Both vanish without a word today. **Not the field flip
   it looks like:** the comma strip happens at commit, and every commit path
-  destroys and rebuilds the row, so a shake started there would animate an object
-  that disappears in the same frame — the feedback has to move to the moment of
-  typing. `ShakeAndClear` despite its name clears only its own coroutine handle,
-  not the text. Carried over 2026-08-23 from the drill-in-frame work, which
-  shipped the rest of that section.
-- **Read `currentCharIndex` through `API.Reflection` instead of reconstructing
-  it.** The drill-in derives the caret's character index from the blinker's
-  position, which is exact only while `PugText`'s glyph count matches the
-  string's — and `TextFieldViewport.IndexSpaceIsSound` exists for no other reason
-  than to catch the four ways it does not. The counter itself turns out to be
-  reachable: `API.Reflection`'s `GetMembersChecked` / `GetValueChecked` get at a
-  private member legally inside the Roslyn sandbox (`docs/ck/sandbox.md`
-  § "Reaching a private member"), which the design took for impossible. Reading
-  it makes the index authoritative and the soundness check unnecessary. Not free:
-  three callers plus the guard, `API.Reflection` is used nowhere in this repo yet,
-  and it would run on every keystroke — measure before committing to it. The
-  blinker's position stays either way, because the scroll offset needs it. Found
-  2026-08-27, after the feature shipped.
-- **Holding a word-jump key crawls after the first jump.** Vanilla's arrow branch
+  destroys and rebuilds the row, so a shake started there would animate an
+  object that disappears in the same frame — the feedback has to move to the
+  moment of typing. `ShakeAndClear` despite its name clears only its own
+  coroutine handle, not the text. Carried over 2026-08-23 from the
+  drill-in-frame work, which shipped the rest of that section.
+- **MSM-22 — Read `currentCharIndex` through `API.Reflection` instead of
+  reconstructing it.** The drill-in derives the caret's character index from the
+  blinker's position, which is exact only while `PugText`'s glyph count matches
+  the string's — and `TextFieldViewport.IndexSpaceIsSound` exists for no other
+  reason than to catch the four ways it does not. The counter itself turns out
+  to be reachable: `API.Reflection`'s `GetMembersChecked` / `GetValueChecked`
+  get at a private member legally inside the Roslyn sandbox
+  (`docs/ck/sandbox.md` § "Reaching a private member"), which the design took
+  for impossible. Reading it makes the index authoritative and the soundness
+  check unnecessary. Not free: three callers plus the guard, `API.Reflection` is
+  used nowhere in this repo yet, and it would run on every keystroke — measure
+  before committing to it. The blinker's position stays either way, because the
+  scroll offset needs it. Found 2026-08-27, after the feature shipped.
+- **MSM-23 — Holding a word-jump key crawls after the first jump.** Vanilla's arrow branch
   repeats on a cooldown (`MenuManager.IsKeyDown` is `GetKeyDown(k) || (GetKey(k)
   && cooldown elapsed)`), while the word-jump postfix triggers on
   `Input.GetKeyDown` alone — so holding the key jumps one word and then crawls
@@ -1106,7 +1121,7 @@ reachable for admins.
   would fire every frame while vanilla still moves only on its own ticks, which
   breaks the `vanillaShift` compensation on every frame in between. Cursor
   position only — no text is lost. Found by the review gate 2026-08-26.
-- **The click collider's fallback reads a transform that moves every frame.**
+- **MSM-24 — The click collider's fallback reads a transform that moves every frame.**
   `UpdateClickCollider` falls back to the field mask's `localScale`/
   `localPosition` when `fieldBorder` is missing, but `FitMaskToViewport` rewrites
   exactly those two values each frame to the mask's intersection with the list
@@ -1116,13 +1131,13 @@ reachable for admins.
   live transform stops being a witness to it after the first frame — the row
   should ask there. Dead today: the branch runs only on a mis-wired prefab. Found
   by the review gate 2026-08-26.
-- **`maxScroll` and the caret reader disagree about `dimensions.xMin`.**
+- **MSM-25 — `maxScroll` and the caret reader disagree about `dimensions.xMin`.**
   `TryCaretIndexFromLocalX` subtracts it, matching vanilla's own blinker formula;
   `ApplyOffset`'s end-of-text clamp does not. The two agree while the row's text
   is left-aligned, which it is — change that and the clamp silently stops short
   of the text end or overshoots it. `_text.dimensions.xMin + _text.dimensions.width
   - _fieldWidth` holds either way. Found by the review gate 2026-08-26.
-- **Prove that the reset poll's action id is the one that works.** The poll binds
+- **MSM-26 — Prove that the reset poll's action id is the one that works.** The poll binds
   Rewired action 223 (`OpenProfile`) rather than vanilla's own `ResetDefaults`
   (300), and the reasoning is on paper rather than measured: 300 belongs to the
   `ControlMapperUI` category and 223 to `Menu`, the category that applies while
