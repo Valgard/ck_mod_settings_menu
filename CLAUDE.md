@@ -167,7 +167,10 @@ traps, each verified in-game. Some carry fuller detail (with the code paths) in
   menu").
 
 `docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info,
-Separator/Label), out-of-scope items, and small fixes.
+Separator/Label) and out-of-scope items. Each point there carries a reference id —
+`MSM-01`, `MSM-02`, … — assigned once and never reused. Cite the id, not the heading,
+and never renumber: the ids do not follow the order of the file, and a point that ships
+takes its id with it.
 
 ## macOS / CrossOver
 
