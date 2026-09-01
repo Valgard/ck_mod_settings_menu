@@ -116,8 +116,8 @@ namespace ModSettingsMenu.UI
         }
 
         // Change the value one step in `dir` (Toggle flips regardless of sign). Numeric writes go
-        // through ConfigEntryBase.BoxedValue with type-exact casts; foreign Choice round-trips via
-        // the serialized value (BoxedValue of a foreign enum is not a string).
+        // through ConfigEntryBase.BoxedValue with type-exact casts; a Choice writes whichever way its
+        // SettingType allows (see the Choice case).
         private void Adjust(int dir)
         {
             if (_def?.Entry == null)
@@ -158,19 +158,29 @@ namespace ModSettingsMenu.UI
                     var toks = _def.Tokens;
                     if (toks == null || toks.Length == 0)
                         break;
-                    string cur = _def.Foreign ? e.GetSerializedValue() : (string)e.BoxedValue;
+                    // Read through BoxedValue.ToString() whatever the entry holds: for a string that is
+                    // the value itself, for an enum its member name, and for a numeric type the same
+                    // rendering ToDescriptionString() built the tokens from — so one read serves all
+                    // three. NOT GetSerializedValue(), which escapes a string (TomlTypeConverter) and
+                    // would compare, display and store the escaped form.
+                    string cur = e.BoxedValue?.ToString() ?? "";
                     int idx = System.Array.IndexOf(toks, cur);
-                    // A foreign value not among the member names is a [Flags] combination (serialized
-                    // "A, B") or an undefined value — single-select cycling can't represent it, so leave
-                    // it untouched rather than clobbering the .cfg to one flag. (flags editing = v2.)
-                    if (idx < 0 && _def.Foreign)
+                    // An enum value that is not a member name is a [Flags] combination (rendered "A, B")
+                    // or an undefined value — single-select cycling can't represent it, so leave it
+                    // untouched rather than clobbering the .cfg to one flag. (flags editing = v2.)
+                    // Any other type has no such reading and snaps to the first token below.
+                    if (idx < 0 && e.SettingType.IsEnum)
                         break;
                     // Unknown/removed token -> snap to the first option; else step and wrap.
                     int next = idx < 0 ? 0 : ((idx + dir) % toks.Length + toks.Length) % toks.Length;
-                    if (_def.Foreign)
-                        e.SetSerializedValue(toks[next]);
-                    else
+                    // A string is its own storage form; everything else has to go back through the
+                    // converter. Safe because every token reached this point through it already:
+                    // ForeignConfigDiscovery.TryTokens only accepts a set it could convert AND validate,
+                    // and MSM's own declared Choice binds string tokens.
+                    if (e.SettingType == typeof(string))
                         e.BoxedValue = toks[next];
+                    else
+                        e.SetSerializedValue(toks[next]);
                     break;
                 }
             }
@@ -210,7 +220,7 @@ namespace ModSettingsMenu.UI
                         : ((int)e.BoxedValue).ToString();
                 case SettingKind.Choice:
                 {
-                    string tok = _def.Foreign ? e.GetSerializedValue() : (string)e.BoxedValue;
+                    string tok = e.BoxedValue?.ToString() ?? ""; // same read as Adjust — see there
                     return Loc.T(_def.Term + "/" + tok, tok); // localized per-option; foreign -> raw token
                 }
                 case SettingKind.Slider:
