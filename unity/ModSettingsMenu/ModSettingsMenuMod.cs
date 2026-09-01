@@ -38,8 +38,9 @@ namespace ModSettingsMenu
             else
                 Debug.LogWarning("[ModSettingsMenu] no AssetBundle — menu prefab will be unavailable.");
 
-            // Dev-only test fixtures for exercising the list-widget drill-in against something
-            // other than a real foreign mod's config — a raw CoreLib ConfigFile created OUTSIDE
+            // Dev-only test fixtures for exercising the discovery path (the list-widget drill-in, and
+            // the Choice shapes further down) against something other than a real foreign mod's
+            // config — raw CoreLib ConfigFiles created OUTSIDE
             // ConfigStore.ForMod, so ConfigStore.IsOwn doesn't recognize it and
             // ForeignConfigDiscovery treats it exactly like a real 3rd-party mod's list setting.
             // Gated on DevFlags.Is("TestFixtures") (see DevFlags.generated.cs, regenerated from
@@ -133,7 +134,70 @@ namespace ModSettingsMenu
                     new ConfigDescription("Tokens containing spaces, to exercise word jumps."),
                     clientScope
                 );
+
+                // Discovered Choice fixtures, in a file of their own so the two concerns stay legible
+                // as two "(detected)" sections while clicking through. No installed third-party mod
+                // binds an AcceptableValueList at all — MSM is the only user of one on this machine —
+                // so without these there is nothing to see the discovered Choice path against.
+                var choiceFile = new ConfigFile("TestChoiceFixtures/config.cfg", saveOnInit: true, info);
+                // The exact path: the type argument is string, so the values are read straight off the
+                // constraint.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceStrings",
+                    "Medium",
+                    new ConfigDescription("A string choice.", new AcceptableValueList<string>("Low", "Medium", "High")),
+                    clientScope
+                );
+                // Still the exact path, with a token containing the ", " the description format joins
+                // on — which is precisely what the reconstruction below cannot survive, and what this
+                // one is indifferent to. Also checks the value is stored raw, not TOML-escaped.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceComma",
+                    "Alpha",
+                    new ConfigDescription("A string choice whose tokens contain commas.", new AcceptableValueList<string>("Alpha", "Beta, and more")),
+                    clientScope
+                );
+                // The reconstruction path: int is not reachable through the exact branch, so these
+                // tokens come from ToDescriptionString() and have to pass convert-then-IsValid.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceInts",
+                    4,
+                    new ConfigDescription("An int choice, reconstructed from the description.", new AcceptableValueList<int>(1, 2, 4, 8)),
+                    clientScope
+                );
+                // An enum Choice carries no constraint (AcceptableValueList cannot hold one — its T is
+                // IEquatable, which no enum satisfies) and reaches Choice one case earlier, from its
+                // member names. Here to catch a regression in the read/write path the string cases
+                // above now share with it, which used to be enum-only.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceEnum",
+                    TestChoice.Second,
+                    new ConfigDescription("An enum choice, to check the member-name path still round-trips."),
+                    clientScope
+                );
+                // The negative control: a constraint on a type no case handles, so nothing may promote
+                // it to a Choice — it has to stay the read-only Info row it is today.
+                choiceFile.Bind(
+                    "Settings",
+                    "RangeDouble",
+                    1.5,
+                    new ConfigDescription("A range of an unhandled numeric type; must stay a read-only Info row.", new AcceptableValueRange<double>(0.0, 10.0)),
+                    clientScope
+                );
             }
+        }
+
+        /// <summary>Dev-only, for the ChoiceEnum fixture above. Three members so cycling has somewhere
+        /// to wrap, and deliberately not alphabetical so a sort would be visible.</summary>
+        private enum TestChoice
+        {
+            First,
+            Second,
+            Third,
         }
 
         public void Init()
