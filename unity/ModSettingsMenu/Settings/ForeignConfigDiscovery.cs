@@ -54,7 +54,21 @@ namespace ModSettingsMenu.Settings
                 Foreign = true,
                 OptionSort = OptionSort.ByKey, // Dictionary order isn't meaningful; key order is stable
             };
-            foreach (var kv in cf.Entries)
+            // Snapshot before walking. CoreLib's own source says it cannot lock this dictionary, and a
+            // mod that binds a setting while the screen builds would throw from MoveNext — which
+            // happens between iterations and so escapes the per-entry guard below entirely.
+            List<KeyValuePair<ConfigDefinition, ConfigEntryBase>> entries;
+            try
+            {
+                entries = new List<KeyValuePair<ConfigDefinition, ConfigEntryBase>>(cf.Entries);
+            }
+            catch (System.Exception ex)
+            {
+                UnityEngine.Debug.LogError($"[ModSettingsMenu] reading the entries of '{cf.ConfigFilePath}' threw — omitting that mod: {ex}");
+                return section;
+            }
+
+            foreach (var kv in entries)
             {
                 SettingDef def;
                 try
@@ -64,9 +78,11 @@ namespace ModSettingsMenu.Settings
                 catch (System.Exception ex)
                 {
                     // AcceptableValueBase is a public abstract class, so ToDescriptionString() and
-                    // IsValid() may be a third party's override — TryTokens calls both. Classification
-                    // used to touch no foreign method at all (it matched types and read auto-properties),
-                    // so this guard arrived with that call. One bad entry costs its own row; without it,
+                    // IsValid() may be a third party's override — TryTokens calls both, on ANY av.
+                    // Classification did already read virtual members before (TryRange takes MinValue /
+                    // MaxValue, both virtual), but only after an `is AcceptableValueRange<int>` match,
+                    // so never on an arbitrary foreign class. That is what changed, and this guard came
+                    // with it. One bad entry costs its own row; without it,
                     // the throw would leave Populate() and empty the screen for every mod at once.
                     UnityEngine.Debug.LogError($"[ModSettingsMenu] classifying '{kv.Key.Key}' from '{cf.ConfigFilePath}' threw — omitting that row: {ex}");
                     continue;
@@ -109,9 +125,12 @@ namespace ModSettingsMenu.Settings
 
             // 2. enum -> Choice over the enum names. Toml renders an enum as its name and parses one
             //    back, and Enum.ToString() is the same name — so these tokens survive both the widget's
-            //    BoxedValue.ToString() read and its converted write, with no per-type code path. An
-            //    enum never carries a value-set constraint (see TryTokens: AcceptableValueList's T is
-            //    IEquatable, which no enum satisfies), so there is nothing narrower to prefer here.
+            //    BoxedValue.ToString() read and its converted write, with no per-type code path. This
+            //    case returns before `av` is read at all, so an enum never reaches TryTokens whatever
+            //    constraint it carries — that is the reason that holds. (AcceptableValueList could not
+            //    hold one anyway, its T being IEquatable, which no enum satisfies. But a third party
+            //    may attach any OTHER AcceptableValueBase subclass to an enum entry, so that is the
+            //    weaker of the two arguments and not the one to lean on.)
             if (t.IsEnum)
             {
                 d.Kind = SettingKind.Choice;
@@ -238,13 +257,19 @@ namespace ModSettingsMenu.Settings
         /// So the fallback parses ToDescriptionString() — the same human-readable line CoreLib writes
         /// into the .cfg — instead: "# Acceptable values: a, b, c".
         ///
-        /// That line is documentation, not a serialization format, so the parse checks its own work
-        /// twice over. Per token: it counts only if <see cref="TomlTypeConverter"/> can turn it back
+        /// That line is documentation, not a serialization format, so the parse checks its own work at
+        /// two levels. Per token: it counts only if <see cref="TomlTypeConverter"/> can turn it back
         /// into a value AND the constraint answers IsValid for it, and one failure discards the whole
-        /// set rather than offering a partial one. Per set: the result has to contain the value the
-        /// entry currently holds. The second check is the load-bearing one, because the first is a
-        /// likelihood and not a guarantee — fragments of a split value usually fail IsValid, but not
-        /// when the fragments are themselves acceptable values. See the comment on that check.
+        /// set rather than offering a partial one. Per set: no value may repeat, and the result must
+        /// contain the value the entry currently holds.
+        ///
+        /// None of the three is sufficient alone, and it is worth knowing why rather than trusting the
+        /// count. The per-token pair misses a split whose fragments happen to be acceptable values.
+        /// The held-value check misses a split that left the held value intact as one of those
+        /// fragments. The duplicate check is what covers that last case, because a description is a
+        /// join over a set and a faithful reading of one cannot repeat itself. Together they are a
+        /// strong filter, not a proof: this reads a human-readable line, and the only real guarantee
+        /// available would be an API that hands over the values.
         ///
         /// An enum cannot reach the fallback at all: AcceptableValueList constrains T to
         /// IEquatable&lt;T&gt;, which no enum implements (CS0315), so no mod can restrict one this way.
@@ -262,16 +287,29 @@ namespace ModSettingsMenu.Settings
                 // The reconstruction below refuses a blank token, and this branch has to promise the
                 // same thing: a blank option is indistinguishable from an unset row, and cycling onto
                 // one writes it into what, for a real mod, is its own config file. A null is worse —
-                // it never matches the row's own read, so the row could never move off it again.
+                // it never matches the row's own read, so the row can never settle on it: it snaps to
+                // the first token instead, and if the null IS the first token nothing moves at all.
+                // Whitespace counts as blank, because the reconstruction trims before it measures and
+                // the two branches have to refuse the same values, not merely similar ones.
                 foreach (var value in values)
-                    if (string.IsNullOrEmpty(value))
+                    if (string.IsNullOrWhiteSpace(value))
                         return Degraded(id, "one of the values it accepts is blank");
-                // Handed through rather than copied. Not because nothing writes to it today — that is a
-                // property of the current code, not of the design — but because a discovered SettingDef
-                // never leaves this screen: Discover() builds them into a local list per menu open
-                // (ModSettingsScreen.Populate) and drops them on the next rebuild, so no public surface
-                // can reach the foreign mod's array through it.
-                tokens = values;
+                // The same set-level check the reconstruction ends with, for the same reason. It reads
+                // as a tautology here — Clamp guarantees the held value is acceptable — but only while
+                // AcceptableValues answers honestly, and it is `virtual`: a subclass may return an
+                // array that its own Clamp and IsValid never consult. Without this the row would read
+                // idx < 0, snap to the first token, and overwrite a foreign mod's value on the first
+                // keypress. A check that cannot reject an honest set costs nothing to keep.
+                if (System.Array.IndexOf(values, e.BoxedValue?.ToString() ?? "") < 0)
+                    return Degraded(id, "the values it accepts do not include the one it currently holds");
+                // Copied, not handed through. `AcceptableValues` is the foreign mod's live constraint
+                // array, and SettingDef.Tokens is a public field on a def that a public surface does
+                // reach: SettingWidget.Section → ModSection.Settings → Tokens, all public, for as long
+                // as the screen is built. MSM is a framework other mods reference, so "nothing writes
+                // into it" is a property of today's code rather than something this can rely on — and
+                // a write there would edit another mod's declared value set. A handful of strings per
+                // menu open is not worth reasoning about.
+                tokens = (string[])values.Clone();
                 return true;
             }
 
@@ -313,24 +351,40 @@ namespace ModSettingsMenu.Settings
                     // and the mod fails the load-time security verification — while System.Type itself,
                     // typeof(...) and Type.IsEnum are all fine. The Unity build cannot catch this: it
                     // compiles against the real assemblies, and the check runs in the game.
-                    return Degraded(id, $"\"{token}\" did not read back as the type the setting stores ({ex.Message})");
+                    // The whole exception, not just its message: the foreign-converter case is somebody
+                    // else's bug, and a bug reported without a stack is a rumour. The common case is a
+                    // FormatException whose ToString() is three lines.
+                    return Degraded(id, $"\"{token}\" did not read back as the type the setting stores ({ex})");
                 }
                 if (!av.IsValid(value))
                     return Degraded(id, $"\"{token}\" read back, but the setting's own constraint rejects it");
                 accepted.Add(token);
             }
 
-            // The set must contain the value the entry is holding. CoreLib clamps at construction and on
-            // every write (ConfigEntryBase → AcceptableValueBase.Clamp), so a bound entry's value IS one
-            // of the acceptable ones — a reconstruction that lost or split something therefore fails
-            // this, whatever the cause. It is the guarantee the per-token checks cannot give, and the
-            // reason they cannot is worth naming: ToDescriptionString() renders with x.ToString() and no
-            // format provider while the converters back are pinned to InvariantInfo, so on a
-            // comma-decimal culture 0.5 is described as "0,5" and splits into "0" and "5" — fragments
-            // that both convert AND validate against a set that contains 0 and 5. Without this check the
-            // row would offer a set its own value is missing from, read idx < 0, and snap the player's
-            // value to the first token on the first keypress.
+            // Two set-level checks, because the per-token ones cannot see a split. The reason they
+            // cannot is worth naming: ToDescriptionString() renders with x.ToString() and no format
+            // provider while the FLOAT converters back are pinned to InvariantInfo, so on a comma-decimal
+            // culture a set of (0.5, 5, 0) is described as "0,5, 5, 0" and splits into "0", "5", "5",
+            // "0" — fragments that each convert AND validate, because 0 and 5 really are members.
             var reconstructed = accepted.ToArray();
+
+            // 1. No value may repeat. A description is built by joining a set, so a faithful reading
+            //    has no duplicates; a split produces them almost by construction (above, "5" twice).
+            //    A constraint that genuinely lists the same value twice is refused too, which costs it
+            //    an Info row and is the right trade for catching this.
+            for (int i = 1; i < reconstructed.Length; i++)
+                if (System.Array.IndexOf(reconstructed, reconstructed[i], 0, i) >= 0)
+                    return Degraded(id, $"it lists \"{reconstructed[i]}\" more than once, so reading its values back cannot have been faithful");
+
+            // 2. The set must contain the value the entry is holding. CoreLib clamps at construction
+            //    and on every write (ConfigEntryBase → AcceptableValueBase.Clamp), so a bound entry's
+            //    value IS one of the acceptable ones. That holds for CoreLib's own two constraints; a
+            //    third party whose Clamp enforces nothing can cost a legitimate Choice a read-only row
+            //    here, which is the safe direction and deliberately chosen. It catches a split that ate
+            //    the held value —
+            //    but NOT one that left it intact as a fragment: with the set above and a held value of
+            //    5, "5" is present and this check passes. That is what check 1 is for, and why neither
+            //    alone is enough.
             if (System.Array.IndexOf(reconstructed, e.BoxedValue?.ToString() ?? "") < 0)
                 return Degraded(id, "the values it lists do not include the one it currently holds, so reading them back cannot have been faithful");
 
