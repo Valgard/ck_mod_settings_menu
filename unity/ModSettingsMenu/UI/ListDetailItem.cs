@@ -272,10 +272,10 @@ namespace ModSettingsMenu.UI
             // edge. screenMask is looked up by name because ListDetailScreen owns it, not this row.
             //
             // Both references are logged loudly when missing rather than left to degrade silently.
-            // An unwired fieldMask leaves _viewport unbound, and an unbound viewport has no text to
-            // measure a caret index against — so it reports no index at all and every caret-derived
-            // feature falls back (typing appends at the row's end, word jumps and click-to-place
-            // do nothing; see TextFieldViewport.IndexSpaceIsSound). The row still edits and still
+            // An unwired fieldMask leaves _viewport unbound, and an unbound viewport has no row to
+            // ask for a caret index — so it reports no index at all and every caret-derived feature
+            // falls back (typing appends at the row's end, word jumps and click-to-place do
+            // nothing; see TextFieldViewport.TryCaretIndex). The row still edits and still
             // stores what was typed, which is why the fault has to be logged to be noticed. An
             // unwired/renamed ViewportMask leaves screenMask null, so
             // TextFieldViewport.FitMaskToViewport returns early every frame and the row's own mask
@@ -297,7 +297,7 @@ namespace ModSettingsMenu.UI
                         + "the row's field mask can't fit itself to the list viewport and will keep clipping outside it."
                 );
             }
-            _viewport.Bind(pugText, fieldMask, screenMask, characterMarkBlinker);
+            _viewport.Bind(this, fieldMask, screenMask);
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) row — the inactive prefab template must
@@ -429,10 +429,13 @@ namespace ModSettingsMenu.UI
                 // away from screen centre, and changing with window size — which used to place the
                 // caret on the wrong character.
                 float worldX = Manager.ui.mouse.pointer.transform.position.x;
-                // Both halves of the move come out of the same recovered index space — where the
-                // click landed, and where the caret already is — so one untrustworthy answer
-                // disqualifies the whole move (TextFieldViewport.IndexSpaceIsSound explains when that
-                // happens). Leaving the caret alone loses nothing: the click has already selected and
+                // The two halves of this move come from different places — where the click landed is
+                // recovered from the glyph list, where the caret already is comes from the row's own
+                // counter — and subtracting them is only meaningful if both count the same
+                // characters. That is exactly what IndexSpaceIsSound establishes, so the recovered
+                // half carries the whole risk and one untrustworthy answer disqualifies the move.
+                //
+                // Leaving the caret alone loses nothing: the click has already selected and
                 // activated the row, which is the part that matters, and the only thing forgone is a
                 // convenience. Moving on a bad index would instead put the caret on a character
                 // nobody pointed at, and the player's next keystroke would land there.
@@ -518,9 +521,10 @@ namespace ModSettingsMenu.UI
         // for why this is a standalone helper rather than logic inlined here.
         private readonly TextFieldViewport _viewport = new TextFieldViewport();
 
-        // Exposes the viewport's caret-index recovery to MenuPatch's AppendString prefix, which
-        // needs to insert at the caret rather than always at the text end. internal, not public: the
-        // only consumer outside this class lives in this same mod assembly.
+        // Exposes the viewport's caret-index reads to MenuPatch — the AppendString prefix, which
+        // inserts at the caret rather than always at the text end, and the word-jump postfix, which
+        // needs the same index to aim a relative move. internal, not public: both consumers live in
+        // this same mod assembly.
         internal TextFieldViewport Viewport => _viewport;
 
         protected override void Update()
