@@ -128,7 +128,12 @@ namespace ModSettingsMenu.Settings
         public string[] Tokens; // Choice only: ordered value.ToString() list (cycle order)
         public ConfigEntryBase Entry; // live handle; widget reads/writes via BoxedValue
         public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
-        public bool Foreign; // true → discovered (not API-registered): raw label, serialized Choice, marker
+
+        // true → discovered (not API-registered): raw label instead of a loc term, and the section
+        // heading carries the "(detected)" marker. Deliberately NOT what decides how a Choice is read
+        // or written — that follows the entry's SettingType, which is the thing that actually differs
+        // (SettingWidget.Adjust). It used to decide it, back when every foreign Choice was an enum.
+        public bool Foreign;
         public bool Unbounded; // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
 
         // true → this row's own Kind still renders natively, but the widget (or, for List, the

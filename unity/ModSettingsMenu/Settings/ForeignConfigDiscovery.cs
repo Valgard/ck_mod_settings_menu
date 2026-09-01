@@ -121,9 +121,20 @@ namespace ModSettingsMenu.Settings
                 return d;
             }
 
-            // 4. Any other AcceptableValues constraint we don't render editable in v1 (AcceptableValueList,
-            //    or a range of an unhandled numeric type) -> read-only Info regardless of scope — there is
-            //    no editable widget for this shape at all, not just "not allowed to touch it right now".
+            // 3c. A closed set of acceptable values -> Choice, cycled by the same widget MSM's own
+            //     declared Choice uses. See TryTokens for why one shape is exact and the rest are
+            //     reconstructed, and for what happens when the reconstruction cannot be trusted.
+            if (av != null && TryTokens(av, t, out string[] tokens))
+            {
+                d.Kind = SettingKind.Choice;
+                d.Tokens = tokens;
+                return d;
+            }
+
+            // 4. A constraint whose value set could not be established (a range of an unhandled numeric
+            //    type, or a list whose tokens did not survive the round trip in TryTokens) -> read-only
+            //    Info regardless of scope — there is no editable widget for this shape at all, not just
+            //    "not allowed to touch it right now".
             if (av != null)
             {
                 d.Kind = SettingKind.Info;
@@ -190,6 +201,74 @@ namespace ModSettingsMenu.Settings
             if (Manager.main == null || Manager.main.player == null)
                 return true;
             return !scope.Changeable();
+        }
+
+        /// <summary>The closed set of values a constrained entry accepts, as the tokens a Choice row
+        /// cycles — or false when that set cannot be established, which leaves the caller with a
+        /// read-only Info row.
+        ///
+        /// One shape is exact and the rest are reconstructed, and the split is not a judgement about
+        /// them: <see cref="AcceptableValueList{T}"/> exposes its values through a generic property, so
+        /// they are reachable only where the type argument is known at compile time. For string that
+        /// is here. For any other T only reflection could reach them, which the Roslyn sandbox forbids
+        /// (docs/ck/sandbox.md), so the fallback reads the human-readable line CoreLib writes into the
+        /// .cfg instead — "# Acceptable values: a, b, c".
+        ///
+        /// That line is documentation, not a serialization format, so the parse checks its own work:
+        /// a token counts only if <see cref="TomlTypeConverter"/> can turn it back into a value AND the
+        /// constraint answers IsValid for it, and one failure discards the whole set rather than
+        /// offering a partial one. Which is what makes reading it safe rather than hopeful — the line
+        /// joins on ", ", so a value containing one arrives as fragments, and fragments fail IsValid.
+        ///
+        /// An enum cannot reach the fallback at all: AcceptableValueList constrains T to
+        /// IEquatable&lt;T&gt;, which no enum implements (CS0315), so no mod can restrict one this way.
+        /// Enums are Choices already, from their member names, one case earlier.</summary>
+        private static bool TryTokens(AcceptableValueBase av, System.Type settingType, out string[] tokens)
+        {
+            tokens = null;
+
+            if (av is AcceptableValueList<string> exact)
+            {
+                // Handed through rather than copied: nothing in this mod writes to SettingDef.Tokens,
+                // and a copy would only mask it if something ever did. The array is the foreign mod's.
+                tokens = exact.AcceptableValues;
+                return tokens != null && tokens.Length > 0;
+            }
+
+            // AcceptableValueRange describes itself as "# Acceptable value range: From x to y", so the
+            // prefix alone tells CoreLib's two shipped constraints apart. A third party's own subclass
+            // is judged by whether its description happens to match this one — which is the honest
+            // reading of a format that exists for a human opening the .cfg.
+            const string prefix = "# Acceptable values: ";
+            string description = av.ToDescriptionString();
+            if (description == null || !description.StartsWith(prefix, System.StringComparison.Ordinal))
+                return false;
+
+            var parts = description.Substring(prefix.Length).Split(',');
+            var accepted = new List<string>(parts.Length);
+            foreach (var part in parts)
+            {
+                string token = part.Trim();
+                if (token.Length == 0)
+                    return false;
+                object value;
+                try
+                {
+                    value = TomlTypeConverter.ConvertToValue(token, settingType);
+                }
+                catch
+                {
+                    return false; // no converter for this type, or this token is not one of its values
+                }
+                if (!av.IsValid(value))
+                    return false;
+                accepted.Add(token);
+            }
+
+            if (accepted.Count == 0)
+                return false;
+            tokens = accepted.ToArray();
+            return true;
         }
 
         private static bool TryRange(AcceptableValueBase av, out float min, out float max)
