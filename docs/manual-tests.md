@@ -62,14 +62,22 @@ otherwise — every `AcceptableValueList` here lives in a file MSM created, whic
 | `RefuseEmptyToken` | `Alpha` | a blank entry in the value list |
 | `RefuseUnconvertible` | `1` | a token that is not an `int` |
 | `RefuseInvalid` | `Alpha` | a constraint that rejects the values it prints |
-| `RefuseSplitValue` | `0.5` | a decimal separator that split the list into fragments |
+| `RefuseSplitValue` | `0.5` | a split that ate the held value — the held-value check |
+| `RefuseSplitDuplicate` | `5.0` | the same split with the held value intact — only the duplicate check |
+| `RefuseBlankInSet` | `Alpha` | a blank entry in a **real** `AcceptableValueList` |
+| `ThrowingConstraint` | `Alpha` | a constraint that throws where MSM asks it a question |
 
-The four `Refuse*` fixtures use a dev-only `AcceptableValueBase` subclass
-(`DescriptionOnlyValues`), because CoreLib's own constraints cannot produce any
-of these states: its constructor refuses an empty set, no supported type renders
-a blank or unparseable token, and its `Clamp` corrects an off-set value at bind.
-They are also the only exercise of a third-party subclass, which is a case the
-code reasons about and nothing else reaches.
+Most of these need a dev-only `AcceptableValueBase` subclass
+(`DescriptionOnlyValues`), because CoreLib's own constraints cannot produce the
+states they test: its constructor refuses an empty set, no supported type renders
+an unparseable token, and its `Clamp` corrects an off-set value at bind. They are
+also the only exercise of a third-party subclass, which is a case the code
+reasons about and nothing else reaches.
+
+`RefuseBlankInSet` is the exception and the reason it exists: a blank *element*
+needs no subclass at all. `AcceptableValueList`'s constructor rejects only a
+zero-length array, so `("Alpha", "  ", "Gamma")` binds cleanly and any mod could
+ship it by accident.
 
 The same flag also declares five lists through the **public consumer API**, in
 this mod's own section (`AddDeclaredListFixtures`). They are the other path
@@ -393,6 +401,14 @@ and would not catch a regression.
       or a read-only Info row. Both are correct; which one says how this
       machine's `CurrentCulture` renders a decimal. A cycle over `0`, `5`, `1`,
       `2` is the failure — that is the split reaching the row.
+- [ ] If it *is* an Info row, there is **one** extra `[ModSettingsMenu]` warning
+      for it, naming the fragment the constraint rejected. That is the expected
+      outcome on a comma-decimal machine, not a defect — count it in the log
+      check at the end.
+- [ ] Two other rows render a `double` through the same culture: `RangeDouble`
+      and `RefuseSplitValue` read `1,5` and `0,5` where this one reads `0,5`.
+      Their `.cfg` values stay invariant regardless, so the file checks below are
+      unaffected.
 
 ### Refused, and said out loud
 
@@ -405,10 +421,20 @@ because discovery re-runs on every open.
 - [ ] `RefuseUnconvertible` — `two` is not an `int`.
 - [ ] `RefuseInvalid` — the constraint rejects the values it prints.
 - [ ] `RefuseSplitValue` — the list does not contain the value the setting
-      holds. This is the one that matters most: every fragment there converts
-      *and* validates, so only the set-level check catches it. Without that
-      check the row would offer `0 / 5` and the first keypress would overwrite
-      `0.5`.
+      holds. Every fragment there converts *and* validates, so neither per-token
+      check sees anything wrong; only the held-value check refuses it.
+- [ ] `RefuseSplitDuplicate` — the same split, but the held value survived it as
+      one of the fragments, so the held-value check passes too. Only the
+      duplicate check is left, and it is what stops the row from offering
+      `0 / 5 / 5 / 0` with `0.5` unreachable and `→` frozen.
+- [ ] `RefuseBlankInSet` — a blank entry in a **real** `AcceptableValueList`.
+      Worth its own line because it needs no dev-only subclass: the constructor
+      accepts it, so any mod could ship this by accident.
+- [ ] `ThrowingConstraint` — its constraint throws where MSM asks it a question.
+      The row is **absent** rather than read-only, the log holds one
+      `[ModSettingsMenu]` error naming it, and — the actual point — **every
+      other row in both sections is still there**. Losing the screen instead of
+      the row is the failure this guards.
 
 ### The negative control
 
@@ -566,4 +592,5 @@ routes behave *differently* here, which nothing on screen shows.
       declined to cycle.
 - [ ] `Player.log` holds no exception from this mod, and no warning **other than**
 the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
-duplicate fixtures, `testDupKey`, and one line for each `Refuse*` entry).
+duplicate fixtures, `testDupKey`, one line for each `Refuse*` entry, the error from
+`ThrowingConstraint`, and — on a comma-decimal machine — one for `ChoiceFloats`).

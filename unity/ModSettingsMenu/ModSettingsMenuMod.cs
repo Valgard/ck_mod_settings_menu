@@ -249,9 +249,10 @@ namespace ModSettingsMenu
                     clientScope
                 );
 
-                // Four rejections that CoreLib's own constraint classes cannot produce — its ctor
-                // refuses an empty set, no supported T renders a blank token, and its Clamp corrects an
-                // off-set value at bind. Each needs DescriptionOnlyValues (below), which is also the
+                // Rejections that CoreLib's own constraint classes cannot produce on the RECONSTRUCTION
+                // path — no supported T renders an unparseable token there, and its Clamp corrects an
+                // off-set value at bind. (A blank MEMBER needs no subclass at all; that is
+                // RefuseBlankInSet further down, and it lands one branch earlier.) Each needs DescriptionOnlyValues (below), which is also the
                 // "a third party's own subclass, judged by whether its description matches" case
                 // TryTokens documents and nothing else exercises. All four must stay read-only Info
                 // rows AND log one line each naming why.
@@ -287,8 +288,8 @@ namespace ModSettingsMenu
                 );
                 // The culture trap, reproduced deterministically: this is verbatim what a comma-decimal
                 // machine's ToDescriptionString() produces for a set of (0.5, 5.0, 0.0). Every fragment
-                // converts and every fragment is valid here, so only the set-level check catches it —
-                // the entry's own value is not among them.
+                // converts and every fragment is valid, so the per-token checks all pass. Held value
+                // 0.5, which the split ate — caught by the held-value check.
                 choiceFile.Bind(
                     "Settings",
                     "RefuseSplitValue",
@@ -299,12 +300,55 @@ namespace ModSettingsMenu
                     ),
                     clientScope
                 );
+                // The same split with a held value the split left INTACT: "5" is among the fragments,
+                // so the held-value check passes and only the duplicate check refuses it. Without that
+                // check this row would offer 0/5/5/0, hide 0.5 entirely, and freeze on → because both
+                // neighbours of index 1 render as the value it already holds.
+                choiceFile.Bind(
+                    "Settings",
+                    "RefuseSplitDuplicate",
+                    5.0,
+                    new ConfigDescription(
+                        "The same split, held value intact — only the duplicate check catches it.",
+                        new DescriptionOnlyValues(typeof(double), "# Acceptable values: 0,5, 5, 0")
+                    ),
+                    clientScope
+                );
+                // A blank value in a REAL AcceptableValueList. Reachable with stock CoreLib — its
+                // constructor rejects only a zero-length array, never a blank element — so this is the
+                // one rejection that needs no subclass, and the exact branch is the only thing between
+                // it and a row that writes "" into a foreign mod's file.
+                choiceFile.Bind(
+                    "Settings",
+                    "RefuseBlankInSet",
+                    "Alpha",
+                    new ConfigDescription(
+                        "A real value list with a blank entry; must stay read-only.",
+                        new AcceptableValueList<string>("Alpha", "  ", "Gamma")
+                    ),
+                    clientScope
+                );
+                // A constraint that throws where MSM asks it a question. Nothing else exercises the
+                // per-entry guard in BuildSection, and that guard is the difference between losing this
+                // row and losing every mod's settings at once: Populate() has no handler of its own.
+                choiceFile.Bind(
+                    "Settings",
+                    "ThrowingConstraint",
+                    "Alpha",
+                    new ConfigDescription(
+                        "A constraint whose description throws; only this row may be lost.",
+                        new DescriptionOnlyValues(typeof(string), "unused", throwOnDescribe: true)
+                    ),
+                    clientScope
+                );
             }
         }
 
         /// <summary>Dev-only, for the ChoiceEnum fixture above. Three members so cycling has somewhere
-        /// to wrap, in an order no sort would produce — a Choice cycles in declaration order, and a
-        /// stray sort would be invisible against alphabetical members.</summary>
+        /// to wrap, in an order no sort would produce — the tokens are Enum.GetNames, which is VALUE
+        /// order (declaration order only while the values are implicit, as here), and a stray sort
+        /// would be invisible against alphabetical members. Giving these explicit values would break
+        /// the order the manual test expects.</summary>
         private enum TestChoice
         {
             Second,
@@ -336,19 +380,24 @@ namespace ModSettingsMenu
         {
             private readonly string _line;
             private readonly bool _valid;
+            private readonly bool _throwOnDescribe;
 
-            public DescriptionOnlyValues(System.Type valueType, string line, bool valid = true)
+            public DescriptionOnlyValues(System.Type valueType, string line, bool valid = true, bool throwOnDescribe = false)
                 : base(valueType)
             {
                 _line = line;
                 _valid = valid;
+                _throwOnDescribe = throwOnDescribe;
             }
 
             public override object Clamp(object value) => value;
 
             public override bool IsValid(object value) => _valid;
 
-            public override string ToDescriptionString() => _line;
+            public override string ToDescriptionString() =>
+                _throwOnDescribe
+                    ? throw new System.InvalidOperationException("fixture: a third party's constraint throwing where MSM asks it a question")
+                    : _line;
         }
 
         public void Init()
