@@ -160,11 +160,9 @@ takes its id with it.
 ## macOS / CrossOver
 
 The mod is deployed through the fake-mod.io workaround (see parent `../CLAUDE.md`). This
-mod's fake mod.io ID is **`9999991`**; the siblings use distinct IDs
-(`disable-durability` `9999999`, `faster-talents` `9999998`, `item-checklist` `9999997`,
-`caveling-divining-rod` `9999996`, `simple-crafting-pool-extender` `9999995`,
-`faster-pet-talents` `9999994`, `reusable-cattle-box` `9999993`,
-`rebalance-key-crafting` `9999992` — they must differ). Do not open the in-game Mods
+mod's fake mod.io ID is **`9999991`**; the siblings must differ, and the IDs already
+taken are the `FAKE_MOD_ID` lines in the sibling `*/.envrc.example` files — the same
+source `../utils/new_mod.py` reads to allocate the next. Do not open the in-game Mods
 menu while installed; re-run `../utils/build.sh` to restore if the cache is wiped.
 
 ## Publishing to mod.io
