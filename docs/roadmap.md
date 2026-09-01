@@ -370,8 +370,8 @@ transfer; the new problems are different ones, below.
    copy here.
 3. **Three serialized references that an extraction does not carry.** All
    verified in the prefab YAML:
-   - `entryPrefab` is an **external** cross-prefab reference
-     (`guid: 74fbf6b0…, type: 2` → `DropdownEntry.prefab`), the shape the
+   - `entryPrefab` is an **external** cross-prefab reference (`guid: 74fbf6b0…,
+     type: 2` → `DropdownEntry.prefab`), the shape the
      `project_corekeeper_nested_prefab_variant` memory records as breaking on
      extraction → wire at runtime.
    - **`ToggleDropdownList()` has no C# caller at all** — it is reached solely

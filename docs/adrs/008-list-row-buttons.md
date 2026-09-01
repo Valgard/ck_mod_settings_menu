@@ -2,8 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-30
-- Builds on [ADR-002](002-list-widget-drill-in.md), [ADR-003](003-list-widget-editing.md),
-  [ADR-005](005-drill-in-row-model.md), [ADR-007](007-horizontal-text-scrolling.md)
+- Builds on [ADR-002](002-list-widget-drill-in.md), [ADR-003](003-list-widget-editing.md), [ADR-005](005-drill-in-row-model.md), [ADR-007](007-horizontal-text-scrolling.md)
 
 ## Context and Problem Statement
 
@@ -238,10 +237,9 @@ single fix among them.
 
 ## More Information
 
-- **Builds on** [ADR-002](002-list-widget-drill-in.md) (the drill-in itself),
-  [ADR-003](003-list-widget-editing.md) (the editable row), [ADR-005](005-drill-in-row-model.md)
-  (the row model these buttons operate inside), and [ADR-007](007-horizontal-text-scrolling.md)
-  (the field width these buttons now share the row with).
+- **Builds on** [ADR-002](002-list-widget-drill-in.md) (the drill-in itself), [ADR-003](003-list-widget-editing.md) (the editable row), [ADR-005](005-drill-in-row-model.md) (the
+  row model these buttons operate inside), and [ADR-007](007-horizontal-text-scrolling.md) (the field width these buttons
+  now share the row with).
 - The general CK mechanisms behind the decisions above — the two navigation modes and what each
   does with a disabled neighbour, the two menu-select sounds and what disarms the second,
   multi-entry neighbour lists and how the closest candidate is chosen, `RadicalMenu`'s own

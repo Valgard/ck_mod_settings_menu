@@ -2,8 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-23
-- Supersedes [ADR-003](003-list-widget-editing.md) **in part** — see
-  § "Relationship to ADR-003"
+- Supersedes [ADR-003](003-list-widget-editing.md) **in part** — see § "Relationship to ADR-003"
 
 ## Context and Problem Statement
 

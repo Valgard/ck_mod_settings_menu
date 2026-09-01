@@ -2,9 +2,8 @@
 
 - Status: accepted
 - Date: 2026-08-23
-- Supersedes the list-detection rule of
-  [ADR-002](002-list-widget-drill-in.md); that ADR's presentation decisions
-  stand unchanged
+- Supersedes the list-detection rule of [ADR-002](002-list-widget-drill-in.md); that ADR's presentation
+  decisions stand unchanged
 
 ## Context and Problem Statement
 
@@ -79,14 +78,14 @@ than offering one for a value that should not be rejoined on commas.
 - **It widens the exposure to the edit-time truncation trap, from bounded to
   unbounded.** The 32-character cap was never meant as a safety device, but it
   worked as one: only tokens between roughly the row's render width and 32
-  characters could reach the *editable* screen, so a mis-edit could lose about ten
-  invisible characters. Any length now qualifies, and `ListKindStore` makes the
-  classification sticky once granted. The mitigation is
-  `docs/roadmap.md` § "Horizontal scrolling in a text field", which is therefore no
-  longer a comfort item but the counterpart to this decision — the two are recorded
-  as pointing at each other. Accepted here because the alternative is keeping a
-  wrong rule for an effect it was not designed to have, while the underlying trap
-  stays open either way.
+  characters could reach the *editable* screen, so a mis-edit could lose about
+  ten invisible characters. Any length now qualifies, and `ListKindStore` makes
+  the classification sticky once granted. The mitigation is `docs/roadmap.md` §
+  "Horizontal scrolling in a text field", which is therefore no longer a comfort
+  item but the counterpart to this decision — the two are recorded as pointing
+  at each other. Accepted here because the alternative is keeping a wrong rule
+  for an effect it was not designed to have, while the underlying trap stays
+  open either way.
 - The change is invisible to consumers using the explicit API — the heuristic only
   ever applies to *discovered* foreign config.
 

@@ -116,7 +116,6 @@ record and the rejected option's detail:
 git show "$(git rev-list -1 HEAD -- docs/specs/2026-08-25-horizontal-text-scrolling-design.md)^:docs/specs/2026-08-25-horizontal-text-scrolling-design.md"
 ~~~
 
-Related: [ADR-003](003-list-widget-editing.md) built the editable row this
-extends, [ADR-005](005-drill-in-row-model.md) the row model the masks hang in,
-and [ADR-006](006-list-detection-heuristic.md) widened which values can reach
-the drill-in at all — which is what moved this from a nicety to a mitigation.
+Related: [ADR-003](003-list-widget-editing.md) built the editable row this extends, [ADR-005](005-drill-in-row-model.md) the row model the
+masks hang in, and [ADR-006](006-list-detection-heuristic.md) widened which values can reach the drill-in at all —
+which is what moved this from a nicety to a mitigation.

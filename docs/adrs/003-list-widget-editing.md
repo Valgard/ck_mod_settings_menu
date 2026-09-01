@@ -1,7 +1,6 @@
 # List widget editing: uniform editable text rows via RadicalMenuOptionTextInput
 
-- Status: accepted, partially superseded by
-  [ADR-005](005-drill-in-row-model.md) (2026-08-23)
+- Status: accepted, partially superseded by [ADR-005](005-drill-in-row-model.md) (2026-08-23)
 - Date: 2026-07-28
 
 > **What ADR-005 changed.** The editing mechanism below stands unaltered: token
