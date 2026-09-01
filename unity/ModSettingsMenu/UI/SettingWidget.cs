@@ -1,3 +1,4 @@
+using CoreLib.Data.Configuration;
 using ModSettingsMenu.Settings;
 using UnityEngine;
 
@@ -8,8 +9,8 @@ namespace ModSettingsMenu.UI
     /// RadicalMenuOption so it joins menu navigation; labelText ("Label" child) +
     /// valueText ("Value" child) auto-assign in the base Awake. Left/right (or activate)
     /// adjusts the value via the type-agnostic ConfigEntryBase.BoxedValue; CoreLib clamps
-    /// + auto-saves. Value display is per-kind. Label is the raw key for now (Phase 5
-    /// swaps to Loc.T(_def.Term); Choice value likewise Loc.T(term/token) ?? token).
+    /// + auto-saves. Value display is per-kind. Label and Choice value are localized through
+    /// Loc.T, each falling back to the raw key / token.
     /// </summary>
     public sealed class SettingWidget : RadicalMenuOption, ISectionRow
     {
@@ -115,9 +116,11 @@ namespace ModSettingsMenu.UI
             return true;
         }
 
-        // Change the value one step in `dir` (Toggle flips regardless of sign). Integer writes go
-        // through ConfigEntryBase.BoxedValue with type-exact casts; an unbounded float Stepper and a
-        // Choice each convert first, for reasons local to their own case below.
+        // Change the value one step in `dir` (Toggle flips regardless of sign). Toggle, Slider and
+        // the bounded int Stepper write ConfigEntryBase.BoxedValue with type-exact casts; the unbounded
+        // float Stepper and a NON-string Choice convert first, each for a reason local to its own case
+        // below. A string Choice writes BoxedValue directly — and that is every Choice MSM's own API
+        // declares, since SectionBuilder.Choice<T> always binds a string entry whatever T it is given.
         private void Adjust(int dir)
         {
             if (_def?.Entry == null)
@@ -126,6 +129,33 @@ namespace ModSettingsMenu.UI
                 return; // read-only row: never changes, regardless of its native Kind
             var e = _def.Entry;
             var before = e.BoxedValue; // for the RequiresRestart change-detection below
+            // Every write below is deliberately unwrapped — a failure has to be loud, which is the
+            // whole reason the Choice case stopped going through SetSerializedValue. What it must NOT
+            // be is invisible: CoreLib assigns the in-memory value BEFORE it saves, so a failing write
+            // leaves the entry changed and the row showing the old value, and the next menu open would
+            // silently disagree with what the player just saw. The catch says so and attributes it to
+            // this mod; the finally re-reads whatever the entry actually holds, either way.
+            try
+            {
+                Apply(dir, e);
+                // A restart-required setting that actually changed marks the menu dirty; leaving the
+                // screen (ModSettingsScreen.Deactivate) then raises CK's restart prompt.
+                if (_def.RequiresRestart && !object.Equals(before, e.BoxedValue))
+                    ModSettingsScreen.RestartPending = true;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[ModSettingsMenu] changing '{_def.Key}' failed — the value may be set in memory but not saved: {ex}");
+            }
+            finally
+            {
+                Refresh();
+            }
+        }
+
+        // The per-kind write itself. Split out of Adjust so the guard above reads as one thing.
+        private void Apply(int dir, ConfigEntryBase e)
+        {
             switch (_def.Kind)
             {
                 case SettingKind.Toggle:
@@ -178,21 +208,17 @@ namespace ModSettingsMenu.UI
                     // parses back by construction, and a foreign value set's were each converted once
                     // already in ForeignConfigDiscovery.TryTokens. Deliberately NOT SetSerializedValue,
                     // which would repeat that conversion inside a catch(Exception) that also wraps the
-                    // assignment — so a throwing foreign Clamp or SettingChanged subscriber would be
-                    // swallowed into a warning naming CoreLib, one line below a string branch where the
-                    // same fault is loud. Same write, same visibility, either way.
+                    // assignment — so a throwing foreign Clamp, or a failing save, came back as a
+                    // warning about a *parse*, attributed to CoreLib, one line below a string branch
+                    // where the same fault is loud. (Not a SettingChanged subscriber: ConfigFile wraps
+                    // each of those itself.) Same write, same visibility, either way.
                     if (e.SettingType == typeof(string))
                         e.BoxedValue = toks[next];
                     else
-                        e.BoxedValue = CoreLib.Data.Configuration.TomlTypeConverter.ConvertToValue(toks[next], e.SettingType);
+                        e.BoxedValue = TomlTypeConverter.ConvertToValue(toks[next], e.SettingType);
                     break;
                 }
             }
-            // A restart-required setting that actually changed marks the menu dirty; leaving the
-            // screen (ModSettingsScreen.Deactivate) then raises CK's restart prompt.
-            if (_def.RequiresRestart && !object.Equals(before, e.BoxedValue))
-                ModSettingsScreen.RestartPending = true;
-            Refresh();
         }
 
         public void Refresh()
