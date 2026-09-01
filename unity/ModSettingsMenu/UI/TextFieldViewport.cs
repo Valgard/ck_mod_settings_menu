@@ -1,3 +1,5 @@
+using System.Linq;
+using PugMod;
 using UnityEngine;
 
 namespace ModSettingsMenu.UI
@@ -10,6 +12,7 @@ namespace ModSettingsMenu.UI
     /// </summary>
     internal sealed class TextFieldViewport
     {
+        private RadicalMenuOptionTextInput _input;
         private PugText _text;
         private SpriteMask _fieldMask;
         private SpriteMask _viewportMask;
@@ -18,6 +21,10 @@ namespace ModSettingsMenu.UI
         private float _fieldHeight;
         private float _fieldOriginX;
 
+        // The text and the blinker are taken OFF the row rather than passed alongside it, because
+        // TryCaretIndex needs the row itself and the other two are its own public fields — handing
+        // all three in would let a caller bind a viewport to one row's caret and another's glyphs.
+        //
         // The field rectangle comes from the mask's OWN prefab transform, never from the frame.
         // The frame is 22 units centred at 10.5 and spans [-0.5, 21.5], while the text starts at 0 —
         // sizing the clip from it lets the text run half a unit PAST the frame, which is what a first
@@ -26,12 +33,13 @@ namespace ModSettingsMenu.UI
         //
         // Read once, here: re-fitting moves the mask every frame, so its live transform stops being
         // a witness to its authored geometry after the first Tick.
-        public void Bind(PugText text, SpriteMask fieldMask, SpriteMask viewportMask, CharacterMarkBlinker blinker)
+        public void Bind(RadicalMenuOptionTextInput input, SpriteMask fieldMask, SpriteMask viewportMask)
         {
-            _text = text;
+            _input = input;
+            _text = input.pugText;
+            _blinker = input.characterMarkBlinker;
             _fieldMask = fieldMask;
             _viewportMask = viewportMask;
-            _blinker = blinker;
             var t = fieldMask.transform;
             _fieldWidth = t.localScale.x;
             _fieldHeight = t.localScale.y;
@@ -45,20 +53,136 @@ namespace ModSettingsMenu.UI
         {
             FitMaskToViewport();
             ApplyOffset(isActive);
+
+            // For the warning alone, and only while this row is the one being edited. Reading the
+            // caret from its counter left IndexSpaceIsSound reachable from the mouse click and
+            // nowhere else — so a keyboard-only or controller-only session would never learn that
+            // the glyph list has gone empty, and that fault is not confined to clicking: vanilla
+            // places the blinker from the same list (Pug.Other:343387), so it also pins the drawn
+            // caret to the row's start and kills the scroll-follow with it. The verdict is discarded
+            // because nothing here consumes an index; the call is for its latched log line.
+            if (isActive)
+                IndexSpaceIsSound();
         }
 
-        /// <summary>The caret's x in text-local space — independent of the offset applied below,
-        /// which is what keeps the calculation non-circular.</summary>
-        public float CaretLocalX => _blinker != null && _text != null ? _blinker.transform.position.x - _text.transform.position.x : 0f;
+        // The caret's x in text-local space — independent of the offset applied below, which is what
+        // keeps the calculation non-circular. Private: ApplyOffset is its only consumer, and the
+        // blinker is a frame-stale source for anything asking about an INDEX (see TryCaretIndex), so
+        // publishing it would leave the route this class deliberately stopped using one call away.
+        private float CaretLocalX => _blinker != null && _text != null ? _blinker.transform.position.x - _text.transform.position.x : 0f;
 
-        /// <summary>The caret's character index, recovered from the blinker's position because the
-        /// base class keeps currentCharIndex private. localCharacterEndPositions is public and is
-        /// the same list CK's own Update uses to place that blinker. False means the recovery is not
-        /// trustworthy right now — see IndexSpaceIsSound.</summary>
-        public bool TryCaretIndex(out int index) => TryCaretIndexFromLocalX(CaretLocalX, out index);
+        // RadicalMenuOptionTextInput.currentCharIndex (Pug.Other:343320) — the caret's own string
+        // index, which is what vanilla itself inserts and deletes at. Private, and reached here
+        // through the SDK's reflection surface rather than reconstructed.
+        //
+        // Two different gates have to be cleared for that, and confusing them sends the next reader
+        // to the wrong place. The Roslyn sandbox permits the SOURCE, simply because PugMod.MemberInfo
+        // and API.Reflection are on none of its deny lists (docs/ck/sandbox.md § "Reaching a private
+        // member"). InvokeChecker.CheckType (PugMod.Loader:552) is a RUNTIME gate inside
+        // API.Reflection.GetValue: it inspects the member's declaring type, never the calling mod, so
+        // it can only make a sandbox-legal read throw — it cannot make an illegal one compile. It
+        // refuses [DisallowPatching] types (five in the whole game, four filesystem and one
+        // networking) and PugMod.Loader itself, and admits by assembly-name prefix — Pug, Unity,
+        // SpriteInstancing, I2, Rewired. RadicalMenuOptionTextInput lives in Pug.Other, so it passes.
+        //
+        // The lookup goes to the DECLARING type, never to ListDetailItem: GetMembersChecked calls
+        // type.GetMembers(Instance|Static|Public|NonPublic) (PugMod.SDK.Runtime:644), and a private
+        // field is reported only by the type that declares it, so asking the subclass finds nothing.
+        // The lookup itself does NOT go through API.Reflection — only Invoke/GetValue/SetValue are
+        // checked, whatever the Checked suffix suggests.
+        //
+        // Resolved once and held, because the scan allocates an array of every member of the type on
+        // each call. null when the field is gone — see TryCaretIndex. Wrapped because a throwing
+        // static initialiser would be far worse than a null: the CLR caches the
+        // TypeInitializationException permanently, and both warning latches below are statics of this
+        // same class, so they would die with the fault they exist to report.
+        //
+        // Cost, measured in game rather than assumed: 3.57 us per read once resolved, and 0.404 ms
+        // for the first TryCaretIndex call — which is where the scan actually lands, since the class
+        // is beforefieldinit and initialises on first static access rather than at load. That first
+        // call may also pay InvokeChecker's one-off walk over every type of every loaded assembly
+        // (PugMod.Loader:541-548), but only if this mod is the first thing in the process to touch
+        // API.Reflection: the checker is a field of the single shared ModAPIReflection
+        // (Pug.Other:392596), so a sibling mod calling first pays it instead. A keystroke costs one
+        // read — 0.02 % of a 60 fps frame — and even the first call stays inside one frame. Measured
+        // under Wine; no non-Wine baseline was taken, so this is one host's number, not a ratio.
+        private static readonly MemberInfo CurrentCharIndexField = ResolveCurrentCharIndexField();
 
-        /// <summary>Recovers a character index from a position in text-local space. TryCaretIndex is
-        /// this asked about the caret itself; a mouse click asks about the pointer.
+        private static MemberInfo ResolveCurrentCharIndexField()
+        {
+            try
+            {
+                return typeof(RadicalMenuOptionTextInput).GetMembersChecked().FirstOrDefault(m => m.GetNameChecked() == "currentCharIndex");
+            }
+            catch (System.Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>The caret's character index, read from the row's own counter. Authoritative:
+        /// this is the same field vanilla's AppendString inserts at (Pug.Other:343442) and
+        /// MoveCharMarker clamps (Pug.Other:343458), so it carries no frame lag — unlike the
+        /// blinker, which only catches up once per frame in Update (Pug.Other:343386-343388). It
+        /// needs no glyph-space check either, since it is a string index rather than a position
+        /// translated into one; it is not thereby guaranteed to be IN range, because only
+        /// MoveCharMarker clamps it and a SetText that skips the marker does not (vanilla guards the
+        /// same overrun on its own way in, Pug.Other:343431-343434).
+        ///
+        /// False has two causes and the log tells them apart: an unbound viewport, which says
+        /// nothing here because Bind()'s caller already named that wiring fault, and a counter that
+        /// could not be read, which warns once. Deliberately no fallback onto the position-based
+        /// recovery below: the two answer as of different moments within a frame, and a caller
+        /// compensating for that lag (MenuPatch's word jump did) cannot compensate for "whichever
+        /// source replied".</summary>
+        public bool TryCaretIndex(out int index)
+        {
+            index = 0;
+            // An unbound viewport has no row to ask. Silent here for the same reason IndexSpaceIsSound
+            // is: Bind()'s caller logs that wiring fault by name.
+            if (_input == null)
+                return false;
+            if (CurrentCharIndexField == null)
+            {
+                WarnCaretUnreadableOnce("RadicalMenuOptionTextInput has no member named 'currentCharIndex'");
+                return false;
+            }
+
+            // A blanket catch, which is right HERE and would not be elsewhere: API.Reflection's read
+            // signals every refusal by throwing and never by returning (Pug.Other:392654-392670), so
+            // there is no narrower channel to listen on — and the alternative is not a logged
+            // exception but a silently swallowed keystroke, because this runs inside a Harmony prefix
+            // that returns before vanilla's own AppendString. The name match alone cannot rule any of
+            // it out: it matches a member of any KIND, and a member of any TYPE. So a Core Keeper
+            // update that keeps the name and changes the shape — a method, a property of another
+            // type, an enum, a short — throws here, once per keystroke, where the whole point of the
+            // fallback is that a game update costs a convenience rather than the ability to type.
+            //
+            // e.ToString() rather than e.GetType().Name: Type.Name IS MemberInfo.Name, so the tidier
+            // form is a System.Reflection reference and fails the sandbox at compile time
+            // (docs/ck/sandbox.md). ToString() is an object override and carries the type anyway.
+            object raw;
+            try
+            {
+                raw = CurrentCharIndexField.GetValueChecked(_input);
+            }
+            catch (System.Exception e)
+            {
+                WarnCaretUnreadableOnce("reading it threw — " + e.ToString());
+                return false;
+            }
+            if (raw is not int value)
+            {
+                WarnCaretUnreadableOnce("'currentCharIndex' is no longer an int");
+                return false;
+            }
+            index = value;
+            return true;
+        }
+
+        /// <summary>Recovers a character index from a position in text-local space — what a mouse
+        /// click needs, and the one question the counter above cannot answer, since a pointer has a
+        /// position and no index.
         ///
         /// A Try, not a plain int, and that shape is the point: a caller cannot use the value without
         /// having seen the verdict. The int form this replaced could not stop a caller from using an
@@ -93,16 +217,15 @@ namespace ModSettingsMenu.UI
             return true;
         }
 
-        // Whether an index recovered from a glyph position may be used as a STRING index — decided
-        // here and nowhere else, so all three callers answer the question the same way.
+        // Whether an index recovered from a glyph position may be used as a STRING index.
         //
-        // Vanilla never has to ask. RadicalMenuOptionTextInput holds currentCharIndex as a string
-        // index (MoveCharMarker clamps it against pugText.GetTextLength(), Pug.Other:343457-343458)
-        // and indexes localCharacterEndPositions with it directly (Pug.Other:343387). That field is
-        // private and the Roslyn sandbox forbids reflection, so this class reconstructs the index
-        // from the caret's POSITION instead — and a reconstruction rests on an assumption an
-        // authoritative read does not make: that entry k of the glyph list ends character k. This
-        // method is that assumption, written down and testable.
+        // Vanilla never has to ask, and neither does TryCaretIndex any more: currentCharIndex is a
+        // string index by construction (MoveCharMarker clamps it against pugText.GetTextLength(),
+        // Pug.Other:343457-343458), and vanilla indexes localCharacterEndPositions with it directly
+        // (Pug.Other:343387). A POSITION is the one thing that counter cannot answer, so a mouse
+        // click still has to cross from glyph space into string space — and that crossing rests on
+        // an assumption a counter does not make: that entry k of the glyph list ends character k.
+        // This method is that assumption, written down and testable.
         //
         // The test is a count, and it is sufficient because the list can only ever come up SHORT.
         // TextManager.Render walks the string it was handed and appends exactly one entry at the
@@ -134,9 +257,12 @@ namespace ModSettingsMenu.UI
         // What this catches in practice, and why it is worth a guard at all: the row's PugText can
         // land on TMP's dynamic-font path (PugText.SetFont, Pug.Other:351532), where the list is
         // filled only under `if (trackDynamicTextCharacterEndPositions)` (Pug.Other:352043) — a flag
-        // the row prefab leaves at 0. The list is then EMPTY while the text is not, every query
-        // answers 0, and each keystroke inserts at the front: "abc" typed left to right is stored as
-        // "cba", in another mod's config file, with no log line and no exception. Only
+        // the row prefab leaves at 0. The list is then EMPTY while the text is not, and every query
+        // answers 0 — so a click anywhere in the row would drag the caret to the text's START
+        // instead of to what was pointed at, and the next keystroke would land there, silently.
+        // Reading the caret rather than reconstructing it has narrowed what this guard stands
+        // between: it used to cover the keyboard too, where the unguarded outcome would have been a
+        // whole typed word stored in reverse in another mod's config file. Only
         // `item.pugText.localize = false` in ListDetailScreen.AddItem keeps that path shut today
         // (it makes TextManager.ShouldUseDynamicFont return before it even looks at the language,
         // Pug.Other:272035-272038), and that line is there for a localisation-term reason that says
@@ -158,12 +284,11 @@ namespace ModSettingsMenu.UI
             return false;
         }
 
-        // Latched for the session, not per call and not per row. The check above runs on every
-        // keystroke, every word jump and every click, and a row stays unsound for as long as it holds
-        // the text that made it so — an unlatched warning would bury the one line that matters under
-        // thousands of copies of itself, precisely when the log is being read to find it. Spanning
-        // rows is intentional too: a drill-in's rows share one prefab and one font, so fifty rows
-        // would report one fault fifty times.
+        // Latched for the session, not per call and not per row. The check above runs on every click
+        // into a row, and a row stays unsound for as long as it holds the text that made it so — an
+        // unlatched warning would bury the one line that matters under copies of itself, precisely
+        // when the log is being read to find it. Spanning rows is intentional too: a drill-in's rows
+        // share one prefab and one font, so fifty rows would report one fault fifty times.
         private static bool _warnedUnsound;
 
         private static void WarnUnsoundOnce(int glyphCount, int textLength)
@@ -172,20 +297,45 @@ namespace ModSettingsMenu.UI
                 return;
             _warnedUnsound = true;
             Debug.LogWarning(
-                "[ModSettingsMenu] Caret index recovery is unavailable: PugText reports "
+                "[ModSettingsMenu] Click-to-place-caret is unavailable: PugText reports "
                     + glyphCount
                     + " glyph end positions for "
                     + textLength
-                    + " characters, so a position cannot be turned into a string index. Typing appends at the end of the row "
-                    + "instead of at the caret; word jumps and click-to-place-caret do nothing. No text is lost or reordered. "
+                    + " characters, so a click position cannot be turned into a string index. Clicking a row still selects and "
+                    + "activates it, but leaves the caret where it was. Typing and word jumps read a separate source and are "
+                    + "unaffected by THIS fault — but see any caret-counter warning beside it. No text is lost or reordered. "
                     + "Logged once per session."
             );
         }
 
-        /// <summary>Word boundaries either side of an index, for Ctrl+Arrow. <paramref
-        /// name="fromIndex"/> must be an index TryCaretIndex vouched for; the clamp below is a bound
-        /// on a trusted value, not a way to make an untrusted one usable — clamping a recovered index
-        /// is what silently turns "no answer" into "the front of the string".</summary>
+        // Same latch, different fault, and kept apart on purpose: this one says the mod lost its
+        // grip on a game field, which is a broken mod rather than a row rendering oddly, and the two
+        // want different answers from whoever reads the log. The reason is passed in because the
+        // three ways to lose that grip — gone, reshaped, refused — want different next steps, and by
+        // the time this is read the difference is not recoverable from anything else.
+        private static bool _warnedCaretUnreadable;
+
+        private static void WarnCaretUnreadableOnce(string reason)
+        {
+            if (_warnedCaretUnreadable)
+                return;
+            _warnedCaretUnreadable = true;
+            Debug.LogWarning(
+                "[ModSettingsMenu] The caret's counter cannot be read — changed by a Core Keeper update? ("
+                    + reason
+                    + "). Typing appends at the end of the row instead of at the caret, a word jump falls back to vanilla's own "
+                    + "single-character move, and click-to-place-caret does nothing. No text is lost or reordered. Logged once "
+                    + "per session."
+            );
+        }
+
+        /// <summary>Word boundaries either side of an index, for Ctrl+Arrow. The clamp below is now
+        /// the only thing bounding <paramref name="fromIndex"/>, and it must stay: TryCaretIndex
+        /// returns the row's raw counter, which vanilla itself treats as possibly past the text
+        /// (Pug.Other:343431-343434 logs and repairs exactly that), so without the clamp `s[i - 1]`
+        /// is an IndexOutOfRangeException. That is the opposite of what this comment used to say,
+        /// and the reason changed with it: while the index came from a reconstruction, clamping was
+        /// the move that silently turned "no answer" into "the front of the string".</summary>
         public int WordBoundary(int fromIndex, int direction)
         {
             string s = _text != null ? _text.GetText() : "";
@@ -242,9 +392,10 @@ namespace ModSettingsMenu.UI
         // MoveCharMarker has an empty body. A row's caret can sit anywhere, so this follows the
         // caret instead — but ONLY for the row actually being edited.
         //
-        // currentCharIndex is private on the base class (Pug.Other:343320), but Update writes the
-        // caret's world x into the public blinker every frame (Pug.Other:343386-343388), for EVERY
-        // row, not just the one being edited: SetInputText (called by SeedText for every row on open)
+        // The blinker, not currentCharIndex, and not because the counter is out of reach — an offset
+        // needs a POSITION, and the counter is an index. Update writes the caret's world x into the
+        // public blinker every frame (Pug.Other:343386-343388), for EVERY row, not just the one
+        // being edited: SetInputText (called by SeedText for every row on open)
         // always leaves currentCharIndex at the text's end (Pug.Other:343539), and nothing moves it
         // again until that row is actually typed into. Following CaretLocalX unconditionally would
         // therefore scroll every untouched row to the END of its text — a list of long tokens shown
@@ -310,12 +461,16 @@ namespace ModSettingsMenu.UI
 
             // Keep the blinker in step WITHIN this frame. base.Update() (Pug.Other:343386-343388)
             // placed it from the text's position as it stood at the START of the frame — i.e. before
-            // the move above — and CaretLocalX is exactly the difference between the blinker and the
-            // text transform, so without this it reads wrong by `delta` until the next base.Update().
-            // Hand-typing leaves several frames between keystrokes for that next Update to catch up;
-            // a held arrow key at the OS repeat rate, in a field already scrolled past its width, can
-            // land a MenuManager.HandleTypingInput read (Pug.Other:269535-269555) inside that window
-            // and insert at the wrong index — the same class of bug the caret-insert rewrite closed.
+            // the move above — so without this the drawn caret sits `delta` away from the character
+            // it marks until the next base.Update().
+            //
+            // That is now the whole of the reason, and it is a rendering one: the blinker is the
+            // caret the PLAYER sees. This used to guard an index as well, back when the insertion
+            // point was recovered from the blinker's position — a held arrow key could land a
+            // HandleTypingInput read inside the un-nudged window and insert at the wrong index.
+            // Nothing reads an index off the blinker any more (TryCaretIndex reads the counter), and
+            // CaretLocalX has exactly one consumer left: the offset computed above, which is why the
+            // nudge stays despite its original hazard being gone.
             //
             // This is a WITHIN-FRAME correction, not an accumulating one: base.Update() overwrites
             // the blinker's position ABSOLUTELY from currentCharIndex every frame, before this method

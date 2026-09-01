@@ -139,6 +139,64 @@ and controller reach such a row regardless.
       not subtle: you press Enter meaning to delete and end up typing in the
       entry instead.
 
+### The caret
+
+Keyboard and mouse, because they answer the question differently: typing and word
+jumps read the row's own `currentCharIndex` through `API.Reflection`, while a
+click has to cross from a pointer position into a character index through the
+glyph list (ADR-009). The controller is deliberately out of scope — its text
+arrives whole from the on-screen keyboard, caret already at the end.
+
+The two paths fail asymmetrically, which is why both need checking: a glyph-list
+fault costs the click alone, while an unreadable counter costs all three, the
+click included, since it needs the caret's own index to aim a relative move.
+
+Two fixtures, and the difference matters. `Overlong` for anything that scrolls —
+its 57-character token is far wider than the field. `WithSpaces` for the word
+jump: `Overlong`'s rows are each a single word, so a jump inside one finds no
+boundary and lands on 0, where an off-by-one would be invisible.
+
+- [ ] Press Home, then type `xyz` — the value begins with `xyz`, in the order
+      typed. Three characters rather than one: the caret path and the
+      append-at-the-end fallback advance the marker by different amounts, and a
+      single keystroke looks identical either way.
+- [ ] Press Left a few times, then type `xyz` — it lands where the caret is, in
+      order. Landing at the end means the counter was not read at all; landing at
+      the front means it came back as 0, which is worth reporting.
+- [ ] Repeat the first check with **End**. This one is a control, not a proof:
+      appending at the end is exactly what the fallback does, so its verdict
+      comes from the log check below rather than from the screen.
+- [ ] In `WithSpaces`, **Ctrl+Left / Alt+Left from the end of an entry** lands on
+      the word boundary; Ctrl+Right walks forward the same way. What this does
+      **not** establish: the ordinary word jump behaves identically with and
+      without the compensation term ADR-009 removed — that term was correct in
+      every case it could see. Only an auto-repeating key in the same frame
+      differed, and that is not cleanly provokable by hand. So this guards the
+      jump against regression; it does not verify the removal.
+- [ ] Click into the middle of a row's text — the caret lands on the character
+      pointed at, and the next keystroke goes there.
+- [ ] Activate a row and hold **Right** (or press End) until the text has
+      visibly scrolled, *then* click near the **right edge**. Without that the row
+      rests at offset 0 while still looking full of text, so the check passes
+      without ever exercising the offset. A conversion that ignored it places the
+      caret several characters from the pointer, and only here.
+- [ ] Commit the Home-then-type edit, leave the screen, and confirm
+      `TestListFixtures/config.cfg` carries those characters at the front of that
+      entry. What appears on screen and what reaches another mod's file are
+      separate claims, and only the second one outlives the menu.
+- [ ] The log carries **no `[ModSettingsMenu]` line about the caret** and **no
+      exception naming `currentCharIndex`**. Two different warnings can land here
+      — one for the counter, one for the glyph list — and neither wording
+      contains the other's. Without this, checks above can pass for the wrong
+      reason: an unreadable counter still types, just at the end.
+
+The clamp on the insertion index has no step, and cannot have one: every path
+that writes a row's text also moves the marker, so no manual walk leaves the
+counter past the text. It guards a state vanilla itself guards against
+(`Pug.Other:343431-343434`), and its only witness is the catch-all at the end of
+this document — no exception and no unexpected warning from this mod in
+`Player.log`.
+
 ### The focused column
 
 Moving between rows must not move the player sideways. Every failure here has

@@ -1,5 +1,12 @@
 # Clip a drill-in row's text with a second mask, not by shortening it
 
+- Status: accepted; **two** of its consequences superseded by [ADR-009](009-caret-index-from-the-counter.md) — the
+  caret-source decision itself, and the one below it about accounting for when
+  the game last wrote that caret, which described the compensation term ADR-009
+  removed. The masking, `maxWidth: 0` and scroll-offset decisions stand
+  unchanged, and the offset still follows the blinker
+- Date: 2026-08-26
+
 ## Context and Problem Statement
 
 A drill-in row could show only as much of a value as fitted its width, and the
