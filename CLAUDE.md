@@ -120,7 +120,7 @@ Adapting a vanilla `UISettings` prefab into a mod AssetBundle surfaced a series 
   menu is open (`docs/ck/ui-framework.md` § "Which input actions you can use inside a
   menu").
 
-`docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info, Separator/Label) and out-of-scope items.
+`docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info, Separator/Label) and out-of-scope items. Each point there carries a reference id — `MSM-01`, `MSM-02`, … — assigned once and never reused. Cite the id, not the heading, and never renumber: the ids do not follow the order of the file, and a point that ships takes its id with it.
 
 ## macOS / CrossOver
 
