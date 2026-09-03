@@ -149,7 +149,7 @@ namespace ModSettingsMenu.Settings
         public float Max; // Slider/Stepper only (ignored for Toggle)
         public float Step = 1f; // Slider only: increment per ←/→ (bar segments = (Max-Min)/Step)
         public SliderDisplay Display; // Slider only
-        public string[] Tokens; // Choice only: ordered value.ToString() list (cycle order); MSM's own, never a foreign constraint's live array
+        public string[] Tokens; // Choice only: ordered ChoiceToken.Of list (cycle order), from either path; MSM's own, never a foreign constraint's live array
         public ConfigEntryBase Entry; // live handle; widget reads/writes via BoxedValue
         public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
 
@@ -277,5 +277,65 @@ namespace ModSettingsMenu.Settings
         /// Here rather than at the call site so that both of this type's rendered strings resolve
         /// in the same place — a reader should not have to learn which of them is the exception.</summary>
         internal string Hint() => Loc.T(HintTerm, HintText);
+    }
+
+    /// <summary>The one string space a Choice's tokens live in. Every place that renders, compares or
+    /// stores one goes through here, because they have to agree and used to agree only by coincidence:
+    /// <see cref="ForeignConfigDiscovery"/> and SectionBuilder build the token lists, SettingWidget reads
+    /// the held value to find its index, the same widget displays it, and it writes the next one back.
+    ///
+    /// Two independent reasons, and either would be enough. A token is a localization leaf key —
+    /// SettingDef.ValueLabel appends it to a term prefix — so it must not vary with the player's
+    /// culture, or a consumer's yaml can only ever be right on one machine. And on the discovered path
+    /// the token makes a round trip through a parser that is pinned to InvariantInfo while ToString() is
+    /// not, which is the half a walkthrough can actually observe.
+    ///
+    /// One thing this deliberately does not do is validate the pair it is given. There is no moment at
+    /// which it could: the exact path takes the value out of a System.Array and the type off the entry,
+    /// so the two arrive from different objects. What keeps them coherent is CoreLib, whose
+    /// ConfigEntryBase constructor refuses a constraint whose ValueType is not assignable to the
+    /// setting's type — an invariant this file relies on and does not enforce. The single-argument
+    /// overload below is the shape to prefer wherever an entry is at hand, because there the mistake
+    /// cannot be made at all.</summary>
+    internal static class ChoiceToken
+    {
+        /// <summary>The token for what an entry currently holds. Prefer this over the two-argument form:
+        /// it takes the value and the type off the same object, so they cannot be mismatched.</summary>
+        internal static string Of(ConfigEntryBase e) => Of(e?.BoxedValue, e?.SettingType);
+
+        /// <summary>The token for a value that is not (yet) an entry's — a member of a constraint's own
+        /// array, which is where the pair genuinely does come from two places.
+        ///
+        /// A DECLARED Choice always stores a string whatever T the consumer chose: SectionBuilder binds
+        /// a ConfigEntry&lt;string&gt; over the tokens and converts back through the handle's own
+        /// FromToken. So that branch is its own token and must not go near the converter, which escapes
+        /// strings — the escaped form would then be compared, displayed and written.
+        ///
+        /// A DISCOVERED entry stores its own type, and only there does the round trip cross a parser:
+        /// SettingWidget writes a chosen token back through TomlTypeConverter.ConvertToValue, which is
+        /// pinned to InvariantInfo for every floating-point type, while ToString() renders in the
+        /// current culture. On a comma-decimal culture that pair turns 0.5 into 5 — the comma reads as
+        /// a group separator. Rendering through the converter puts both ends in the same space.
+        ///
+        /// Enums are named explicitly rather than left to the converter, which would answer identically:
+        /// their tokens come from Enum.GetNames one case earlier in BuildDef, and tying them to CoreLib's
+        /// converter table would make that agreement depend on a table this does not own.</summary>
+        internal static string Of(object value, System.Type type)
+        {
+            if (value == null)
+                return "";
+            if (type == typeof(string) || type.IsEnum)
+                return value.ToString();
+            // A DECLARED Choice takes any T at all — it stores a string token, so nothing about it ever
+            // reaches CoreLib's converter and a T outside that table is a legitimate declaration rather
+            // than a mistake. Ask instead of assuming: converting would throw for exactly those, and
+            // ToString() is both what such a declaration produced before and what its own FromToken
+            // compares against. Every DISCOVERED entry does have a converter — the exact path accepts
+            // only those types and the reconstruction asks CanConvert before it parses — so this line
+            // never decides anything on that path.
+            if (!TomlTypeConverter.CanConvert(type))
+                return value.ToString();
+            return TomlTypeConverter.ConvertToString(value, type);
+        }
     }
 }

@@ -153,7 +153,8 @@ namespace ModSettingsMenu.Settings
 
             // 2. enum -> Choice over the enum names. Toml renders an enum as its name and parses one
             //    back, and Enum.ToString() is the same name — so these tokens survive both the widget's
-            //    BoxedValue.ToString() read and its converted write, with no per-type code path. This
+            //    read (ChoiceToken.Of, which names enums explicitly for exactly this reason) and its
+            //    converted write, with no per-type code path. This
             //    case returns before `av` is read at all, so an enum never reaches TryTokens whatever
             //    constraint it carries — that is the reason that holds. (AcceptableValueList could not
             //    hold one anyway, its T being IEquatable, which no enum satisfies. But a third party
@@ -189,7 +190,7 @@ namespace ModSettingsMenu.Settings
             }
 
             // 3c. A closed set of acceptable values -> Choice, cycled by the same widget MSM's own
-            //     declared Choice uses. See TryTokens for why one shape is exact and the rest are
+            //     declared Choice uses. See TryTokens for why most sets are read exactly and the rest
             //     reconstructed, and for what happens when the reconstruction cannot be trusted.
             if (av != null && TryTokens(av, e, id, out string[] tokens))
             {
@@ -275,21 +276,31 @@ namespace ModSettingsMenu.Settings
         /// cycles — or false when that set cannot be established, which leaves the caller with a
         /// read-only Info row.
         ///
-        /// One shape is exact and the rest are reconstructed, and the split is about how many types a
-        /// pattern-match can name: <see cref="AcceptableValueList{T}"/> exposes its values through a
-        /// generic property, so `av is AcceptableValueList&lt;X&gt;` reaches them for any X written down
-        /// here — the way TryRange below names int and float. String is written down because it is the
-        /// shape MSM's own declared Choice binds and the one a foreign mod is likeliest to use. What
-        /// does not scale is the open set: naming every T a mod might pick is not possible. So the
-        /// fallback parses ToDescriptionString() — the same human-readable line CoreLib writes into
-        /// the .cfg — instead: "# Acceptable values: a, b, c".
+        /// Most sets are read exactly and the rest are reconstructed, and the split is about how many
+        /// types a pattern-match can name: <see cref="AcceptableValueList{T}"/> exposes its values
+        /// through a generic property, so `av is AcceptableValueList&lt;X&gt;` reaches them for any X
+        /// written down — which ReadExactValues does for every type <see cref="TomlTypeConverter"/> has a
+        /// converter for. That set is not a sample of a larger one: a converter is a PRECONDITION, and
+        /// enforced earlier than here, since CoreLib's own ConfigFile.Bind throws for a T it cannot
+        /// convert. An entry whose type is outside that table cannot exist to reach this file at all.
         ///
-        /// That is a choice of SOURCE, not the only route, and the distinction is load-bearing because
-        /// every check below exists to compensate for it. `System.Reflection.*` is denied, but PugMod's
-        /// own `API.Reflection` is not (ADR-009, already load-bearing in this mod) and a `T[]` casts to
-        /// `System.Array` — so the values are reachable without ever naming T, and reading them would
-        /// make the whole guard sequence unnecessary. Which source is better here has not been
-        /// measured; see MSM-27. What ships is the parse.
+        /// What is left over is a type someone registered through TomlTypeConverter.AddConverter — in
+        /// the table at runtime, absent from the cascade, which is written against the shipped table.
+        /// For that the fallback parses ToDescriptionString() — the same human-readable line CoreLib
+        /// writes into the .cfg: "# Acceptable values: a, b, c". Nothing checks the cascade against that
+        /// table (CoreLib's TomlTypeConverter), and nothing needs to: a converter added there and not
+        /// here falls to the reconstruction instead of being read exactly, which is a loss of precision
+        /// rather than a break — so this correspondence goes imprecise with age, never wrong.
+        ///
+        /// Reading the property through PugMod's own `API.Reflection` was the obvious alternative to
+        /// both, and it does not work — measured in game, not reasoned about (MSM-27, since closed).
+        /// The source compiles and the mod loads (`safetyCheck=True`), because `PugMod.MemberInfo` and
+        /// `API.Reflection` are on none of the sandbox's deny lists. The refusal is a second, later gate:
+        /// `ModAPIReflection.GetValue` runs `InvokeChecker.CheckType` on the member's DECLARING type
+        /// (Pug.Other:392657), which admits only assemblies named Pug/Unity/SpriteInstancing/I2/Rewired
+        /// — and CoreLib's is named `CoreLib`. It throws `Not allowed to access AcceptableValues`. A
+        /// non-generic control on the same run (`AcceptableValueBase.ValueType`) was refused too, so the
+        /// type parameter was never the obstacle; the assembly is. See docs/ck/sandbox.md.
         ///
         /// That line is documentation, not a serialization format, so the parse checks its own work at
         /// two levels. Per token: it counts only if <see cref="TomlTypeConverter"/> can turn it back
@@ -302,8 +313,8 @@ namespace ModSettingsMenu.Settings
         /// The held-value check misses a split that left the held value intact as one of those
         /// fragments. The duplicate check is what covers that last case, because a description is a
         /// join over a set and a faithful reading of one cannot repeat itself. Together they are a
-        /// strong filter, not a proof: this reads a human-readable line, and the only real guarantee
-        /// available would be an API that hands over the values.
+        /// strong filter, not a proof: this reads a human-readable line. The real guarantee is the exact
+        /// path above — this is what is left where that path cannot reach.
         ///
         /// An enum cannot reach the fallback at all: AcceptableValueList constrains T to
         /// IEquatable&lt;T&gt;, which no enum implements (CS0315), so no mod can restrict one this way.
@@ -313,37 +324,52 @@ namespace ModSettingsMenu.Settings
             tokens = null;
             var settingType = e.SettingType;
 
-            if (av is AcceptableValueList<string> exact)
+            var exact = ReadExactValues(av, out System.Array values);
+            // Reported rather than passed over in silence, because there is no honest shape here at all:
+            // AcceptableValueList's own constructor rejects both null and an empty array, so anything
+            // arriving this way came from a subclass whose `virtual AcceptableValues` answers abnormally
+            // — the same dishonesty the held-value check below treats as a degradation. It also used to
+            // be audible: for every type but string this fell to the parse, where an empty array
+            // described itself as a blank entry and a null threw out of CoreLib into BuildSection's
+            // guard. Going exact must not cost the foreign author that signal, since the row they see is
+            // a read-only one either way.
+            if (exact == ExactRead.Unusable)
+                return Degraded(id, values == null ? "its constraint reports no list of values at all" : "the list of values it accepts is empty");
+
+            if (exact == ExactRead.Usable)
             {
-                var values = exact.AcceptableValues;
-                if (values == null || values.Length == 0)
-                    return false;
-                // The reconstruction below refuses a blank token, and this branch has to promise the
-                // same thing: a blank option is indistinguishable from an unset row, and cycling onto
-                // one writes it into what, for a real mod, is its own config file. A null is worse —
-                // it never matches the row's own read, so the row can never settle on it: it snaps to
-                // the first token instead, and if the null IS the first token nothing moves at all.
-                // Whitespace counts as blank, because the reconstruction trims before it measures and
-                // the two branches have to refuse the same values, not merely similar ones.
-                foreach (var value in values)
-                    if (string.IsNullOrWhiteSpace(value))
+                // Rendered into a NEW array, never handed through. `AcceptableValues` is the foreign
+                // mod's live constraint array, and SettingDef.Tokens is a public field on a def that a
+                // public surface does reach: SettingWidget.Section → ModSection.Settings → Tokens, all
+                // public, for as long as the screen is built. MSM is a framework other mods reference,
+                // so "nothing writes into it" is a property of today's code rather than something this
+                // can rely on — and a write there would edit another mod's declared value set.
+                var rendered = new string[values.Length];
+                for (int i = 0; i < rendered.Length; i++)
+                {
+                    // A blank option is indistinguishable from an unset row, and cycling onto one writes
+                    // it into what, for a real mod, is its own config file. A null is worse — it never
+                    // matches the row's own read, so the row can never settle on it: it snaps to the
+                    // first token instead, and if the null IS the first token nothing moves at all.
+                    // Whitespace counts as blank, because the reconstruction trims before it measures
+                    // and the two paths have to refuse the same values, not merely similar ones.
+                    string token = ChoiceToken.Of(values.GetValue(i), settingType);
+                    if (string.IsNullOrWhiteSpace(token))
                         return Degraded(id, "one of the values it accepts is blank");
-                // The same set-level check the reconstruction ends with, for the same reason. It reads
-                // as a tautology here — Clamp guarantees the held value is acceptable — but only while
-                // AcceptableValues answers honestly, and it is `virtual`: a subclass may return an
-                // array that its own Clamp and IsValid never consult. Without this the row would read
-                // idx < 0, snap to the first token, and overwrite a foreign mod's value on the first
-                // keypress. A check that cannot reject an honest set costs nothing to keep.
-                if (System.Array.IndexOf(values, e.BoxedValue?.ToString() ?? "") < 0)
+                    rendered[i] = token;
+                }
+                // Reads as a tautology — Clamp guarantees the held value is acceptable — but only while
+                // AcceptableValues answers honestly, and it is `virtual`: a subclass may return an array
+                // that its own Clamp and IsValid never consult. Without this the row would read idx < 0,
+                // snap to the first token, and overwrite a foreign mod's value on the first keypress. A
+                // check that cannot reject an honest set costs nothing to keep.
+                if (System.Array.IndexOf(rendered, ChoiceToken.Of(e)) < 0)
                     return Degraded(id, "the values it accepts do not include the one it currently holds");
-                // Copied, not handed through. `AcceptableValues` is the foreign mod's live constraint
-                // array, and SettingDef.Tokens is a public field on a def that a public surface does
-                // reach: SettingWidget.Section → ModSection.Settings → Tokens, all public, for as long
-                // as the screen is built. MSM is a framework other mods reference, so "nothing writes
-                // into it" is a property of today's code rather than something this can rely on — and
-                // a write there would edit another mod's declared value set. A handful of strings per
-                // menu open is not worth reasoning about.
-                tokens = (string[])values.Clone();
+                // Note where this does NOT go on to: a recognised set that failed either check above
+                // returned rather than falling through to the reconstruction. The description would
+                // hand back the very same values, and the parse could accept what the exact read
+                // refused — one entry judged twice, by the weaker of the two tests.
+                tokens = rendered;
                 return true;
             }
 
@@ -392,7 +418,22 @@ namespace ModSettingsMenu.Settings
                 }
                 if (!av.IsValid(value))
                     return Degraded(id, $"\"{token}\" read back, but the setting's own constraint rejects it");
-                accepted.Add(token);
+                // The VALUE's canonical token, not the fragment that produced it. The description is
+                // written in the current culture and read back invariantly, so a token taken verbatim
+                // from it would not survive the widget's own round trip. Converting and re-rendering is
+                // free here — the conversion happened one line up, for the validation. It also makes the
+                // duplicate check below see two spellings of one value (0.5 and 0.50) as the repeat
+                // they are.
+                string rendered = ChoiceToken.Of(value, settingType);
+                // Blankness is tested TWICE and on two different strings, which looks redundant and is
+                // not. Above, on the fragment, so the message can name what the description actually
+                // said. Here, on what will be stored — a different string since the line above, and the
+                // one the exact path refuses at its own blank check. Without this the two paths would
+                // refuse merely similar values rather than the same ones: `\t` is a two-character
+                // fragment that passes the length test and unescapes into whitespace.
+                if (string.IsNullOrWhiteSpace(rendered))
+                    return Degraded(id, $"\"{token}\" reads back as a blank value");
+                accepted.Add(rendered);
             }
 
             // Two set-level checks, because the per-token ones cannot see a split. The reason they
@@ -419,7 +460,7 @@ namespace ModSettingsMenu.Settings
             //    but NOT one that left it intact as a fragment: with the set above and a held value of
             //    5, "5" is present and this check passes. That is what check 1 is for, and why neither
             //    alone is enough.
-            if (System.Array.IndexOf(reconstructed, e.BoxedValue?.ToString() ?? "") < 0)
+            if (System.Array.IndexOf(reconstructed, ChoiceToken.Of(e)) < 0)
                 return Degraded(id, "the values it lists do not include the one it currently holds, so reading them back cannot have been faithful");
 
             tokens = reconstructed;
@@ -440,6 +481,80 @@ namespace ModSettingsMenu.Settings
             if (_degradationsReported.Add(id))
                 UnityEngine.Debug.LogWarning($"[ModSettingsMenu] '{id}' states a fixed set of values, but {reason} — showing it as a read-only row instead.");
             return false;
+        }
+
+        /// <summary>What an exact read of a constraint's values came to. Three outcomes rather than two,
+        /// because the caller has three things to do and a bool carries two of them: only
+        /// <see cref="NotRecognised"/> may fall through to the reconstruction, and reading "recognised"
+        /// off a non-null array — which was the earlier shape — silently sends the case this enum exists
+        /// for down the very path it must not take.</summary>
+        private enum ExactRead
+        {
+            /// <summary>Not one of the shapes ReadExactValues names. The reconstruction is next.</summary>
+            NotRecognised,
+
+            /// <summary>One of those shapes, but its values are unusable — the array came back null or
+            /// empty, which its own constructor forbids. The caller reports it and stops; it must NOT
+            /// consult the description, which is built from this same array.</summary>
+            Unusable,
+
+            /// <summary>One of those shapes, with values to render.</summary>
+            Usable,
+        }
+
+        /// <summary>The values of a constrained set MSM can read exactly, handed back as
+        /// <see cref="System.Array"/> so the element type is named once here and nowhere after.
+        ///
+        /// Not named Try…: that prefix promises "true ⇒ the out parameter is good", and the whole point
+        /// here is that recognising a shape and getting usable values out of it are separate answers.
+        ///
+        /// The types are exactly <see cref="TomlTypeConverter"/>'s, minus two that cannot arrive: bool
+        /// becomes a Toggle in BuildDef before `av` is read at all, and no enum can be an
+        /// AcceptableValueList's T (its IEquatable&lt;T&gt; constraint, CS0315). Spelling them out one
+        /// by one IS the mechanism — `av is AcceptableValueList&lt;X&gt;` needs X written down — and the
+        /// set is closed rather than sampled, because CoreLib's ConfigFile.Bind refuses a type it cannot
+        /// convert. Same shape as TryRange below, for the same reason.
+        ///
+        /// A mis-wired arm cannot compile: each `is` introduces its own pattern variable, so reusing one
+        /// from an earlier arm is a definite-assignment error. What compiles silently is a MISSING arm,
+        /// and its cost is small — that type falls to the reconstruction.</summary>
+        private static ExactRead ReadExactValues(AcceptableValueBase av, out System.Array values)
+        {
+            values = null;
+            if (av is AcceptableValueList<string> vString)
+                values = vString.AcceptableValues;
+            else if (av is AcceptableValueList<int> vInt)
+                values = vInt.AcceptableValues;
+            else if (av is AcceptableValueList<float> vFloat)
+                values = vFloat.AcceptableValues;
+            else if (av is AcceptableValueList<double> vDouble)
+                values = vDouble.AcceptableValues;
+            else if (av is AcceptableValueList<long> vLong)
+                values = vLong.AcceptableValues;
+            else if (av is AcceptableValueList<decimal> vDecimal)
+                values = vDecimal.AcceptableValues;
+            else if (av is AcceptableValueList<byte> vByte)
+                values = vByte.AcceptableValues;
+            else if (av is AcceptableValueList<sbyte> vSByte)
+                values = vSByte.AcceptableValues;
+            else if (av is AcceptableValueList<short> vShort)
+                values = vShort.AcceptableValues;
+            else if (av is AcceptableValueList<ushort> vUShort)
+                values = vUShort.AcceptableValues;
+            else if (av is AcceptableValueList<uint> vUInt)
+                values = vUInt.AcceptableValues;
+            else if (av is AcceptableValueList<ulong> vULong)
+                values = vULong.AcceptableValues;
+            else
+                return ExactRead.NotRecognised;
+            // Recognition is the cascade having matched, NOT `values != null`. AcceptableValues is
+            // virtual, so a subclass may answer null — and reading that as "not one of these shapes"
+            // would send it to the parse, whose first act is ToDescriptionString(): CoreLib's own
+            // implementation is AcceptableValues.Select(…), which throws on null from inside another
+            // mod's type. BuildSection's per-entry guard does catch that, so the cost is the row rather
+            // than the screen — but a lost row is still worse than the read-only one this buys, and it
+            // arrives with a stack trace instead of a sentence naming the mod.
+            return values == null || values.Length == 0 ? ExactRead.Unusable : ExactRead.Usable;
         }
 
         private static bool TryRange(AcceptableValueBase av, out float min, out float max)
