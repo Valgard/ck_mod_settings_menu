@@ -75,35 +75,33 @@ A row showing a **computed, non-editable** value in the normal option layout
   same widget, not a second kind. Default: focusable (consistent with sibling
   rows), revisit if it feels wrong.
 
-### MSM-03 — Separator / Label
-
-A **display-only** row rendered **full-width** (a heading or a divider),
-**not** the two-column option layout — for structuring long sections.
-
-- **API:** `.Label(string key)` (heading) / `.Separator()` (bare divider).
-- **Behaviour:** never interactive, **skipped in navigation** (not focusable) —
-  likely **not** a `RadicalMenuOption` at all, just a `PugText` / divider
-  `SpriteRenderer` placed into the section box's layout.
-- **Prefab:** needs a **new, full-width prefab** — the one genuinely expensive
-  item here. Per the project rule (`feedback_corekeeper_prefab_edits_in_editor`
-  memory), new/structural prefab objects **must be authored in the Unity
-  Editor**: a `-batchmode` build reserializes and drops hand-authored objects /
-  nulls refs. So this is real Editor work, not a code-only change.
-
 ## Why MSM-02 and MSM-03 are separate widgets
 
-Logically both are "silent" (non-interactive) rows, but the split is driven by
+MSM-03 shipped as `SectionBuilder.Label(key)`; this section stays because the
+rule outlived the point, and because MSM-05 cites it by name. Logically Info and
+Label are both "silent" (non-interactive) rows, but the split was driven by
 **layout topology at the prefab layer**, not by intent:
 
 - **Info** keeps the two-column geometry (label left / value right) → reuses the
   existing option prefab → code-only.
-- **Separator/Label** spans the full width with no value column → needs its own
-  prefab → Editor work.
+- **Label** spans the full width with no value column → needed its own prefab →
+  Editor work.
 
 The moment the geometry diverges, the prefab diverges, and that is precisely
 what a distinct `SettingKind` value is for (it selects prefab + behaviour). They
-only *share* membership in the ordered `ModSection.Settings` list (so a
-separator can sit between option 3 and 4).
+only *share* membership in the ordered `ModSection.Settings` list, so a heading
+sits between option 3 and 4.
+
+Building it confirmed the rule and added one thing the plan had not foreseen:
+inside a row, **x = 0 is the boundary between the two columns, not the left
+edge**. The label column ends at `-0.665` and is 11 units wide, so a full-width
+element starts at `-11.665`. A new element authored in the Editor arrives at
+`x: 0` with centred alignment — squarely between the two columns — and the
+symptom is a row that occupies its height while showing nothing.
+
+A bare `.Separator()` was cut rather than built: no consumer wanted one, and an
+unused entry point cannot be withdrawn from a published API. If one is ever
+wanted it needs a **new** id — MSM-03 went with the point that shipped.
 
 ## Explicitly out of scope
 
@@ -721,12 +719,14 @@ Everything binds into the CoreLib section `"Settings"` today, so a discovered mo
 renders as one flat list. GMCM groups by the file's own sections. For a mod with
 twenty values that is the difference between a list and a structure.
 
-- **It rides on the planned Separator/Label widget** (MSM-03): a section header
-  *is* that widget's `.Label(key)` — full width, no value column, not
-  interactive. So this point carries no Editor work of its own, and it becomes
-  the first real consumer of a widget that would otherwise ship unexercised.
-  Build the widget first; if a grouped header cannot be built from it, the
-  widget's spec is incomplete, and that is better learned here.
+- **The widget it rides on now exists.** A section header *is*
+  `SectionBuilder.Label(key)` — full width, no value column, not interactive,
+  skipped by navigation — so this point carries no Editor work of its own and
+  makes it the first real consumer of a widget that otherwise ships exercised
+  only by dev fixtures. What is still open is the half `.Label` does not answer:
+  a heading is *declared* by a consumer, and a discovered mod declares nothing.
+  Something has to build one per `.cfg` section on the discovery path and place
+  it in `ModSection.Settings`, which today is filled one entry per config entry.
 - **Deliberately not collapsible.** Core Keeper has no expand/collapse idiom in
   its menu UI at all — a search for `Expand`, `Collapse`, `Foldout`,
   `SwitchExpandState`, `isExpanded` turns up only ECS collider pooling and two
