@@ -708,10 +708,10 @@ namespace ModSettingsMenu.UI
             }
         }
 
-        // Templates under WidgetTemplates (SectionTemplate, SettingTemplate, ListTemplate) are
-        // instantiation sources only — never rendered. Force them inactive at setup so a stray
-        // Editor activation can't leak a phantom row/section into the menu. Instantiate works
-        // fine on inactive templates; the clones are SetActive(true).
+        // Templates under WidgetTemplates (SectionTemplate, SettingTemplate, ListTemplate,
+        // LabelTemplate) are instantiation sources only — never rendered. Force them inactive at
+        // setup so a stray Editor activation can't leak a phantom row/section into the menu.
+        // Instantiate works fine on inactive templates; the clones are SetActive(true).
         private void DeactivateTemplates()
         {
             var templates = transform.Find("WidgetTemplates");

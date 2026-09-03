@@ -852,6 +852,21 @@ two adjacent on purpose, and the last one the final row of the box.
       after scrolling with the mouse wheel, for instance. That is vanilla and
       not a defect.)
 
+**Segment sorting needs a temporary edit, and is the one piece of this widget
+the ordinary walk cannot reach.** No fixture combines a heading with a sort:
+this section is `AsDeclared`, `SortOptions` applies to a whole section, and
+setting it permanently would reorder every other fixture here and break the
+ordering claims the checks above rest on. Discovery never produces a heading, so
+nothing else exercises it either. Until a consumer needs both, the check costs a
+one-line edit and a rebuild:
+
+- [ ] Add `.SortOptions(OptionSort.ByLabel)` to this mod's own section
+      (`ModSettingsMenuMod.Init`), rebuild, and confirm: the settings between two
+      headings are alphabetical **among themselves**, every heading is still
+      exactly where it was declared, and `testLabelTrailing` is still the last
+      row. Then take the line out again — leaving it in invalidates the ordering
+      checks above.
+
 ## After the walk
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly
