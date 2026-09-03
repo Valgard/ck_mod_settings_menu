@@ -12,6 +12,15 @@ namespace ModSettingsMenu.Settings
         Choice,
         Info,
         List,
+
+        /// <summary>A full-width heading between rows, for grouping a long section. Holds no value:
+        /// its SettingDef carries no ConfigEntry, and it is the one kind that never becomes a menu
+        /// option — see LabelRow for why that is structural rather than a setting.
+        ///
+        /// APPENDED, never inserted. This enum is public API; nothing persists a member today
+        /// (ListKindStore stores id strings only), but a shifted value would be a silent break for
+        /// anything that ever did.</summary>
+        Label,
     }
 
     /// <summary>How a Slider renders its value.</summary>

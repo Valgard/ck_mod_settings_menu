@@ -481,6 +481,38 @@ namespace ModSettingsMenu.Settings
             return true;
         }
 
+        /// <summary>
+        /// A full-width heading between this section's settings, for grouping a long list of them.
+        /// It holds no value: nothing is bound, nothing persists, and there is no handle — which is
+        /// why this is the one declaration that cannot fail the way the others can.
+        ///
+        /// <paramref name="key"/> is a localisation key, resolved as "&lt;ModId&gt;-Config/&lt;key&gt;"
+        /// exactly like every other row's label and falling back to the raw key when no term
+        /// resolves. Deliberately no literal-text parameter: a readable fallback would hide a
+        /// missing term, and a visible raw key is the same diagnosis every other row already gives.
+        ///
+        /// The row is skipped by navigation because it never enters the screen's menuOptions —
+        /// Core Keeper's own answer for the category headings in its key-rebinding screen.
+        ///
+        /// Under <see cref="SortOptions"/> ByKey/ByLabel a label is a SEGMENT BOUNDARY: the settings
+        /// between two labels are sorted among themselves and the labels stay where they were
+        /// declared. A label states an order, so a sort that reordered across it would answer the
+        /// same question twice.
+        /// </summary>
+        public SectionBuilder Label(string key)
+        {
+            _lastDeclarationFailed = false;
+            _section.Settings.Add(
+                new SettingDef
+                {
+                    Key = key,
+                    Kind = SettingKind.Label,
+                    Term = Term(key),
+                }
+            );
+            return this;
+        }
+
         /// <summary>Marks the most-recently-declared setting as requiring a game restart to take effect.
         /// When such a setting is changed in the menu, leaving the Mod settings screen raises CK's own
         /// "restart to apply mod changes" prompt (Cancel/Yes → relaunch). Chain it right after the widget:
@@ -488,6 +520,19 @@ namespace ModSettingsMenu.Settings
         /// live value only matters at the next bake/launch (e.g. recipe rewrites).</summary>
         public SectionBuilder RequiresRestart()
         {
+            int n = _section.Settings.Count;
+            // A label is not a setting: it holds no value, so nothing about it can change and
+            // nothing could ever require a restart. Refuse rather than mark it — this modifier
+            // addresses the last declaration POSITIONALLY, so accepting it here would silently
+            // attach a restart demand to a row that can never trigger one, and the consumer would
+            // have no way to see that their intended setting never got the flag.
+            if (n > 0 && _section.Settings[n - 1].Kind == SettingKind.Label)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': it follows the label '{_section.Settings[n - 1].Key}', which holds no value and can never change. Chain it directly after the setting it belongs to."
+                );
+                return this;
+            }
             // Refuse rather than reach past a failed declaration: Settings[Count - 1] would be the
             // setting declared BEFORE the one that failed, so this modifier would silently attach
             // to an unrelated value and demand a restart for a change that applies immediately.
@@ -498,13 +543,49 @@ namespace ModSettingsMenu.Settings
                 );
                 return this;
             }
-            int n = _section.Settings.Count;
             if (n > 0)
                 _section.Settings[n - 1].RequiresRestart = true;
             return this;
         }
 
-        public void Build() => ModSettings.Register(_section);
+        public void Build()
+        {
+            WarnAboutDuplicateKeys();
+            ModSettings.Register(_section);
+        }
+
+        // Two rows in one section carrying the same key resolve to the SAME loc term
+        // (MsmTerms.Label is the single schema for a label and a setting alike), so they render the
+        // same text and neither is identifiable from the screen. CoreLib catches nothing here: a
+        // label never binds at all, and two settings that bind the same key with the same type get
+        // the same entry handed back without complaint.
+        //
+        // Checked once at Build() rather than in each declaration method, so it catches the
+        // collision in both directions — label after setting, and setting after label — from one
+        // place instead of six.
+        private void WarnAboutDuplicateKeys()
+        {
+            var seen = new List<string>();
+            var duplicated = new List<string>();
+            foreach (var def in _section.Settings)
+            {
+                if (def.Key == null)
+                    continue;
+                if (seen.Contains(def.Key))
+                {
+                    if (!duplicated.Contains(def.Key))
+                        duplicated.Add(def.Key);
+                }
+                else
+                {
+                    seen.Add(def.Key);
+                }
+            }
+            if (duplicated.Count > 0)
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] '{_section.ModId}' declares {duplicated.Count} key(s) more than once ({string.Join(", ", duplicated.ToArray())}). Each resolves to a single term, so those rows show the same text and cannot be told apart on screen."
+                );
+        }
 
         private string Term(string key) => MsmTerms.Label(_section.ModId, key);
     }
