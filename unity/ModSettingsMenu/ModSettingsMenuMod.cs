@@ -548,6 +548,13 @@ namespace ModSettingsMenu
         // is the API a consumer actually calls rather than a SettingDef assembled by hand.
         private static void AddDeclaredFixtures(SectionBuilder section)
         {
+            // The headings are placed BETWEEN the other fixtures rather than appended, because a
+            // heading that sits alone at the end would exercise the rendering while showing nothing
+            // about the thing it is for — grouping the rows beneath it. Like every other fixture
+            // here they carry no loc term, which is deliberate twice over: the raw key names the
+            // heading's position on screen while walking the checks, and a missing term falling
+            // back to the key rather than to a blank row is itself one of them.
+            section.Label("testLabelChoice");
             // The only declared Choice anywhere, and the only exercise of SectionBuilder's token
             // rendering. A float T on purpose: that is the one case where going through ChoiceToken
             // differs from the ToString() this used to do, so it is the whole check. It must read
@@ -555,6 +562,10 @@ namespace ModSettingsMenu
             // token shown — on a comma-decimal host the old code stored "1,5" and made the loc key
             // depend on the machine, which no consumer's yaml can be right for twice.
             section.Choice(out _, "testChoiceFloat", new[] { 0.5f, 1.5f, 2.5f }, 1.5f);
+            // The heading with the most rows under it, so navigation has to step over it in both
+            // directions with a real neighbour on each side — the case a heading at either end of
+            // the box cannot produce.
+            section.Label("testLabelLists");
             section.List(out _, "testListFreeText", new[] { "Alpha", "Beta", "Gamma" });
             // Long enough that reordering has somewhere to travel, and that the arrow columns can be
             // walked past the visible edge — the read-only fixture in EarlyInit covers a long list
@@ -580,11 +591,22 @@ namespace ModSettingsMenu
             // that keeps the player's order and dedupes through the case-insensitive match. The
             // ReadOnly fixture above cannot reach it.
             section.List(out _, "testListOrderOnlyDuplicate", new[] { "Alpha", "Beta", "Alpha" }, ListEditing.OrderOnly);
+            section.Label("testLabelEdgeCases");
             // Reaches BindGuarded without needing a filesystem fault: binding one key twice with
             // different types trips ConfigFile.Bind's unchecked cast. The Slider must be logged and
             // left out, the Toggle and everything after must survive — and RequiresRestart() after a
             // failed declaration must refuse rather than mark the setting before it.
             section.Toggle(out _, "testDupKey", true).Slider(out _, "testDupKey", 0f, 10f, 5f, 1f).RequiresRestart();
+            // RequiresRestart() after a HEADING must be refused too, and for a different reason than
+            // the failed declaration above: nothing went wrong here, the row simply holds no value
+            // and could never trigger a restart. Accepting it would leave the setting the consumer
+            // actually meant unflagged, with a restart demand attached to a row that can never
+            // change. Expected outcome is a warning naming this key.
+            section.Label("testLabelRestartGuard").RequiresRestart();
+            // The heading declared LAST, so the trailing segment of the sort is empty and the box's
+            // final row is a heading — the two positions the sorting helper handles without a
+            // special case and which nothing else here would put it in.
+            section.Label("testLabelTrailing");
         }
 
         public void ModObjectLoaded(Object obj)
