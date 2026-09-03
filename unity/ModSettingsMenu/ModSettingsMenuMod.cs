@@ -40,9 +40,14 @@ namespace ModSettingsMenu
 
             // Dev-only test fixtures for exercising the discovery path (the list-widget drill-in, and
             // the Choice shapes further down) against something other than a real foreign mod's
-            // config — two raw CoreLib ConfigFiles created OUTSIDE ConfigStore.ForMod, so
+            // config — raw CoreLib ConfigFiles created OUTSIDE ConfigStore.ForMod, so
             // ConfigStore.IsOwn doesn't recognize them and ForeignConfigDiscovery treats them exactly
-            // like a real 3rd-party mod's settings.
+            // like a real 3rd-party mod's settings. Several files, and how they are divided is
+            // load-bearing rather than cosmetic: Bind and every later write end in ConfigFile.Save,
+            // which asks each entry in that file for its description, so a fixture that refuses to give
+            // one takes the whole file's writes with it. Hence one file for the lists, one for the
+            // ordinary Choice shapes, and one PER fixture whose description throws — see
+            // BindThrowingFixture, which owns that last rule so a caller cannot break it.
             // Gated on DevFlags.Is("TestFixtures") (see DevFlags.generated.cs, regenerated from
             // the MOD_DEV_FLAGS env var by CLIBuildHelper.Build on every build) — OFF by default,
             // so a normal build never ships these into a real player's settings screen; opt in
@@ -167,13 +172,18 @@ namespace ModSettingsMenu
                     ),
                     clientScope
                 );
-                // The reconstruction path: int is not reachable through the exact branch, so these
-                // tokens come from ToDescriptionString() and have to pass convert-then-IsValid.
+                // A plain integer value list. It used to demonstrate the reconstruction — int was not
+                // reachable through the exact branch, so its tokens came out of ToDescriptionString()
+                // and had to pass convert-then-IsValid. ReadExactValues names int now, so this reads
+                // exactly, and what it guards is the OTHER half: a non-string type is written back
+                // through TomlTypeConverter.ConvertToValue, so a token that did not come from
+                // ChoiceToken.Of would not survive the trip. An int renders the same either way, which
+                // is exactly why it is the quiet check — ChoiceFloats is where a mismatch is loud.
                 choiceFile.Bind(
                     "Settings",
                     "ChoiceInts",
                     4,
-                    new ConfigDescription("An int choice, reconstructed from the description.", new AcceptableValueList<int>(1, 2, 4, 8)),
+                    new ConfigDescription("An int choice, read exactly.", new AcceptableValueList<int>(1, 2, 4, 8)),
                     clientScope
                 );
                 // An enum Choice carries no constraint (AcceptableValueList cannot hold one — its T is
@@ -224,18 +234,44 @@ namespace ModSettingsMenu
                     new ConfigDescription("A [Flags] enum holding a combination; cycling must leave it untouched."),
                     clientScope
                 );
-                // The reconstruction against a decimal separator, using a REAL constraint — so what it
-                // reports is how this machine actually behaves. Invariant culture: a normal three-option
-                // Choice. Comma-decimal culture: the description splits into fragments and this has to
-                // fall back to a read-only Info row rather than offer a cycle of halves. Either outcome
-                // is worth knowing; the deterministic version of the same trap is RefuseSplitValue below.
+                // The decimal separator against a REAL constraint, and the fixture this mod's exact-read
+                // path exists for. It used to have two legal outcomes — a three-option Choice on an
+                // invariant culture, a read-only Info row on a comma-decimal one, because the
+                // description split into fragments. Now there is one: ReadExactValues reads the floats
+                // themselves and no separator is ever involved, so this must be 0.5 / 1.5 / 2.5 on every
+                // machine. It is also the only fixture that exercises the repaired round trip, since
+                // float is where ToString() (culture) and ConvertToValue (invariant) used to disagree —
+                // cycling must land on the value shown, not on ten times it.
+                // The deterministic version of the old trap survives as RefuseSplitValue below, which
+                // still takes the reconstruction: it is a DescriptionOnlyValues, not a value list.
                 choiceFile.Bind(
                     "Settings",
                     "ChoiceFloats",
                     1.5f,
                     new ConfigDescription(
-                        "A float choice; shows how this machine's culture renders a decimal.",
+                        "A float choice, read exactly; must show 0.5/1.5/2.5 whatever the culture.",
                         new AcceptableValueList<float>(0.5f, 1.5f, 2.5f)
+                    ),
+                    clientScope
+                );
+                // The reconstruction's SUCCESS case, and the only one — every other parse-path fixture
+                // ends in a rejection. It was ChoiceInts until this file's exact read took int over, and
+                // a shipped path whose sole positive test moved elsewhere is how a working route quietly
+                // stops being one. It stays reachable because DescriptionOnlyValues is not an
+                // AcceptableValueList, so the cascade declines it and the parse runs.
+                //
+                // The non-canonical spellings are the check. A token is stored as the VALUE's rendering,
+                // not the fragment that produced it, so these must arrive as 0.5 / 1.5 / 2.5 and cycling
+                // must land on what is shown. Drop that normalisation and the tokens keep their trailing
+                // zeros while the widget reads back "1.5" — index -1, and the row snaps to the first
+                // option on every other press. Visible on any machine; no decimal separator involved.
+                choiceFile.Bind(
+                    "Settings",
+                    "ChoiceReconstructed",
+                    1.5,
+                    new ConfigDescription(
+                        "A reconstructed choice; must show 0.5/1.5/2.5, not the spellings it was given.",
+                        new DescriptionOnlyValues(typeof(double), "# Acceptable values: 0.50, 1.5, 2.50")
                     ),
                     clientScope
                 );
@@ -331,17 +367,86 @@ namespace ModSettingsMenu
                 // A constraint that throws where MSM asks it a question. Nothing else exercises the
                 // per-entry guard in BuildSection, and that guard is the difference between losing this
                 // row and losing every mod's settings at once: Populate() has no handler of its own.
-                choiceFile.Bind(
-                    "Settings",
+                // Alone in its file, losing the row also loses the box — a section with no rows is
+                // dropped whole — so the property this still demonstrates is that the SCREEN survives.
+                BindThrowingFixture(
+                    "TestThrowingConstraint",
                     "ThrowingConstraint",
                     "Alpha",
-                    new ConfigDescription(
-                        "A constraint whose description throws; only this row may be lost.",
-                        new DescriptionOnlyValues(typeof(string), "unused", throwOnDescribe: true)
-                    ),
-                    clientScope
+                    "A constraint whose description throws; this row and its box may be lost, nothing else.",
+                    new DescriptionOnlyValues(typeof(string), "unused", throwOnDescribe: true),
+                    clientScope,
+                    info
+                );
+                // The other half. A real AcceptableValueList<float> whose description is unreadable: the
+                // exact read never asks for one, so this must render as a normal Choice over 0.5/1.5/2.5
+                // — and on every machine, which is what makes it the check the culture-dependent
+                // ChoiceFloats cannot be. If it ever appears as a read-only Info row, the values are
+                // coming from a description again.
+                //
+                // Read the two boxes together: the same unreadable description, opposite outcomes —
+                // ThrowingConstraint's row is lost because the parse asks, this one survives because
+                // the exact read does not. A change that made the exact path consult a description
+                // again would collapse them onto the same result, which is the regression neither
+                // reports alone.
+                BindThrowingFixture(
+                    "TestExactNoDescription",
+                    "ChoiceExactNoDescription",
+                    1.5f,
+                    "A float choice whose description throws; must still be a working Choice.",
+                    new ThrowingDescriptionValues(0.5f, 1.5f, 2.5f),
+                    clientScope,
+                    info
                 );
             }
+        }
+
+        /// <summary>Dev-only. Binds one fixture whose constraint refuses to describe itself, into a
+        /// <see cref="ConfigFile"/> of its own.
+        ///
+        /// The file is created HERE rather than passed in, and that is the whole point of the helper:
+        /// a caller never holds one, so a second throwing fixture cannot be put beside the first. That
+        /// rule used to be an instruction to the reader, and the reader it was written for was me,
+        /// after the failure it describes.
+        ///
+        /// Why it matters. ConfigEntryBase's constructor ends in `BoxedValue = defaultValue`, which goes
+        /// through the Value setter and fires OnSettingChanged for any value differing from the field
+        /// default — so a whole-file Save runs BEFORE Bind reaches `Entries[definition] = entry`. Alone
+        /// in a file, that Save sees no entries and succeeds. Beside another throwing one it throws out
+        /// of the constructor and the entry is never registered: no row, no log line, and a section with
+        /// no rows is dropped whole. The symptom is a missing BOX, not a missing row.
+        ///
+        /// The catch is narrow and then checked, which is the difference between swallowing an expected
+        /// throw and swallowing evidence. Bind's own trailing Save throws for the same reason and is
+        /// harmless, because registration already happened — but TomlTypeConverter raises this same
+        /// exception type for a missing converter, and the constructor case above raises it too. So the
+        /// registration is verified afterwards rather than assumed, and its absence is reported loudly.
+        /// Without that, the one-per-file rule would be enforced by a comment and hidden by the code
+        /// under it.</summary>
+        private static void BindThrowingFixture<T>(
+            string folder,
+            string key,
+            T def,
+            string description,
+            AcceptableValueBase values,
+            ConfigScope scope,
+            LoadedMod info
+        )
+        {
+            var file = new ConfigFile($"{folder}/config.cfg", saveOnInit: false, info);
+            try
+            {
+                file.Bind("Settings", key, def, new ConfigDescription(description, values), scope);
+            }
+            catch (System.InvalidOperationException)
+            {
+                // Expected: the save asks this constraint for a description and it refuses.
+            }
+            if (!file.Entries.ContainsKey(new ConfigDefinition("Settings", key)))
+                Debug.LogError(
+                    $"[ModSettingsMenu] fixture '{key}' was not registered — its own file already held a throwing "
+                        + "entry, so the constructor's save threw before Bind could record it. One per file."
+                );
         }
 
         /// <summary>Dev-only, for the ChoiceEnum fixture above. Three members so cycling has somewhere
@@ -400,16 +505,37 @@ namespace ModSettingsMenu
                     : _line;
         }
 
+        /// <summary>Dev-only. A REAL value list whose description is unreadable — the proof that the
+        /// exact path never asks for one.
+        ///
+        /// It exists because the property it proves is invisible on most machines: the culture trap the
+        /// exact read removes only appears where ToDescriptionString() renders a decimal comma, so on a
+        /// dot-decimal host the parse and the exact read produce identical tokens and a walkthrough
+        /// cannot tell them apart. Making the description throw replaces that dependency on the host
+        /// with a deterministic one: if this renders as a Choice over its values, the description was
+        /// not read, on any machine.
+        ///
+        /// Subclassing works because CoreLib seals neither the class nor the method, and it changes
+        /// nothing the exact path touches — the base constructor fills AcceptableValues as usual.</summary>
+        private sealed class ThrowingDescriptionValues : AcceptableValueList<float>
+        {
+            public ThrowingDescriptionValues(params float[] values)
+                : base(values) { }
+
+            public override string ToDescriptionString() =>
+                throw new System.InvalidOperationException("fixture: the description must not be read where the values can be");
+        }
+
         public void Init()
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
             var section = ModSettings.Section(this).Toggle(out ShowForeignConfigs, "showForeignConfigs", true);
             if (DevFlags.Is("TestFixtures"))
-                AddDeclaredListFixtures(section);
+                AddDeclaredFixtures(section);
             section.Build();
         }
 
-        // Dev-only fixtures for the DECLARED list path — the counterpart to the raw ConfigFile
+        // Dev-only fixtures for the DECLARED path — the counterpart to the raw ConfigFile
         // fixtures in EarlyInit, which exercise discovery instead. Both are needed and neither
         // stands in for the other: a discovered list is always declared FreeText, because the
         // heuristic cannot know an entry set is closed. So OrderOnly is reachable through this path
@@ -420,8 +546,15 @@ namespace ModSettingsMenu
         //
         // Declared through the real public API, in this mod's own section, so what is being checked
         // is the API a consumer actually calls rather than a SettingDef assembled by hand.
-        private static void AddDeclaredListFixtures(SectionBuilder section)
+        private static void AddDeclaredFixtures(SectionBuilder section)
         {
+            // The only declared Choice anywhere, and the only exercise of SectionBuilder's token
+            // rendering. A float T on purpose: that is the one case where going through ChoiceToken
+            // differs from the ToString() this used to do, so it is the whole check. It must read
+            // 1.5 and cycle 0.5 / 1.5 / 2.5 on every machine, and the stored .cfg value must be the
+            // token shown — on a comma-decimal host the old code stored "1,5" and made the loc key
+            // depend on the machine, which no consumer's yaml can be right for twice.
+            section.Choice(out _, "testChoiceFloat", new[] { 0.5f, 1.5f, 2.5f }, 1.5f);
             section.List(out _, "testListFreeText", new[] { "Alpha", "Beta", "Gamma" });
             // Long enough that reordering has somewhere to travel, and that the arrow columns can be
             // walked past the visible edge — the read-only fixture in EarlyInit covers a long list

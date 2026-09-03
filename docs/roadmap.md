@@ -715,31 +715,6 @@ report as one.
 - The de-duplication this needs already exists here — `ForeignConfigDiscovery`
   reports each degradation once, and `ListKindStore` remembers across opens.
 
-## MSM-27 — Read a constrained set through `API.Reflection` instead of parsing its description
-
-`ForeignConfigDiscovery.TryTokens` reads `AcceptableValueList<string>` directly
-and reconstructs every other `T` from `ToDescriptionString()` — a
-human-readable line — guarding the result with three checks because a parse of
-prose cannot be trusted outright. Those checks work, and the checks are the
-point: they exist because the source is the wrong one.
-
-**The values are reachable without parsing anything.** `AcceptableValues` is a
-public property, so it needs no private-member trick; the only obstacle was ever
-the type parameter, and [ADR-009](adrs/009-caret-index-from-the-counter.md) established that `API.Reflection` is
-sandbox-legal and is already a load-bearing surface here. The returned `T[]`
-casts to `System.Array`, so `T` never has to be spelled — which is exactly the
-thing the pattern-match cannot do for an open set of types.
-
-What that would buy: the culture trap disappears (no separator is ever involved),
-and with it the duplicate check, the held-value check and the whole class of
-"a fragment that happened to validate". What it costs is a second SDK surface on
-the discovery path, an exception-signalled failure per ADR-009's own warning, and
-a fallback for the case where the read is refused — the description parse would
-have to stay as that fallback, so this adds a route rather than replacing one.
-
-Untested either way. The parse ships and is guarded; this is the better source if
-it holds, and the comparison has never been run.
-
 ## MSM-15 — Group a mod's rows by its `.cfg`'s own sections
 
 Everything binds into the CoreLib section `"Settings"` today, so a discovered mod

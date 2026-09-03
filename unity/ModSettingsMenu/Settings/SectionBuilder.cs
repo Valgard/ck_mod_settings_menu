@@ -138,9 +138,16 @@ namespace ModSettingsMenu.Settings
 
         /// <summary>
         /// A discrete choice cycling a fixed, ordered set of values of any type T. The
-        /// displayed text + persistence key is value.ToString() (the "token"); Phase 5
-        /// localizes via a derived term, falling back to the token. Prefer an enum for T
-        /// (self-documenting tokens). Values must have distinct ToString().
+        /// displayed text + persistence key is <see cref="ChoiceToken.Of(object, System.Type)"/> (the
+        /// "token"); Phase 5 localizes via a derived term, falling back to the token. Prefer an enum for
+        /// T (self-documenting tokens). Values must have distinct tokens.
+        ///
+        /// Through ChoiceToken rather than ToString() so a numeric T renders invariantly. A token is the
+        /// localization leaf key a consumer writes into its yaml, and ToString() would make that key —
+        /// and the stored .cfg value — depend on the machine's decimal separator, so the same
+        /// declaration would need a different yaml per host and a stored value would stop matching its
+        /// own token list when the locale changed. Enums and strings render identically either way, and
+        /// a T that CoreLib cannot convert falls back to ToString(), so this narrows nothing.
         /// </summary>
         public SectionBuilder Choice<T>(out SettingHandle<T> handle, string key, T[] values, T def)
         {
@@ -153,9 +160,9 @@ namespace ModSettingsMenu.Settings
             }
             var tokens = new string[values.Length];
             for (int i = 0; i < values.Length; i++)
-                tokens[i] = values[i].ToString();
+                tokens[i] = ChoiceToken.Of(values[i], typeof(T));
             // Store a string token (arbitrary T needs no CoreLib converter); validate it stays valid.
-            var entry = BindGuarded(key, def.ToString(), new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
+            var entry = BindGuarded(key, ChoiceToken.Of(def, typeof(T)), new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
             if (entry == null)
             {
                 handle = new SettingHandle<T>(def);
@@ -169,7 +176,7 @@ namespace ModSettingsMenu.Settings
                         return values[i];
                 return def; // unknown/removed token → default
             }
-            handle = new SettingHandle<T>(entry, FromToken, v => v.ToString());
+            handle = new SettingHandle<T>(entry, FromToken, v => ChoiceToken.Of(v, typeof(T)));
             _lastDeclarationFailed = false;
             _section.Settings.Add(
                 new SettingDef
