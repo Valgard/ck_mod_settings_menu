@@ -27,6 +27,7 @@ namespace ModSettingsMenu.UI
         public GameObject sectionTemplate; // inactive; SectionBox (Header + Hint + Widgets-box)
         public GameObject settingTemplate; // inactive widget row; has a SettingWidget + Label/Value
         public GameObject listTemplate; // inactive list-widget row; has a ListWidget + ListWidgetBox (wired in the Editor)
+        public GameObject labelTemplate; // inactive full-width heading row; has a LabelRow (wired in the Editor)
 
         internal const int RowPaddingPx = 6; // vertical breathing room added to each row's text height
 
@@ -306,6 +307,11 @@ namespace ModSettingsMenu.UI
 
                 foreach (var def in OrderedSettings(section))
                 {
+                    if (def.Kind == SettingKind.Label)
+                    {
+                        BuildLabelRow(def, container);
+                        continue;
+                    }
                     if (def.Kind == SettingKind.List)
                     {
                         if (listTemplate == null)
@@ -560,6 +566,37 @@ namespace ModSettingsMenu.UI
                     break;
             }
             return list;
+        }
+
+        // A heading row inside a section box. Two things separate it from every other row here:
+        // it is rendered and then NOT added to menuOptions — which is the whole mechanism by
+        // which navigation steps over it — and it has no widget class, because there is no
+        // behaviour to give one.
+        //
+        // Rendered in Populate rather than in RenderContent: the height comes from the text's own
+        // rendered dimensions, which are available immediately after a forced render, exactly as
+        // SettingWidget.Bind makes them available for the label/value columns. Only the list rows
+        // need the later pass, and for a reason of their own.
+        private void BuildLabelRow(SettingDef def, Transform container)
+        {
+            if (labelTemplate == null)
+            {
+                Debug.LogWarning($"[ModSettingsMenu] Label '{def.Key}' declared but labelTemplate is unwired — the heading is skipped.");
+                return;
+            }
+            var go = Object.Instantiate(labelTemplate, container);
+            go.SetActive(true);
+            go.name = "Label " + def.Key;
+            var row = go.GetComponent<LabelRow>();
+            if (row == null || row.text == null)
+            {
+                Debug.LogWarning($"[ModSettingsMenu] labelTemplate has no LabelRow/text wired — the heading '{def.Key}' renders blank.");
+                return;
+            }
+            // RenderPlain, not Render: MSM resolves terms itself through Loc, so the PugText must
+            // not try to resolve the finished string a second time.
+            row.text.RenderPlain(def.Label());
+            SetRowHeight(go, RowHeightPx(row.text));
         }
 
         // Build one section (Option A): instantiate the sectionTemplate and render its heading
