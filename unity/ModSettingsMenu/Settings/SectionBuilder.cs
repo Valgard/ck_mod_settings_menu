@@ -542,9 +542,11 @@ namespace ModSettingsMenu.Settings
         /// </summary>
         public SectionBuilder Group(string key, string movedFrom = null)
         {
-            _lastDeclarationFailed = false;
             if (!IsUsableSectionName(key, "group name"))
+            {
+                _lastDeclarationFailed = true;
                 return this;
+            }
             if (movedFrom != null && !IsUsableSectionName(movedFrom, "movedFrom group"))
                 movedFrom = null;
             if (movedFrom == key)
@@ -564,6 +566,7 @@ namespace ModSettingsMenu.Settings
                     Term = Term(key),
                 }
             );
+            _lastDeclarationFailed = false;
             return this;
         }
 
@@ -580,15 +583,16 @@ namespace ModSettingsMenu.Settings
             // to an unrelated value and demand a restart for a change that applies immediately.
             //
             // ⚠️ Checked FIRST, and the order is load-bearing — the two guards below look mutually
-            // exclusive and are not. Label() clears this flag, so "the last declaration is a label"
-            // and "the last declaration failed" seem unable to hold together. They can: a
-            // declaration that fails AFTER a label sets the flag again while adding no SettingDef,
-            // leaving that label as Settings[n - 1]. Both guards then match, and only this one names
-            // the cause the consumer has to act on — the label is merely what happens to be last.
+            // exclusive and are not. Label() does not set this flag, but a rejected Group() does:
+            // Group() clears it on success and sets it to true when key validation fails, adding no
+            // SettingDef on failure. So "the last declaration is a label" and "the last declaration
+            // failed" can hold together: a declaration that fails AFTER a label leaves that label as
+            // Settings[n - 1]. Both guards then match, and only this one names the cause the
+            // consumer has to act on — the label is merely what happens to be last.
             if (_lastDeclarationFailed)
             {
                 Debug.LogWarning(
-                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': the setting it follows could not be bound (see the error above), and marking the one before it would be wrong."
+                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': the declaration it follows did not take effect (see the error above), so marking the one before it would attach the restart to the wrong setting."
                 );
                 return this;
             }
