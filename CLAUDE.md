@@ -135,6 +135,15 @@ traps, each verified in-game. Some carry fuller detail (with the code paths) in
   `PugText`s must keep `maxWidth: 0` — a non-zero value there makes `PugText.Render`
   wrap, which silently disables the text input's own capacity check entirely (mechanism
   and the general rule in `docs/ck/ui-framework.md` § "A text row in a menu").
+- **In a settings row, `x = 0` is the boundary between the two columns, not the left
+  edge.** The label column *ends* at `-0.665` and is 11 units wide; the value column
+  *begins* at `+0.665`. So a full-width element (the `LabelTemplate` heading) starts at
+  `-11.665` with `horizontalAlignment: left`, and anything authored fresh in the Editor
+  arrives at `x: 0` with **centred** alignment — squarely between the two columns. The
+  symptom is the misleading part and cost a round: the row occupies its correct height
+  while showing nothing at all, which reads like a text that never rendered. It did
+  render — `PugText.glyphs` was populated on the first pass. Measure that list before
+  believing a rendering explanation for an invisible row.
 - **Core Keeper ships the `RESET_DEFAULTS` hint slot fully wired** (glyph plus the
   localized `Menu/Reset` label) **and requests it in exactly one place** — the
   control-mapping menu, through a `[SerializeField]` list rather than from code
@@ -151,8 +160,8 @@ traps, each verified in-game. Some carry fuller detail (with the code paths) in
   menu is open (`docs/ck/ui-framework.md` § "Which input actions you can use inside a
   menu").
 
-`docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info,
-Separator/Label) and out-of-scope items. Each point there carries a reference id —
+`docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info) and
+out-of-scope items. Each point there carries a reference id —
 `MSM-01`, `MSM-02`, … — assigned once and never reused. Cite the id, not the heading,
 and never renumber: the ids do not follow the order of the file, and a point that ships
 takes its id with it.
