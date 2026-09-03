@@ -25,12 +25,17 @@ They are created through raw CoreLib `ConfigFile`s **outside**
 `ConfigStore.ForMod`, so `ConfigStore.IsOwn` does not recognise them and
 `ForeignConfigDiscovery` treats them exactly as it treats a third-party mod.
 They are not an imitation of the foreign path; they are that path with files we
-own. There are two, rendered as two `(detected)` sections, and either may need
-inspecting after a write:
+own. There are four files. Two hold the ordinary fixtures and are the ones worth
+inspecting after a write; the other two hold one throwing fixture each and can
+never be written at all (below), so only three `(detected)` boxes appear — the
+fourth loses its only row and with it its box, which is the expected outcome
+there:
 
 ```
 <bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestListFixtures/config.cfg
 <bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestChoiceFixtures/config.cfg
+<bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written)
+<bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written)
 ```
 
 | Fixture | Value | What it is for |
@@ -52,12 +57,13 @@ otherwise — every `AcceptableValueList` here lives in a file MSM created, whic
 |---|---|---|
 | `ChoiceStrings` | `Medium` of Low/Medium/High | the exact path: `AcceptableValueList<string>` read directly |
 | `ChoiceComma` | `Alpha` of three | tokens holding the `", "` separator and a `"` — the quote is what tells the raw read from the escaped one |
-| `ChoiceInts` | `4` of 1/2/4/8 | the reconstruction path: tokens parsed back out of the description line |
+| `ChoiceInts` | `4` of 1/2/4/8 | a non-string type read exactly, then written back through the converter |
 | `ChoiceEnum` | `Second` of three | the member-name round trip, always ON a member so never the guard |
 | `ChoiceFlags` | `Alpha, Beta` | a `[Flags]` combination — the value the guard exists to leave alone |
 | `ChoiceSingle` | `Only` | one option: the wrap arithmetic with nowhere to go |
 | `ChoiceReadOnly` | `Medium`, view-only | a locked Choice must still display the right token |
-| `ChoiceFloats` | `1.5` of 0.5/1.5/2.5 | how *this machine's* culture renders a decimal — outcome depends on it |
+| `ChoiceFloats` | `1.5` of 0.5/1.5/2.5 | the culture-proof read and write: same result on every machine |
+| `ChoiceReconstructed` | `1.5` of 0.5/1.5/2.5 | the parse path's only SUCCESS case — tokens are the values re-rendered, not the spellings given |
 | `RangeDouble` | `1.5`, range 0–10 | negative control: an unhandled constraint stays a read-only Info row |
 | `RefuseEmptyToken` | `Alpha` | a blank entry in the value list |
 | `RefuseUnconvertible` | `1` | a token that is not an `int` |
@@ -65,7 +71,30 @@ otherwise — every `AcceptableValueList` here lives in a file MSM created, whic
 | `RefuseSplitValue` | `0.5` | a split that ate the held value — the held-value check |
 | `RefuseSplitDuplicate` | `5.0` | the same split with the held value intact — only the duplicate check |
 | `RefuseBlankInSet` | `Alpha` | a blank entry in a **real** `AcceptableValueList` |
-| `ThrowingConstraint` | `Alpha` | a constraint that throws where MSM asks it a question |
+
+Two more fixtures have an unreadable description, and they are a pair on purpose
+— the same fault, opposite outcomes. **Each is alone in its own file**, and that
+is a hard rule rather than tidiness (below):
+
+| File / box | Fixture | Expected |
+|---|---|---|
+| `TestThrowingConstraint` | `ThrowingConstraint` | the parse asks for a description, so this row is **lost** and its box never appears |
+| `TestExactNoDescription` | `ChoiceExactNoDescription` | the exact read does not ask, so this is a **working Choice** over 0.5/1.5/2.5 |
+
+The second is the only check of the exact read that does not depend on the host:
+the culture trap it removes is invisible where decimals render with a dot, so on
+such a machine the parse would have produced identical tokens. A throwing
+description replaces that dependency on the machine with a certainty.
+
+**Why one per file, and why the others are separate from both.** CoreLib saves a
+whole file on every value change and asks each entry in it for a description
+while doing so — including from inside `ConfigEntryBase`'s constructor, which
+assigns the default value before `Bind` has registered the entry. Two throwing
+fixtures in one file therefore cost the *second* one its registration entirely:
+no row, no log line, and a box with no rows is dropped whole, so the symptom is a
+missing box rather than a missing row. Keeping either beside the ordinary
+fixtures has a milder version of the same effect — every save in that file throws,
+so a cycle can be checked on screen but never in the `.cfg`.
 
 Most of these need a dev-only `AcceptableValueBase` subclass
 (`DescriptionOnlyValues`), because CoreLib's own constraints cannot produce the
@@ -73,6 +102,12 @@ states they test: its constructor refuses an empty set, no supported type render
 an unparseable token, and its `Clamp` corrects an off-set value at bind. They are
 also the only exercise of a third-party subclass, which is a case the code
 reasons about and nothing else reaches.
+
+There is a second dev subclass, `ThrowingDescriptionValues`, and it differs in
+kind: it derives from a *real* `AcceptableValueList<float>` and overrides only
+`ToDescriptionString()`. Its inheritance is the point — the values stay genuinely
+readable while the description does not, which is what lets one fixture separate
+the two paths.
 
 `RefuseBlankInSet` is the exception and the reason it exists: a blank *element*
 needs no subclass at all. `AcceptableValueList`'s constructor rejects only a
@@ -89,6 +124,7 @@ by a section reset.
 
 | Fixture | `ListEditing` | What it is for |
 |---|---|---|
+| `testChoiceFloat` | — | the only declared **Choice**: SectionBuilder's own token rendering |
 | `testListFreeText` | `FreeText` | the declared path reaching the same behaviour discovery produces |
 | `testListOrderOnly` | `OrderOnly` | six entries: reordering with no add row, and the arrow columns |
 | `testListOrderOnlySingle` | `OrderOnly` | one entry — the row with no neighbour to wrap to |
@@ -361,10 +397,14 @@ the screen — open `Player.log` after the walk and search for
 
 - [ ] `ChoiceStrings` shows `Medium`; `→` steps to `High`, again wraps to `Low`,
       and `←` walks back the same way.
-- [ ] `ChoiceInts` shows `4` and cycles `1 / 2 / 4 / 8`. This is the
-      reconstruction path — its tokens were parsed out of a description line
-      rather than read off the constraint, so the two paths must be walked
-      separately even though they look identical on screen.
+- [ ] `ChoiceInts` shows `4` and cycles `1 / 2 / 4 / 8`, and the `.cfg` holds the
+      value shown after each step. What this checks is the non-string **write**:
+      unlike the string fixtures, the chosen token goes back through
+      `TomlTypeConverter.ConvertToValue`, and this is the only ordinary fixture
+      on that branch. It does **not** discriminate between token sources — an int
+      renders identically whichever way it is produced, so a regression there
+      would pass this step. `ChoiceFloats` and `ChoiceReconstructed` are where
+      that shows.
 - [ ] `ChoiceEnum` shows `Second` and cycles `Second / First / Third` — the
       declaration order, not alphabetical. Alphabetical output means something
       is sorting the tokens.
@@ -397,17 +437,29 @@ and would not catch a regression.
 
 ### Culture
 
-- [ ] `ChoiceFloats` is either a working three-option Choice (`0.5 / 1.5 / 2.5`)
-      or a read-only Info row. Both are correct; which one says how this
-      machine's `CurrentCulture` renders a decimal. A cycle over `0`, `5`, `1`,
-      `2` is the failure — that is the split reaching the row.
-- [ ] If it *is* an Info row, there is **one** extra `[ModSettingsMenu]` warning
-      for it, naming the fragment the constraint rejected. That is the expected
-      outcome on a comma-decimal machine, not a defect — count it in the log
-      check at the end.
-- [ ] Two other rows render a `double` through the same culture: `RangeDouble`
-      and `RefuseSplitValue` read `1,5` and `0,5` where this one reads `0,5`.
-      Their `.cfg` values stay invariant regardless, so the file checks below are
+- [ ] `ChoiceFloats` is a working three-option Choice reading `0.5 / 1.5 / 2.5`,
+      on every machine. There is no longer a second correct outcome: the values
+      are read off the constraint, so no separator is involved and the culture
+      cannot reach them. An Info row here, or a cycle over `0`, `5`, `1`, `2`, is
+      now a failure rather than a machine-dependent result.
+- [ ] Cycle it once and check the `.cfg`: the stored value is the one shown. This
+      is the half the exact read does *not* fix by itself — a token is written
+      back invariantly, so a token rendered in the machine's own culture would
+      store `5` where the row shows `0,5`. It is the only fixture where that
+      mismatch is visible.
+- [ ] It provokes **no** `[ModSettingsMenu]` warning any more, on any machine.
+- [ ] `ChoiceReconstructed` shows `1.5` and cycles `0.5 / 1.5 / 2.5` — **not**
+      `0.50 / 1.5 / 2.50`, which is how its description spells them. This is the
+      parse path's only success case; every other `Refuse*` fixture below ends in
+      a rejection, so without this step nothing checks that the reconstruction
+      still produces a usable Choice at all. A row that shows the trailing zeros
+      is the regression: cycling then lands on a token the widget cannot find,
+      and every other press snaps back to the first option.
+- [ ] Two other rows still render a `double` through the machine's own culture and
+      make the contrast visible: on a comma-decimal host `RangeDouble` and
+      `RefuseSplitValue` read `1,5` and `0,5` while this one reads `1.5`. They are
+      Info rows, which display the raw value; a Choice displays a token. Their
+      `.cfg` values stay invariant regardless, so the file checks below are
       unaffected.
 
 ### Refused, and said out loud
@@ -430,11 +482,33 @@ because discovery re-runs on every open.
 - [ ] `RefuseBlankInSet` — a blank entry in a **real** `AcceptableValueList`.
       Worth its own line because it needs no dev-only subclass: the constructor
       accepts it, so any mod could ship this by accident.
-- [ ] `ThrowingConstraint` — its constraint throws where MSM asks it a question.
-      The row is **absent** rather than read-only, the log holds one
-      `[ModSettingsMenu]` error naming it, and — the actual point — **every
-      other row in both sections is still there**. Losing the screen instead of
-      the row is the failure this guards.
+### Refused, or not, by the same fault
+
+The two fixtures below share an unreadable description and are checked as a pair.
+Neither matches the preamble above — one loses its whole box, the other is a
+working Choice, and one of them logs a line per keypress by design.
+
+- [ ] There is **no** `TestThrowingConstraint` box: its only row was lost, and a
+      section with no rows is dropped whole. The log holds exactly one
+      `[ModSettingsMenu]` error naming `ThrowingConstraint`.
+- [ ] There **is** a `TestExactNoDescription` box, holding
+      `ChoiceExactNoDescription` as a working Choice reading `1.5` and cycling
+      `0.5 / 1.5 / 2.5`. Same unreadable description as the row above, opposite
+      outcome — that contrast is the check, not either box alone.
+- [ ] Cycling it logs `changing 'ChoiceExactNoDescription' failed`, once per
+      press. **That line is the pass, not a fault** — and the strongest evidence
+      in this walk: the widget could only try to write because the row was built
+      as a Choice with real tokens, from a constraint whose description throws.
+      Saving it cannot work, since the save asks for that same description.
+- [ ] Two ways this one fails, and they mean different things. A read-only Info
+      row means the values came from a description again. A **missing box** means
+      the entry was never registered — the constructor's own save threw before
+      `Bind` could record it, which is what happens if this fixture ever shares a
+      file with another throwing one.
+- [ ] Cycle any `TestChoiceFixtures` row and confirm the log holds **no**
+      `changing '…' failed` line. Those entries used to share a file with these
+      two, and CoreLib's whole-file rewrite made every save in it throw — the
+      value changed in memory, the row looked right, and nothing reached disk.
 
 ### The negative control
 
@@ -454,6 +528,18 @@ because discovery re-runs on every open.
 These run against the four fixtures in this mod's **own** section, not the
 detected one. They exist because every check above enters through discovery, and
 the two paths reach the drill-in with different things known about the value.
+
+### The declared Choice
+
+- [ ] `testChoiceFloat` reads `1.5` and cycles `0.5 / 1.5 / 2.5`, and the stored
+      value in `ModSettingsMenu.cfg` is the token shown. It is the only fixture
+      on the declared Choice path, and a float on purpose: string and enum
+      render the same however the token is produced, so this is the one place
+      where SectionBuilder going through `ChoiceToken` is observable at all.
+- [ ] On a comma-decimal host the old behaviour is visible as `1,5` — in the row
+      **and** in the `.cfg`. That is the failure: a token is also the
+      localization leaf key a consumer writes into its yaml, so a key that
+      changes with the machine cannot be translated once and stay right.
 
 ### `FreeText` — the same as a detected list
 
@@ -748,5 +834,7 @@ Both shapes are in the blocks above on purpose.
       declined to cycle.
 - [ ] `Player.log` holds no exception from this mod, and no warning **other than**
 the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
-duplicate fixtures, `testDupKey`, one line for each `Refuse*` entry, the error from
-`ThrowingConstraint`, and — on a comma-decimal machine — one for `ChoiceFloats`).
+duplicate fixtures, `testDupKey`, one line for each `Refuse*` entry, the error
+from `ThrowingConstraint`, and one `changing '…' failed` per press on
+`ChoiceExactNoDescription`). The count no longer depends on the machine's culture:
+`ChoiceFloats` used to add a line here on a comma-decimal host and now never does.

@@ -131,10 +131,13 @@ namespace ModSettingsMenu.UI
             var before = e.BoxedValue; // for the RequiresRestart change-detection below
             // Every write below is deliberately unwrapped — a failure has to be loud, which is the
             // whole reason the Choice case stopped going through SetSerializedValue. What it must NOT
-            // be is invisible: CoreLib assigns the in-memory value BEFORE it saves, so a failing write
-            // leaves the entry changed and the row showing the old value, and the next menu open would
-            // silently disagree with what the player just saw. The catch says so and attributes it to
-            // this mod; the finally re-reads whatever the entry actually holds, either way.
+            // be is invisible, and the direction of that is worth stating exactly, because it is the
+            // opposite of what "failed" suggests: CoreLib assigns the in-memory value BEFORE it saves,
+            // so a failing write leaves the entry holding the NEW value and the finally below renders
+            // it. The player therefore sees the change succeed, and only the next launch disagrees.
+            // The log line is the sole signal — this catch says so and attributes it to this mod.
+            // A row that marked itself unsaved would be better than a log line nobody reads; the
+            // reason there is none is that no such affordance exists yet, not that it was weighed.
             try
             {
                 Apply(dir, e);
@@ -188,12 +191,14 @@ namespace ModSettingsMenu.UI
                     var toks = _def.Tokens;
                     if (toks == null || toks.Length == 0)
                         break;
-                    // Read through BoxedValue.ToString() whatever the entry holds: for a string that is
-                    // the value itself, for an enum its member name, and for a numeric type the same
-                    // rendering ToDescriptionString() built the tokens from — so one read serves all
-                    // three. NOT GetSerializedValue(), which escapes a string (TomlTypeConverter) and
-                    // would compare, display and store the escaped form.
-                    string cur = e.BoxedValue?.ToString() ?? "";
+                    // Through the same renderer that produced the tokens, so the comparison happens in
+                    // one string space rather than in two that used to coincide by accident: for a
+                    // string the value itself, for an enum its member name, for a numeric type the
+                    // converter's invariant form — which is what the write below parses back.
+                    // NOT GetSerializedValue(), which escapes a string (TomlTypeConverter) and would
+                    // compare, display and store the escaped form; ChoiceToken.Of exists partly to keep
+                    // that exception in one place.
+                    string cur = ChoiceToken.Of(e);
                     int idx = System.Array.IndexOf(toks, cur);
                     // An enum value that is not a member name is a [Flags] combination (rendered "A, B")
                     // or an undefined value — single-select cycling can't represent it, so leave it
@@ -250,7 +255,7 @@ namespace ModSettingsMenu.UI
                         : ((int)e.BoxedValue).ToString();
                 case SettingKind.Choice:
                 {
-                    string tok = e.BoxedValue?.ToString() ?? ""; // same read as Adjust — see there
+                    string tok = ChoiceToken.Of(e); // same read as Adjust — see there
                     return _def.ValueLabel(tok); // localized per-option; falls back to the raw token
                 }
                 case SettingKind.Slider:
