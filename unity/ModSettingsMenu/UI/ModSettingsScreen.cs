@@ -559,13 +559,43 @@ namespace ModSettingsMenu.UI
             switch (section.OptionSort)
             {
                 case OptionSort.ByKey:
-                    list.Sort((a, b) => string.Compare(a.Key, b.Key, System.StringComparison.OrdinalIgnoreCase));
-                    break;
+                    return SortWithinSegments(list, (a, b) => string.Compare(a.Key, b.Key, System.StringComparison.OrdinalIgnoreCase));
                 case OptionSort.ByLabel:
-                    list.Sort((a, b) => string.Compare(a.Label(), b.Label(), System.StringComparison.OrdinalIgnoreCase));
-                    break;
+                    return SortWithinSegments(list, (a, b) => string.Compare(a.Label(), b.Label(), System.StringComparison.OrdinalIgnoreCase));
             }
             return list;
+        }
+
+        // Sort the settings BETWEEN labels, leaving every label exactly where it was declared.
+        //
+        // A label already states an order — "these belong together, under this name" — so a sort
+        // that moved rows across one would answer the same question a second time and contradict
+        // its own first answer. Segmenting costs one pass and removes the contradiction instead of
+        // documenting it.
+        //
+        // No degenerate case needs handling: settings declared before the first label form a
+        // leading segment, two adjacent labels enclose an empty one (List.Sort of an empty list is
+        // a no-op), and a section with no labels at all is a single segment — i.e. byte for byte
+        // the behaviour before this existed.
+        private static List<SettingDef> SortWithinSegments(List<SettingDef> list, System.Comparison<SettingDef> compare)
+        {
+            var result = new List<SettingDef>(list.Count);
+            var segment = new List<SettingDef>();
+            foreach (var def in list)
+            {
+                if (def.Kind == SettingKind.Label)
+                {
+                    segment.Sort(compare);
+                    result.AddRange(segment);
+                    segment.Clear();
+                    result.Add(def);
+                    continue;
+                }
+                segment.Add(def);
+            }
+            segment.Sort(compare);
+            result.AddRange(segment);
+            return result;
         }
 
         // A heading row inside a section box. Two things separate it from every other row here:
