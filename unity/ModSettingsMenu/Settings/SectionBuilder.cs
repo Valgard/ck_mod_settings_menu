@@ -521,6 +521,23 @@ namespace ModSettingsMenu.Settings
         public SectionBuilder RequiresRestart()
         {
             int n = _section.Settings.Count;
+            // Refuse rather than reach past a failed declaration: Settings[Count - 1] would be the
+            // setting declared BEFORE the one that failed, so this modifier would silently attach
+            // to an unrelated value and demand a restart for a change that applies immediately.
+            //
+            // ⚠️ Checked FIRST, and the order is load-bearing — the two guards below look mutually
+            // exclusive and are not. Label() clears this flag, so "the last declaration is a label"
+            // and "the last declaration failed" seem unable to hold together. They can: a
+            // declaration that fails AFTER a label sets the flag again while adding no SettingDef,
+            // leaving that label as Settings[n - 1]. Both guards then match, and only this one names
+            // the cause the consumer has to act on — the label is merely what happens to be last.
+            if (_lastDeclarationFailed)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': the setting it follows could not be bound (see the error above), and marking the one before it would be wrong."
+                );
+                return this;
+            }
             // A label is not a setting: it holds no value, so nothing about it can change and
             // nothing could ever require a restart. Refuse rather than mark it — this modifier
             // addresses the last declaration POSITIONALLY, so accepting it here would silently
@@ -530,16 +547,6 @@ namespace ModSettingsMenu.Settings
             {
                 Debug.LogWarning(
                     $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': it follows the label '{_section.Settings[n - 1].Key}', which holds no value and can never change. Chain it directly after the setting it belongs to."
-                );
-                return this;
-            }
-            // Refuse rather than reach past a failed declaration: Settings[Count - 1] would be the
-            // setting declared BEFORE the one that failed, so this modifier would silently attach
-            // to an unrelated value and demand a restart for a change that applies immediately.
-            if (_lastDeclarationFailed)
-            {
-                Debug.LogWarning(
-                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': the setting it follows could not be bound (see the error above), and marking the one before it would be wrong."
                 );
                 return this;
             }

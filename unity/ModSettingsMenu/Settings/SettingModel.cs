@@ -121,10 +121,19 @@ namespace ModSettingsMenu.Settings
     }
 
     /// <summary>
-    /// Non-generic descriptor of one registered setting. Carries everything the
+    /// Non-generic descriptor of one registered row. Carries everything the
     /// Phase-2b menu needs to render + drive it: the derived loc term, the widget
     /// kind, numeric bounds (Slider/Stepper), and the live CoreLib ConfigEntry
     /// (read/write via the type-agnostic ConfigEntryBase surface).
+    ///
+    /// Most fields are meaningful only for some kinds — Min/Max for Slider and Stepper, Tokens for
+    /// Choice, DeclaredEditing for List — and one kind steps outside the description above
+    /// entirely: <see cref="SettingKind.Label"/> is a heading, not a setting. It holds no value, so
+    /// its <see cref="Entry"/> is NULL and RequiresRestart, the bounds and the tokens all mean
+    /// nothing for it. Anything reading a def out of <see cref="ModSection.Settings"/> must
+    /// therefore gate on Kind, or on Entry being non-null, before reaching for a value — which is
+    /// what SectionReset.IsInScope, the menu's own render loop and ListDetailWouldBeEmpty each
+    /// already do.
     /// </summary>
     public sealed class SettingDef
     {
@@ -159,7 +168,7 @@ namespace ModSettingsMenu.Settings
         public float Step = 1f; // Slider only: increment per ←/→ (bar segments = (Max-Min)/Step)
         public SliderDisplay Display; // Slider only
         public string[] Tokens; // Choice only: ordered ChoiceToken.Of list (cycle order), from either path; MSM's own, never a foreign constraint's live array
-        public ConfigEntryBase Entry; // live handle; widget reads/writes via BoxedValue
+        public ConfigEntryBase Entry; // live handle; widget reads/writes via BoxedValue. NULL for a Label — see the class summary
         public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
 
         // true → this def came from discovery rather than from a consumer's SectionBuilder call. A
