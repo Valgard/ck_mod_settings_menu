@@ -118,6 +118,7 @@ Each widget method binds a persisted CoreLib entry, hands you a typed
 | `Choice<T>(out SettingHandle<T> h, string key, T[] values, T def)` | ←/→ cycle | `T` | any `T`; token = `value.ToString()` |
 | `Stepper(out SettingHandle<int> h, string key, int min, int max, int def)` | ←/→ integer | `int` | clamped to `[min, max]` |
 | `List(out SettingHandle<string[]> h, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)` | preview row → full-screen editor | `string[]` | see below |
+| `Label(string key)` | full-width heading, not selectable | — | groups the settings under it; see **Grouping** |
 | `RequiresRestart()` | — | — | marks the **last-declared** setting as restart-required (see below) |
 | `Build()` | — | — | registers the section |
 
@@ -254,7 +255,7 @@ ModSettings.Section(this)
 ### Enums
 
 ```csharp
-public enum SettingKind  { Toggle, Slider, Stepper, Choice }   // widget type
+public enum SettingKind  { Toggle, Slider, Stepper, Choice, Info, List, Label }  // widget type
 public enum SliderDisplay { Steps, Number, Percent }           // how a Slider shows its value
 public enum OptionSort    { AsDeclared, ByKey, ByLabel }       // option order within a section
 ```
@@ -262,6 +263,31 @@ public enum OptionSort    { AsDeclared, ByKey, ByLabel }       // option order w
 `OptionSort.ByLabel` sorts by the **localized** label, so it re-sorts per active
 language; `ByKey` sorts by the raw `key`; `AsDeclared` (default) keeps your
 builder-chain order.
+
+### Grouping
+
+`Label(key)` puts a heading between your settings. It shows no value, cannot be
+selected, and is skipped by keyboard and controller navigation — it is there to
+be read, not used.
+
+```csharp
+ModSettings.Section(this)
+    .Label("display")
+    .Toggle(out _, "showHud", true)
+    .Toggle(out _, "showCoords", false)
+    .Label("behaviour")
+    .Slider(out _, "delay", 0f, 5f, 1f, 0.5f)
+    .Build();
+```
+
+The `key` is a loc key like any other, resolved as `<ModId>-Config/<key>` and
+falling back to the raw key when you ship no term for it. It shares one key
+space with your settings, so do not give a label the same key as a setting —
+both would show the same text.
+
+Under `SortOptions(ByKey)` or `ByLabel`, a label acts as a **boundary**: the
+settings between two labels are sorted among themselves, and the labels stay
+where you declared them.
 
 ---
 
