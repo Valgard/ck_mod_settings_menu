@@ -5,6 +5,10 @@ entry is the version published to mod.io; its body is the modfile changelog.
 
 ## [2.0.0]
 
+- **Mods can group their settings under headings.** A mod with many settings can
+  now put a heading above each group, so its box reads as sections instead of one
+  long list. Headings are there to be read: they show no value, and keyboard and
+  controller navigation steps straight over them.
 - **Detected mods can show translated names.** A mod that ships translations for
   its own settings now has them used here — for its heading, its setting names,
   and the values of a multiple-choice setting alike. Both naming schemes are

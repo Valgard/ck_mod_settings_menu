@@ -822,6 +822,36 @@ Both shapes are in the blocks above on purpose.
 - [ ] With the terms out and rebuilt, all of it is back to `PlacementPlus`,
       `MaxBrushSize`, `ExcludeItems` and `ChoiceEnum`.
 
+## Headings
+
+A heading is the only row here that is not a menu option at all, so most of
+these checks are about it being **absent** from things rather than present in
+them. The fixtures are `testLabelChoice`, `testLabelLists`,
+`testLabelEdgeCases`, `testLabelRestartGuard` and `testLabelTrailing` — the last
+two adjacent on purpose, and the last one the final row of the box.
+
+- [ ] Each renders full width, left-aligned, and visibly heavier than the rows
+      under it.
+- [ ] Arrow keys and the controller step over every heading in **both**
+      directions, with no dead press at the boundary. This is the check that
+      would catch a heading having become a `RadicalMenuOption` after all —
+      which is the one thing the whole design turns on.
+- [ ] The mouse cannot select one: hovering produces no highlight and no sound.
+- [ ] Scrolled to the box edge, a heading is **clipped by the box** rather than
+      drawn over its border. A freshly authored renderer defaults to the wrong
+      mask interaction, which is how this has gone wrong here before.
+- [ ] A heading shows its raw key. Deliberate: the fixtures ship no loc term, so
+      this is the fallback working. A blank row would mean it is not.
+- [ ] `testLabelRestartGuard` produces its own warning in `Player.log`, naming
+      that key — and the setting declared *before* it did not silently acquire
+      the restart flag.
+- [ ] The section reset (`R`) restores every real setting of the box and leaves
+      every heading untouched.
+- [ ] The footer still offers **Auswählen** and **Zurücksetzen** while a normal
+      row is selected by keyboard. (They disappear when nothing is selected —
+      after scrolling with the mouse wheel, for instance. That is vanilla and
+      not a defect.)
+
 ## After the walk
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly
@@ -834,7 +864,8 @@ Both shapes are in the blocks above on purpose.
       declined to cycle.
 - [ ] `Player.log` holds no exception from this mod, and no warning **other than**
 the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
-duplicate fixtures, `testDupKey`, one line for each `Refuse*` entry, the error
-from `ThrowingConstraint`, and one `changing '…' failed` per press on
-`ChoiceExactNoDescription`). The count no longer depends on the machine's culture:
-`ChoiceFloats` used to add a line here on a comma-decimal host and now never does.
+duplicate fixtures, `testDupKey`, `testLabelRestartGuard`, one line for each
+`Refuse*` entry, the error from `ThrowingConstraint`, and one `changing '…'
+failed` per press on `ChoiceExactNoDescription`). The count no longer depends on
+the machine's culture: `ChoiceFloats` used to add a line here on a comma-decimal
+host and now never does.
