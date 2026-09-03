@@ -62,6 +62,8 @@ namespace ModSettingsMenu.Settings
         {
             try
             {
+                if (_currentSection != DefaultSection)
+                    AdoptStrandedValue(key);
                 return _file.Bind(_currentSection, key, def, description);
             }
             catch (Exception ex)
@@ -592,7 +594,7 @@ namespace ModSettingsMenu.Settings
             if (_lastDeclarationFailed)
             {
                 Debug.LogWarning(
-                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': the declaration it follows did not take effect (see the error above), so marking the one before it would attach the restart to the wrong setting."
+                    $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': the declaration it follows did not take effect (see the log above), so marking the one before it would attach the restart to the wrong setting."
                 );
                 return this;
             }
@@ -681,6 +683,60 @@ namespace ModSettingsMenu.Settings
                 return false;
             }
             return true;
+        }
+
+        // Recovers the value of a key that used to bind under a different section, by re-keying
+        // CoreLib's own orphan record onto the target definition. ConfigFile.Reload files every line
+        // it cannot match onto a bound entry into OrphanedEntries, and ConfigFile.Bind adopts one
+        // whose ConfigDefinition matches EXACTLY — so moving the record is enough, and CoreLib does
+        // the deserialization and the save on its own. Save() writes orphans back out, so nothing is
+        // ever destroyed by getting this wrong; the cost of doing nothing is a value the player set
+        // silently reverting to its default.
+        private void AdoptStrandedValue(string key)
+        {
+            var target = new ConfigDefinition(_currentSection, key);
+            if (_file.OrphanedEntries.ContainsKey(target))
+                return; // already where it belongs; CoreLib's own Bind adopts it
+            // The declared source first — the author's statement outranks the inference below.
+            if (_movedFrom != null && TryAdoptFrom(new ConfigDefinition(_movedFrom, key), target, key))
+                return;
+            // Then MSM's own history. Not a guess: ConfigStore gives each consumer its own file and
+            // MSM has only ever bound into DefaultSection, so an orphan there is MSM's own doing.
+            // Reached even WITH a declared source, because a player who skipped the version that
+            // introduced the old group still holds the value here.
+            if (TryAdoptFrom(new ConfigDefinition(DefaultSection, key), target, key))
+                return;
+            if (_movedFrom == null)
+                WarnAboutValueLeftElsewhere(key);
+        }
+
+        private bool TryAdoptFrom(ConfigDefinition from, ConfigDefinition to, string key)
+        {
+            if (!_file.OrphanedEntries.TryGetValue(from, out var stranded))
+                return false;
+            _file.OrphanedEntries.Remove(from);
+            _file.OrphanedEntries[to] = stranded;
+            Debug.Log($"[ModSettingsMenu] '{_section.ModId}': '{key}' moved from [{from.Section}] to [{to.Section}]; its stored value came with it.");
+            return true;
+        }
+
+        // Says nothing when a declared movedFrom found nothing: after the first successful launch
+        // there is nothing left to migrate while the declaration stays in the consumer's chain
+        // forever, so a message here would appear on every start for every player from then on.
+        // This case is the opposite one — a value sitting in some section nobody declared, which is
+        // an unexplained move, and the message names the remedy rather than only the finding.
+        private void WarnAboutValueLeftElsewhere(string key)
+        {
+            foreach (var kv in _file.OrphanedEntries)
+            {
+                if (!string.Equals(kv.Key.Key, key, System.StringComparison.Ordinal))
+                    continue;
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] '{_section.ModId}': '{key}' now binds into [{_currentSection}], but a stored value of that name is still sitting in [{kv.Key.Section}] and is not being read. "
+                        + $"If this setting moved between groups, declare it: .Group(\"{_currentSection}\", movedFrom: \"{kv.Key.Section}\")."
+                );
+                return;
+            }
         }
 
         private string Term(string key) => MsmTerms.Label(_section.ModId, key);
