@@ -28,6 +28,22 @@ namespace ModSettingsMenu.UI
 
         public void Bind(SettingDef def, ModSection section)
         {
+            // A Label is not this widget's to render, and the failure is silent without this:
+            // ValueString has no Label case, so it returns "" without ever touching the null Entry
+            // — nothing throws, and the result is a SELECTABLE, empty-valued row registered in
+            // menuOptions, which is precisely what the heading design exists to prevent.
+            // ModSettingsScreen.Populate routes labels to LabelRow before reaching here; that one
+            // branch is the whole guarantee, so this says so loudly if it ever stops being true.
+            // Returning early leaves _def null, and GetActiveStateInCurrentScene then reports
+            // INACTIVE — so the row drops out of navigation instead of becoming the very thing
+            // being guarded against.
+            if (def != null && def.Kind == SettingKind.Label)
+            {
+                Debug.LogError(
+                    $"[ModSettingsMenu] internal: the label '{def.Key}' reached SettingWidget — a heading renders through LabelRow, not here. Row skipped."
+                );
+                return;
+            }
             _def = def;
             _section = section;
             // The ♦/♢ step glyphs only render in boldLarge (thinMedium's atlas lacks them — that's

@@ -614,15 +614,20 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning($"[ModSettingsMenu] Label '{def.Key}' declared but labelTemplate is unwired — the heading is skipped.");
                 return;
             }
+            // Asked of the TEMPLATE, before anything is instantiated. Checking the clone instead
+            // would mean the failure path leaves an artefact rather than nothing: an abandoned
+            // GameObject, already parented into the box and already active, that never reaches
+            // SetRowHeight and so contributes whatever height the prefab happens to carry. The
+            // guard above avoids every side effect by running first; this one has to match it.
+            if (labelTemplate.GetComponent<LabelRow>()?.text == null)
+            {
+                Debug.LogWarning($"[ModSettingsMenu] labelTemplate has no LabelRow/text wired — the heading '{def.Key}' is skipped.");
+                return;
+            }
             var go = Object.Instantiate(labelTemplate, container);
             go.SetActive(true);
             go.name = "Label " + def.Key;
             var row = go.GetComponent<LabelRow>();
-            if (row == null || row.text == null)
-            {
-                Debug.LogWarning($"[ModSettingsMenu] labelTemplate has no LabelRow/text wired — the heading '{def.Key}' renders blank.");
-                return;
-            }
             // RenderPlain, not Render: MSM resolves terms itself through Loc, so the PugText must
             // not try to resolve the finished string a second time.
             row.text.RenderPlain(def.Label());
