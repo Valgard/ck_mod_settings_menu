@@ -16,6 +16,16 @@ namespace ModSettingsMenu.Settings
         private readonly ModSection _section;
         private readonly ConfigFile _file;
 
+        /// <summary>The CoreLib section every declaration binds into until the first
+        /// <see cref="Group"/> call. Named rather than repeated: Task 2's adoption asks whether the
+        /// current section still IS this one, and a second literal would let the two drift.</summary>
+        internal const string DefaultSection = "Settings";
+
+        // The section later declarations bind into, and the group they may inherit a stranded value
+        // from. Both change together in Group() and nowhere else.
+        private string _currentSection = DefaultSection;
+        private string _movedFrom;
+
         // True when the widget declared LAST failed to bind and therefore added no SettingDef.
         //
         // RequiresRestart() addresses "the most recently declared setting" positionally, as
@@ -52,7 +62,7 @@ namespace ModSettingsMenu.Settings
         {
             try
             {
-                return _file.Bind("Settings", key, def, description);
+                return _file.Bind(_currentSection, key, def, description);
             }
             catch (Exception ex)
             {
@@ -513,6 +523,50 @@ namespace ModSettingsMenu.Settings
             return this;
         }
 
+        /// <summary>
+        /// Starts a group: renders a heading row exactly as <see cref="Label"/> does, AND binds every
+        /// declaration after it into the CoreLib section <paramref name="key"/> instead of
+        /// <see cref="DefaultSection"/>. Both effects are named in the method name on purpose — the
+        /// second one changes the layout of the mod's own .cfg, and a caller must be able to see that
+        /// at the call site.
+        ///
+        /// <paramref name="key"/> is both the loc key of the heading and the section name in the
+        /// file, so it must satisfy CoreLib's rules for a section name; an unusable one is refused
+        /// whole (no heading, no section change) rather than half-applied.
+        ///
+        /// <paramref name="movedFrom"/> names the group this group's settings used to live in, for a
+        /// consumer that renames one. Without it a rename would leave every value behind under the
+        /// old section: CoreLib keeps such a line but reads it under a definition nothing asks for
+        /// again. Moving OUT of <see cref="DefaultSection"/> needs no declaration — see the adoption
+        /// in BindGuarded, which knows that section is MSM's own history.
+        /// </summary>
+        public SectionBuilder Group(string key, string movedFrom = null)
+        {
+            _lastDeclarationFailed = false;
+            if (!IsUsableSectionName(key, "group name"))
+                return this;
+            if (movedFrom != null && !IsUsableSectionName(movedFrom, "movedFrom group"))
+                movedFrom = null;
+            if (movedFrom == key)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] '{_section.ModId}' declares the group '{key}' as moved from itself; there is nothing to move, so the group is kept and the migration dropped."
+                );
+                movedFrom = null;
+            }
+            _currentSection = key;
+            _movedFrom = movedFrom;
+            _section.Settings.Add(
+                new SettingDef
+                {
+                    Key = key,
+                    Kind = SettingKind.Label,
+                    Term = Term(key),
+                }
+            );
+            return this;
+        }
+
         /// <summary>Marks the most-recently-declared setting as requiring a game restart to take effect.
         /// When such a setting is changed in the menu, leaving the Mod settings screen raises CK's own
         /// "restart to apply mod changes" prompt (Cancel/Yes → relaunch). Chain it right after the widget:
@@ -592,6 +646,37 @@ namespace ModSettingsMenu.Settings
                 Debug.LogWarning(
                     $"[ModSettingsMenu] '{_section.ModId}' declares {duplicated.Count} key(s) more than once ({string.Join(", ", duplicated.ToArray())}). Each resolves to a single term, so those rows show the same text and cannot be told apart on screen."
                 );
+        }
+
+        // CoreLib's ConfigDefinition constructor rejects these, and an empty name would write a
+        // bare "[]" heading into the .cfg. Checked here rather than left to the bind because a bad
+        // name would otherwise fail once PER SETTING in the group, and BindGuarded would drop each
+        // of them from the menu separately — a typo in one group name costing every row it holds.
+        private static readonly char[] InvalidSectionChars = { '=', '\n', '\t', '\\', '"', '\'', '[', ']' };
+
+        private bool IsUsableSectionName(string value, string what)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                Debug.LogWarning($"[ModSettingsMenu] '{_section.ModId}' declared a {what} that is empty; the declaration is ignored.");
+                return false;
+            }
+            if (value != value.Trim())
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] '{_section.ModId}' declared the {what} '{value}' with leading or trailing whitespace, which CoreLib refuses; the declaration is ignored."
+                );
+                return false;
+            }
+            int bad = value.IndexOfAny(InvalidSectionChars);
+            if (bad >= 0)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] '{_section.ModId}' declared the {what} '{value}', which CoreLib refuses because of the character '{value[bad]}'; the declaration is ignored."
+                );
+                return false;
+            }
+            return true;
         }
 
         private string Term(string key) => MsmTerms.Label(_section.ModId, key);
