@@ -235,7 +235,10 @@ Open sequence is three steps for a reason: `Activate` → `Populate` (build stru
 `menuOptions`) → `base.Activate` (hierarchy goes active) → `RenderContent` (render layouts *now*,
 because `LinearLayout` skips inactive children — heights would compute as 0 before activation).
 Rebuilds every open (vanilla `PugText`s free their glyphs on disable). Sections render
-**alphabetically by `DisplayName`**; options within a box follow the section's `OptionSort`.
+**alphabetically by `DisplayName`**. Options within a box follow the section's `OptionSort`, with
+one rule on top: a `SettingKind.Label` is a **segment boundary**. `ByKey`/`ByLabel` sort the runs
+of settings between labels and leave the labels where they were declared, because a label already
+states an order and a sort that crossed it would contradict that.
 
 `PreWarm()` pays the one-time first-enable cost at load via a same-frame
 `SetActive(true)/SetActive(false)`. `Deactivate` consumes the restart-dirty flag and requests the
@@ -255,6 +258,21 @@ A tiny `MonoBehaviour` on the section-template prefab exposing `header`, `hint`,
 `widgetContainer` as **serialized references** (the screen wires by reference, not by fragile
 `Find()` paths). The `widgetContainer` is a `LinearLayout` with a 9-slice border background that
 auto-sizes to its rows — the visible box.
+
+### `LabelRow`
+
+A one-field component on the label template: the heading's `PugText`. Deliberately a plain
+`MonoBehaviour` — not a `RadicalMenuOption`, not even a `UIelement` — which is what keeps a heading
+out of navigation. That is structural rather than a setting: `isMenuOption` is virtual on
+`UIelement` with a default of `false` and is overridden in exactly one place in the whole game
+(`RadicalMenuOption`), so a plain `MonoBehaviour` cannot enter `menuOptions` at all. Core Keeper
+does the same thing for the category headings in its key-rebinding screen
+(`ControlMapping_CategoryLabel`), down to distinguishing the heading by font weight rather than by
+a divider sprite.
+
+`ModSettingsScreen.BuildLabelRow` instantiates it, renders the resolved term, sets the row height
+through the shared `SetRowHeight`/`RowHeightPx` path, and — the load-bearing part — does not add it
+to `menuOptions`.
 
 ### `SettingWidget : RadicalMenuOption`
 
