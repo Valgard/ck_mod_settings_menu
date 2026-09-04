@@ -634,7 +634,7 @@ namespace ModSettingsMenu
             section.Group("testGroupTwo");
             section.Toggle(out _, "testSecondGroupToggle", false);
             // A group name CoreLib refuses. The declaration must be dropped whole — no heading, and
-            // the two settings after it must still bind into [testGroupTwo], not vanish.
+            // the one setting after it must still bind into [testGroupTwo], not vanish.
             section.Group("bad[name]");
             section.Toggle(out _, "testAfterBadGroup", true);
             // A declared movedFrom whose source has never existed. Its whole purpose is to stay

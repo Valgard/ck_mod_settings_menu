@@ -584,12 +584,14 @@ namespace ModSettingsMenu.Settings
             // to an unrelated value and demand a restart for a change that applies immediately.
             //
             // ⚠️ Checked FIRST, and the order is load-bearing — the two guards below look mutually
-            // exclusive and are not. Label() does not set this flag, but a rejected Group() does:
-            // Group() clears it on success and sets it to true when key validation fails, adding no
-            // SettingDef on failure. So "the last declaration is a label" and "the last declaration
-            // failed" can hold together: a declaration that fails AFTER a label leaves that label as
-            // Settings[n - 1]. Both guards then match, and only this one names the cause the
-            // consumer has to act on — the label is merely what happens to be last.
+            // exclusive and are not. Label() clears this flag exactly like every successful widget
+            // does, so "the last declaration is a label" and "the last declaration failed" seem
+            // unable to hold together — until a rejected Group() is considered: it sets the flag to
+            // true on a bad key and adds no SettingDef, while a SUCCESSFUL Group() clears the flag
+            // and adds one exactly like Label() does. So a label from either call can sit at
+            // Settings[n - 1] while the very next declaration is the failed Group() that set this
+            // flag. Both guards then match, and only this one names the cause the consumer has to
+            // act on — the label is merely what happens to be last.
             if (_lastDeclarationFailed)
             {
                 Debug.LogWarning(
