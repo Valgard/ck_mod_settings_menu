@@ -30,6 +30,12 @@ namespace ModSettingsMenu
         // excludes it from discovery - MSM never lists its own section as a "foreign" one.
         public static SettingHandle<bool> ShowForeignConfigs;
 
+        // MSM-28: once-per-open naming diagnostics for a discovered mod's rows, read by
+        // ForeignConfigDiscovery.Discover(). Off by default. Bound directly on MSM's own ConfigFile
+        // in Init() rather than through SectionBuilder — see BindNamingDiagnostics for why it is its
+        // own bind rather than a second .Toggle() call.
+        public static SettingHandle<bool> NamingDiagnostics;
+
         public void EarlyInit()
         {
             var info = ((IMod)this).GetModInfo();
@@ -559,10 +565,55 @@ namespace ModSettingsMenu
         public void Init()
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
+            NamingDiagnostics = BindNamingDiagnostics();
             var section = ModSettings.Section(this).Toggle(out ShowForeignConfigs, "showForeignConfigs", true);
             if (DevFlags.Is("TestFixtures"))
                 AddDeclaredFixtures(section);
             section.Build();
+        }
+
+        /// <summary>MSM-28's diagnostic switch, bound directly on MSM's own ConfigFile rather than
+        /// through a SectionBuilder <c>.Toggle()</c> call. Every SectionBuilder widget adds a row to
+        /// the menu, and this one is not for a player: it is aimed at a FOREIGN mod author who never
+        /// took this mod's own dependency and so never opens this screen's box at all — for them, a
+        /// line in a .cfg file they are already editing is the only surface that reaches them.
+        /// ConfigStore.ForMod is keyed by modId and caches one ConfigFile per consumer, so this binds
+        /// into the exact same file the ModSettings.Section(this) call right after it hands
+        /// SectionBuilder — the bool just never becomes a SettingDef, and it shares MSM's own
+        /// [Settings] section with showForeignConfigs.
+        ///
+        /// Guarded the way SectionBuilder.BindGuarded guards every widget bind, and for the same
+        /// reason: ConfigFile.Bind ends in a filesystem write (Save()) with no exception handling of
+        /// its own, and this call runs BEFORE ModSettings.Section below it. Unguarded, a Wine
+        /// filesystem fault here would take the whole of Init() down with it — including MSM's own
+        /// "Mod settings" box — for a setting nobody but a mod author reading the file will ever
+        /// look at.</summary>
+        private SettingHandle<bool> BindNamingDiagnostics()
+        {
+            var info = ((IMod)this).GetModInfo();
+            try
+            {
+                var entry = ConfigStore
+                    .ForMod(this, info.Metadata.name)
+                    .Bind(
+                        "Settings",
+                        "reportForeignNamingStages",
+                        false,
+                        new ConfigDescription(
+                            "For a foreign mod author, not a player: with this on, opening the settings menu logs one line per "
+                                + "detected mod's config file, naming how many of its rows resolved under Mod Settings Menu's own "
+                                + "term schema, how many under General Mod Config Menu's, and how many fell back to the raw key, "
+                                + "plus the exact terms tried for that section's first row. Off by default, because it doubles "
+                                + "every label lookup on a path already tuned to open without a stall."
+                        )
+                    );
+                return new SettingHandle<bool>(entry);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[ModSettingsMenu] Could not bind the naming-diagnostics switch; it stays off for this session: {ex}");
+                return new SettingHandle<bool>(false);
+            }
         }
 
         // Dev-only fixtures for the DECLARED path — the counterpart to the raw ConfigFile
