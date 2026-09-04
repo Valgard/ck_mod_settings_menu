@@ -424,6 +424,57 @@ those.
 
 ---
 
+## If you never took this dependency at all
+
+Mod Settings Menu also renders settings for mods that never integrated it: if
+your mod binds its own CoreLib `ConfigFile` (the same file General Mod Config
+Menu, GMCM, reads), this framework can detect it and show it as a "(detected)"
+section, with no wiring on your side. A detected row's label is resolved the
+same three-stage way an integrated one's is — this framework's own term scheme
+first (**Localization**, above), then GMCM's own scheme, then your raw config
+key as a last resort.
+
+**A wrong stage looks exactly like shipping no terms at all** — the same raw
+keys on screen, the same silence in the log — so there is normally no way to
+tell "I never wrote terms for this" apart from "I wrote terms, and neither
+scheme is finding them." A one-time diagnostic answers that, without you needing
+to read this framework's own source.
+
+It is not a setting for a player to see, so it never appears in the menu: switch
+it on by hand in `ModSettingsMenu.cfg` — created the first time Mod Settings
+Menu itself runs, next to your own mod's `config.cfg` — under `[Settings]`:
+
+```ini
+reportForeignNamingStages = true
+```
+
+With it on, opening the settings screen logs one line per detected mod's config
+file to `Player.log`, for example:
+
+```
+[ModSettingsMenu] 'PlacementPlus/PlacementPlus.cfg': 12 rows named — 0 by MSM's schema,
+10 by GMCM's, 2 by their raw key. Heading: GMCM's. Tried for 'MaxBrushSize':
+'PlacementPlus-Config/MaxBrushSize', then 'PlacementPlus_PlacementPlus_General/MaxBrushSize'.
+```
+
+That names, for the whole file: how many rows resolved under each scheme, which
+scheme named the box heading, and — concretely, for the section's first row —
+the two terms tried, in the order they were tried, before the raw key. A `0`
+under "MSM's schema" with everything else under "GMCM's" or "their raw key" is
+not by itself a problem — most detected mods ship no terms for this framework at
+all, and that is the ordinary case this diagnostic is not for. It is for the
+other case: you *did* ship a term and it is not the one being tried. The two
+quoted terms in the log line are exactly what a `TextDataBlock` would need to be
+keyed under (header + `/` + name, same as any term in the **Localization**
+section above) for that row to be found — copy the one that matches your own
+naming intent.
+
+Turn it back off once you are done — it doubles every label lookup on this
+screen, on a path already tuned to open without a stall, so it is not
+something to leave on for a player.
+
+---
+
 ## Full example: Faster Talents
 
 The [Faster Talents](https://mod.io/g/corekeeper/m/fastertalents) mod is the reference consumer.

@@ -465,6 +465,57 @@ only a label term.
 > `localization/Localization.csv` so the new text takes. A real mod.io update
 > (new version) is unaffected.
 
+### If you never took the dependency at all
+
+Everything above this point assumes you called `ModSettings.Section(this)`. If
+you didn't — if your mod persists its own settings through a CoreLib
+`ConfigFile` and never referenced MSM at all — the framework still finds that
+file and renders it as a "(detected)" section, with no wiring on your side. A
+detected row's label goes through the same three stages a registered consumer's
+does: MSM's own scheme above first, then General Mod Config Menu's (GMCM's)
+scheme, then your raw config key as a last resort.
+
+The trouble is that a wrong stage winning is invisible from the screen. If MSM
+is looking under the wrong owner name — say the folder your mod's `ConfigFile`
+lives in differs from the internal name you compiled against — or if the
+GMCM-style term it tries second doesn't match what you actually shipped, the row
+falls straight through to your raw key, exactly as it would for a mod that
+shipped no terms at all. Nothing on screen tells "I never wrote a term for this"
+apart from "I wrote one, and it's being looked up under the wrong name" — until
+you turn on the diagnostic.
+
+It's a bool, bound directly on MSM's own `ConfigFile` rather than declared
+through `SectionBuilder`: a diagnostic aimed at someone editing a `.cfg` file
+has no business becoming a row in a menu built for players. Add this under
+`[Settings]` in `ModSettingsMenu.cfg` (it exists once Mod Settings Menu has run
+at all, next to your own mod's `config.cfg`):
+
+```ini
+reportForeignNamingStages = true
+```
+
+Open the settings screen once, then look in `Player.log` for a line like:
+
+```
+[ModSettingsMenu] 'PlacementPlus/PlacementPlus.cfg': 12 rows named — 0 by MSM's schema,
+10 by GMCM's, 2 by their raw key. Heading: GMCM's. Tried for 'MaxBrushSize':
+'PlacementPlus-Config/MaxBrushSize', then 'PlacementPlus_PlacementPlus_General/MaxBrushSize'.
+```
+
+Read it as: of the 12 rows this file produced, none matched MSM's own scheme,
+ten matched GMCM's, and two fell all the way through to their raw key — and the
+box heading itself resolved under GMCM's scheme too. The last sentence is the
+part worth copying: it names the exact two terms tried for the section's first
+row, in the order they were tried. Whichever one matches how you actually name
+your `TextDataBlock`s tells you which scheme you're aiming for; if neither does,
+that mismatch is the thing to fix. A `0` next to "MSM's schema" is not itself
+the problem — most detected mods never take this dependency and so never target
+its scheme at all.
+
+This costs one extra lookup per stage per row, on a screen already tuned to open
+without a noticeable stall — which is why it defaults to off, and is worth
+switching off again once you're done with it.
+
 ---
 
 ## 8. RequiresRestart & the EarlyInit/Init bake-time trap

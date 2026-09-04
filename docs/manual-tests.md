@@ -863,6 +863,53 @@ Both shapes are in the blocks above on purpose.
 - [ ] With the terms out and rebuilt, all of it is back to `PlacementPlus`,
       `MaxBrushSize`, `ExcludeItems` and `ChoiceEnum`.
 
+### The naming diagnostic
+
+MSM-28's own switch, and it needs none of the yaml editing above: run it here,
+with the terms already out, where every discovered section is back to shipping
+no term under either schema — that known shape is what makes the counts below
+checkable without touching `localization.yaml` at all.
+
+- [ ] At the default (`reportForeignNamingStages` absent from
+      `ModSettingsMenu.cfg`, or `false`), open the settings screen:
+      `Player.log` carries no `[ModSettingsMenu]` line containing "rows
+      named". Off must mean silent, not merely unread.
+- [ ] Add `reportForeignNamingStages = true` under `[Settings]` in
+      `ModSettingsMenu.cfg`, then open the settings screen: the log now
+      carries exactly one such line per discovered section — one for each
+      fixture file above that renders at least one row, and one more for
+      PlacementPlus if it is loaded. `TestThrowingConstraint` gets none: its
+      only row never registers, so the whole box is dropped before
+      `Discover()` ever returns it (see § Running the fixtures) — there is
+      nothing here to name.
+- [ ] Every line reads `0 by MSM's schema, 0 by GMCM's, N by their raw key`
+      and `Heading: the folder name` — the raw-key stage must win for all N
+      rows of a section, and the folder name for its heading, because nothing
+      here ships a term under either schema at this point in the walk.
+      Regard any other outcome (a nonzero count under MSM's or GMCM's
+      schema, or `Heading: GMCM's`) as this walk's terms not actually having
+      been removed.
+- [ ] The trailing sentence names one of the section's own rows twice, once
+      per schema, in the form `Tried for '<key>': '<term>', then '<term>'` —
+      e.g. for `TestListFixtures`, `<term>` reads
+      `TestListFixtures-Config/<key>` for the first form and
+      `TestListFixtures_config_Settings/<key>` for the second. Both are
+      concrete enough to paste into a yaml file as-is; that they resolve to
+      nothing right now is the point of running this check before the terms
+      exist. The key named is not necessarily the same row the screen shows
+      first — the report reads the section before its own alphabetical
+      `ByKey` sort runs — so match it by the key printed, not by on-screen
+      position.
+- [ ] Open the settings screen a second time without closing the game: the
+      log gains a **second**, identical set of lines rather than none. This
+      diagnostic is not deduplicated across opens the way a `Degraded`
+      warning is — a value that could change between opens (a term added, a
+      mod re-ordering its own config) must be re-counted every time, not
+      remembered from the first.
+- [ ] Set `reportForeignNamingStages` back to `false` before moving on — a
+      switch left on costs a doubled lookup on every future menu open, for a
+      diagnostic this walk no longer needs.
+
 ## Headings
 
 A heading is the only row here that is not a menu option at all, so most of
