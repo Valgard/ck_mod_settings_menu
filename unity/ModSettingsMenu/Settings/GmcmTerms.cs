@@ -34,18 +34,23 @@ namespace ModSettingsMenu.Settings
     /// accepts '\\' — a backslash path would leave GMCM with an unusable term too, and an author
     /// names their terms after what GMCM actually asked for.
     ///
-    /// Two boundaries worth naming. GMCM builds a fourth shape this does not: a per-SECTION
-    /// heading, by feeding the composed file key back in ("&lt;Mod&gt;_&lt;file&gt;/&lt;Section&gt;"). MSM has no
-    /// per-section heading to hang it on yet; the roadmap's grouping point is where it would
-    /// arrive. And fidelity here is one-directional: it guarantees this builds nothing GMCM
-    /// would not have, not that it finds everything GMCM finds — an author using GMCM's own
-    /// LocalizationOverride tag names a term out of schema entirely, and reading that tag would
-    /// need reflection, which the sandbox forbids.
+    /// One boundary worth naming, now that GMCM's per-SECTION heading has a counterpart here
+    /// too: the shape GMCM composes by feeding the composed file key back in
+    /// ("&lt;Mod&gt;_&lt;file&gt;/&lt;Section&gt;") is <see cref="Section"/> above. And fidelity here is
+    /// one-directional: it guarantees this builds nothing GMCM would not have, not that it finds
+    /// everything GMCM finds — an author using GMCM's own LocalizationOverride tag names a term
+    /// out of schema entirely, and reading that tag would need reflection, which the sandbox
+    /// forbids.
     /// </summary>
     internal static class GmcmTerms
     {
         /// <summary>The term for the config file itself — GMCM's own heading for a mod's page.</summary>
         internal static string File(string configFilePath) => Compose(configFilePath);
+
+        /// <summary>The term for one SECTION's heading. GMCM composes this from the file key plus
+        /// the section, which is the same output Compose gives for the raw path plus the section —
+        /// the dot-strip lands on the same segment either way.</summary>
+        internal static string Section(string configFilePath, string section) => Compose(configFilePath, section);
 
         /// <summary>The term for one entry's label.</summary>
         internal static string Label(string configFilePath, string section, string key) => Compose(configFilePath, section, key);
