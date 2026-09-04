@@ -211,6 +211,14 @@ The same guard names the mistake when you declare **one key twice with different
 types** (say a `Toggle` and later a `List` on `"mode"`), which otherwise
 surfaced as an unattributed cast exception from inside the builder.
 
+The same is also true for a declaration whose own arguments are invalid — a
+`null` key, or a `Slider`/`Stepper` range where `min` is not lower than `max`.
+Building those throws before your call ever reaches `Bind`, so nothing there
+could catch it; the framework checks for both up front instead, with the same
+outcome as a failed bind — the setting is left out, your mod keeps running on
+its declared default, and `Player.log` names the widget and the values it
+rejected.
+
 ### `SettingHandle<T>` — reading and writing values
 
 ```csharp
