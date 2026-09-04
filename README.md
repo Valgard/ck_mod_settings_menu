@@ -216,8 +216,8 @@ The same is also true for a declaration whose own arguments are invalid — a
 Building those throws before your call ever reaches `Bind`, so nothing there
 could catch it; the framework checks for both up front instead, with the same
 outcome as a failed bind — the setting is left out, your mod keeps running on
-its declared default, and `Player.log` names the widget and the values it
-rejected.
+its declared default, and `Player.log` names the setting and the widget, plus
+the offending bounds where there are any to quote.
 
 ### `SettingHandle<T>` — reading and writing values
 
