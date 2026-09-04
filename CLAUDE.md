@@ -31,6 +31,11 @@ source .envrc           # exports UNITY_BIN, SDK_PATH, MOD_INSTALL_PATH, MOD_NAM
 ../utils/build.sh      # Unity batchmode build; on Darwin auto-runs install-macos.sh
 ```
 
+**`.envrc` is not tracked, so a fresh worktree does not have one** — copy it in from the
+main checkout before the first build there, or `source` finds nothing and the build fails
+on unset variables. It is worktree-correct once present: `MOD_REPO_ROOT="$PWD"` and the
+localization paths all derive from where it is sourced, not from where it lives.
+
 Unity Editor must be closed (it locks the shared SDK project). `utils/link.sh` symlinks
 the repo's `unity/` mirror into `$SDK_PATH/Assets/`: one **directory** symlink for
 `unity/ModSettingsMenu/`, plus file symlinks for the Assets-level files beside it
