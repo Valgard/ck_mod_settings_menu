@@ -98,14 +98,16 @@ namespace ModSettingsMenu.Settings
         // BindGuarded is ever entered. Same blast radius as a null key above — unchecked,
         // this takes the whole section down with it (MSM-29). Both bounds are quoted in the
         // message, because the mistake this exists for is the two arguments swapped, and
-        // only seeing both tells you which way round.
-        private bool IsUsableRange<T>(T min, T max, string widget)
+        // only seeing both tells you which way round; the key is quoted too, because this is
+        // the only channel a consumer with several sliders has for telling which declaration
+        // the line is even about.
+        private bool IsUsableRange<T>(T min, T max, string key, string widget)
             where T : IComparable
         {
             if (min.CompareTo(max) >= 0)
             {
                 Debug.LogError(
-                    $"[ModSettingsMenu] '{_section.ModId}' called {widget} with min ({min}) not lower than max ({max}); the declaration is left out of the menu and the mod keeps its own default for it."
+                    $"[ModSettingsMenu] '{_section.ModId}': '{key}' called {widget} with min ({min}) not lower than max ({max}); the declaration is left out of the menu and the mod keeps its own default for it."
                 );
                 return false;
             }
@@ -172,7 +174,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            if (!IsUsableRange(min, max, nameof(Slider)))
+            if (!IsUsableRange(min, max, key, nameof(Slider)))
             {
                 handle = new SettingHandle<float>(def);
                 _lastDeclarationFailed = true;
@@ -272,7 +274,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            if (!IsUsableRange(min, max, nameof(Stepper)))
+            if (!IsUsableRange(min, max, key, nameof(Stepper)))
             {
                 handle = new SettingHandle<int>(def);
                 _lastDeclarationFailed = true;

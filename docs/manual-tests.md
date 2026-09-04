@@ -646,9 +646,9 @@ down with it (MSM-29). The check is what no longer happens.
       reversed (`min` 10, `max` 0).
 - [ ] `testAfterReversedRange` appears anyway, right where it is declared —
       the box did not vanish, only the one bad row did.
-- [ ] `Player.log` carries one line naming `Slider` and both bounds, `min
-      (10)` and `max (0)`, so the log states which way round they were
-      passed.
+- [ ] `Player.log` carries one line naming `testReversedRange`, `Slider` and
+      both bounds — `min (10)` and `max (0)` — so the line says which
+      declaration, which widget, and which way round the bounds were passed.
 
 ### A list that cannot work
 
