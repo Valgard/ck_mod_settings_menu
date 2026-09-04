@@ -691,28 +691,6 @@ first, which also clears `activeInputField` and thereby disarms CK's own `if
 result handler, so only the call's *source* can separate "the player just typed
 this" from "the world just wiped it" — see that patch's comment.
 
-## MSM-28 — Say which naming stage answered, once per menu open
-
-A discovered mod's rows resolve through three stages, and a wrong one is
-**indistinguishable from a mod that ships no terms**: same raw keys, same
-silence. Two things can be wrong that way. MSM's own stage takes its owner from
-the config file's folder name, because a `ConfigFile` will not name its mod —
-so a mod whose folder differs from its internal name is never found under the
-published schema. And GMCM's stage reproduces another program's string
-function; a mis-port misses every lookup forever.
-
-Neither can be seen from the screen, and neither is a defect a player would
-report as one.
-
-- **Not per-failure logging.** Roughly two lookups per row across every
-  discovered mod, on the path that already needed `PreWarm` to stop freezing.
-- **One aggregate line per discovered section per open**, behind a diagnostic
-  toggle: which terms were tried, which stage won. That turns "my translations
-  are ignored and I cannot find out why" into something a foreign author can
-  answer alone.
-- The de-duplication this needs already exists here — `ForeignConfigDiscovery`
-  reports each degradation once, and `ListKindStore` remembers across opens.
-
 ## MSM-16 — A master switch with sub-values
 
 GMCM's `CombindConfigPage` is a public API a consuming mod registers against: a
