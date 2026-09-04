@@ -529,8 +529,8 @@ working Choice, and one of them logs a line per keypress by design.
 A detected mod's rows are now grouped by the sections its own `.cfg` already has —
 the same grouping a consumer can declare through `.Group()` (below), but inferred
 rather than authored. More raw `ConfigFile`s, made the same way as the fixtures
-above, cover it: `TestGroupFixtures`, with two sections, and
-`TestSingleGroupFixtures`, with one.
+above, cover it: `TestGroupFixtures`, with two sections, `TestSingleGroupFixtures`,
+with one, and `TestEmptySectionFixtures`, whose first section has no name at all.
 
 - [ ] `TestGroupFixtures (detected)` shows two headings — `alpha` first, `Zebra`
       second — each with its own rows beneath (`firstAlphabetically` and `second`
@@ -540,6 +540,11 @@ above, cover it: `TestGroupFixtures`, with two sections, and
 - [ ] `TestSingleGroupFixtures (detected)` shows its single row with **no**
       heading at all — a file with one section gets none, because it would only
       repeat the box heading already above it.
+- [ ] `TestEmptySectionFixtures (detected)` shows `beforeAnyHeader` first with
+      **no** heading above it — the empty section CoreLib files every pre-header
+      line under — then a heading `named` above its row `afterHeader`. Two
+      sections is what makes headings appear here at all: the empty one still
+      counts toward that threshold even though it renders no caption of its own.
 
 ## The declared list path
 
