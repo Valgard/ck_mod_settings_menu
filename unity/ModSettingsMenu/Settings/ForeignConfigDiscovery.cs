@@ -52,7 +52,10 @@ namespace ModSettingsMenu.Settings
                 ModId = cf.ConfigFilePath,
                 DisplayName = OwnerFromPath(cf.ConfigFilePath),
                 Foreign = true,
-                OptionSort = OptionSort.ByKey, // Dictionary order isn't meaningful; key order is stable
+                // Dictionary order isn't meaningful; key order is stable — within a group, since
+                // SortWithinSegments treats a section heading as a segment boundary and sorts only
+                // what lies between two of them, never across one.
+                OptionSort = OptionSort.ByKey,
             };
             // Snapshot before walking. CoreLib's own source says it cannot lock this dictionary, and a
             // mod that binds a setting while the screen builds would throw from MoveNext — which
@@ -74,6 +77,12 @@ namespace ModSettingsMenu.Settings
             // degrades to DisplayName — so the early return above stays correct either way.
             section.HeadingTerm = GmcmTerms.File(cf.ConfigFilePath);
 
+            // Grouped by the section each entry declares, so a mod that structured its own .cfg has
+            // that structure on screen. Ordinal keys, because CoreLib's sections are case-sensitive
+            // and two that differ only in case are two sections; the DISPLAY order below is
+            // case-insensitive, because that is a reading order and not an identity.
+            var groups = new Dictionary<string, List<SettingDef>>(System.StringComparer.Ordinal);
+            var order = new List<string>();
             foreach (var kv in entries)
             {
                 SettingDef def;
@@ -95,11 +104,58 @@ namespace ModSettingsMenu.Settings
                     );
                     continue;
                 }
-                if (def != null)
-                    section.Settings.Add(def);
+                if (def == null)
+                    continue;
+                string sectionName = kv.Key.Section ?? "";
+                if (!groups.TryGetValue(sectionName, out var rows))
+                {
+                    rows = new List<SettingDef>();
+                    groups[sectionName] = rows;
+                    order.Add(sectionName);
+                }
+                rows.Add(def);
+            }
+
+            order.Sort(System.StringComparer.OrdinalIgnoreCase);
+            // One section is the common case, and its heading would sit directly under the box
+            // heading naming the same mod — so it is left out. A CONSUMER's single group is kept, in
+            // contrast: there the group is declared, and a declaration is honoured. Discovery infers.
+            bool withHeadings = order.Count > 1;
+            string owner = OwnerFromPath(cf.ConfigFilePath);
+            foreach (var sectionName in order)
+            {
+                // CoreLib's Reload files every line before the file's first [Header] under
+                // currentSection = "" — reachable here, and not the same as "no sections at all"
+                // (that case never reaches this branch, since a single section leaves withHeadings
+                // false). Naming a heading for it would run Label()'s own chain on an empty key:
+                // MsmTerms and GmcmTerms both compose a term from it, neither term is one an author
+                // ever ships a translation for, and the raw-key fallback is empty too — Loc.TFirstOf
+                // treats an empty fallback as no fallback at all — so the row would land on
+                // SettingDef.Label()'s "(unnamed)" placeholder. A heading that names nothing, sitting
+                // above rows that do have names, is worse than no heading — so this group gets none.
+                // It still counts toward withHeadings above: a reader genuinely sees two areas
+                // whether or not the first one is captioned, and it sorts first regardless ("" is
+                // ordinal-least), so leaving its heading out costs nothing but the caption.
+                if (withHeadings && sectionName.Length > 0)
+                    section.Settings.Add(HeadingFor(cf.ConfigFilePath, owner, sectionName));
+                section.Settings.AddRange(groups[sectionName]);
             }
             return section;
         }
+
+        // A heading carries no value, so its SettingDef has no Entry — the one kind of def that
+        // does not (see SettingKind.Label). It needs no new resolution code: Term / GmcmTerm / Key
+        // are exactly the three stages SettingDef.Label() already tries, so a section heading reads
+        // under MSM's schema, then GMCM's, then as the raw section name from the file.
+        private static SettingDef HeadingFor(string configFilePath, string owner, string sectionName) =>
+            new SettingDef
+            {
+                Key = sectionName,
+                Kind = SettingKind.Label,
+                Term = MsmTerms.Label(owner, sectionName),
+                GmcmTerm = GmcmTerms.Section(configFilePath, sectionName),
+                Foreign = true,
+            };
 
         // Widget-kind inference cascade (first match wins). See ADR-001 (the discovery base). Every
         // kind gets its own native widget regardless of read-only-ness — SettingDef.ReadOnly (view-
