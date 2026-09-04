@@ -46,11 +46,12 @@ every declaration after it into the CoreLib section `key` — and the method nam
 is where a reader of the call site sees both.
 
 Option 2 was rejected because the file-layout effect is the more consequential
-of the two and would not have been named at the call site; ADR-010 rejected the
-same shape for the same reason. Option 3 was rejected because the two would be
-declared together nearly every time and could then drift apart unnoticed — a
-heading reading "Combat" over a section named `misc`. Option 4 was rejected
-because the consumer API is the standard path, not the inferred one.
+of the two and would not have been named at the call site: a reader of the
+declaration would see a heading being asked for and not a file being
+reorganised. Option 3 was rejected because the two would be declared together
+nearly every time and could then drift apart unnoticed — a heading reading
+"Combat" over a section named `misc`. Option 4 was rejected because the consumer
+API is the standard path, not the inferred one.
 
 Four further decisions came with it:
 
@@ -107,10 +108,13 @@ Four further decisions came with it:
   rejects a section name containing `= \n \t \ " ' [ ]` or padded with
   whitespace; left to the first bind, one such name would fail once per setting
   in the group and `BindGuarded` would drop each of those rows from the menu
-  separately. A refused group therefore emits no heading and changes no section
-  — and it is the first declaration that can fail without a bind having been
-  attempted, which is what makes `RequiresRestart()`'s two guards
-  non-exclusive and their order load-bearing.
+  separately. A refused group therefore emits no heading and changes no section,
+  which reaches by a second route something [ADR-010](010-heading-rows-are-not-menu-options.md) already records: a
+  declaration that fails without adding a row can leave a heading as the last
+  entry, so `RequiresRestart()`'s two guards are not mutually exclusive and
+  their order is load-bearing. There it is a setting failing after a heading;
+  here it is the heading's own declaration failing. `.Group()` adds a path into
+  that case rather than creating it.
 
 ## More Information
 
