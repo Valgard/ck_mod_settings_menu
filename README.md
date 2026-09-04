@@ -334,6 +334,13 @@ anymore:
 .Group("fight", movedFrom: "combat")   // this group used to be called "combat"
 ```
 
+Removing a group entirely — deleting the `.Group()` call so those settings bind
+back into `[Settings]` — has no declaration of its own: `movedFrom` only ever
+names a group to migrate *from*, never `[Settings]` as a destination with
+something to say about it. MSM still warns when this happens, but the message
+states what is true instead of a fix to apply: the value stays under the old
+group and is not read again, and restoring the group is what brings it back.
+
 `key` doubles as a CoreLib section name, so it must satisfy CoreLib's rules for
 one — no `= \n \t \ " ' [ ]`, and no leading or trailing whitespace. An
 unusable key is refused whole (no heading, no section change), and the

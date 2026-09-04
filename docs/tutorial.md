@@ -609,6 +609,12 @@ Skip `movedFrom` when the group is brand new: moving a setting *out of*
 `[Settings]` for the first time needs no declaration at all — MSM already
 treats `[Settings]` as its own history and recovers the value on its own.
 
+Dropping a group entirely — deleting the `.Group()` call so those settings
+bind back into `[Settings]` — is the direction with no declaration to make:
+`movedFrom` only ever names a group to move *from*. MSM still warns, but the
+message says what is true instead: the value stays under the old group and is
+not read again, and restoring the group is what brings it back.
+
 ---
 
 ## 10. Pitfall checklist
