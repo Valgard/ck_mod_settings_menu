@@ -796,7 +796,18 @@ namespace ModSettingsMenu.Settings
         {
             var target = new ConfigDefinition(_currentSection, key);
             if (_file.OrphanedEntries.ContainsKey(target))
+            {
+                // Runs here too, even though THIS key needs no adoption: WarnAboutValueLeftElsewhere
+                // only ever reports OTHER sections (see the section check inside it), so a value
+                // already sitting at `target` cannot make it warn about itself. What it can still
+                // find is a SECOND, abandoned copy of this same key under a section nobody reads
+                // any more — a group renamed twice, say. Skipping this call here, as an earlier
+                // version did, left exactly that fact unmentioned whenever a live value already
+                // existed: a dead row under an old group produced no warning at all, because the one
+                // code path able to name it returned before ever running.
+                WarnAboutValueLeftElsewhere(key);
                 return; // already where it belongs; CoreLib's own Bind adopts it
+            }
             // The declared source first, and unconditionally — the author's statement outranks the
             // inference below and holds regardless of where this binding lands.
             if (_movedFrom != null && TryAdoptFrom(new ConfigDefinition(_movedFrom, key), target, key))
@@ -821,14 +832,14 @@ namespace ModSettingsMenu.Settings
             return true;
         }
 
-        // Runs unconditionally — for a bind into a group and for one back into DefaultSection alike —
-        // because a value left behind is the same damage whichever direction the binding moved, and
-        // this scan is the only thing that can name it for a third-party author. It still says
-        // nothing in the ordinary case, and not because of a gate: a successful TryAdoptFrom above
-        // re-keys the orphan onto the target definition, so a satisfied movedFrom — or a group that
-        // has simply always bound the same way — both leave nothing under the old section for a
-        // later launch to find here. What this DOES find is a value sitting somewhere neither
-        // adoption attempt reached: an unexplained move.
+        // Runs unconditionally — for a bind into a group, for one back into DefaultSection, and now
+        // for one whose value already sits at the target alike — because a value left behind is the
+        // same damage whichever way the binding resolved, and this scan is the only thing that can
+        // name it for a third-party author. It still says nothing in the ordinary case, and not
+        // because of a gate: a successful TryAdoptFrom above re-keys the orphan onto the target
+        // definition, so a satisfied movedFrom — or a group that has simply always bound the same
+        // way — both leave nothing under the old section for a later launch to find here. What this
+        // DOES find is a value sitting somewhere neither adoption attempt reached: an unexplained move.
         //
         // The DefaultSection branch splits on _movedFrom, because a remedy can be named there too now
         // — not only in the other branch. With no movedFrom declared at all there is genuinely nothing
@@ -848,6 +859,12 @@ namespace ModSettingsMenu.Settings
             foreach (var kv in _file.OrphanedEntries)
             {
                 if (!string.Equals(kv.Key.Key, key, System.StringComparison.Ordinal))
+                    continue;
+                // Never "elsewhere" when it IS the target: AdoptStrandedValue now calls this even
+                // when `target` itself already holds the value (see its own early return), and
+                // without this check the loop would report that entry to itself as a value left
+                // behind in the very section it is about to be read from.
+                if (kv.Key.Section == _currentSection)
                     continue;
                 if (_currentSection == DefaultSection)
                 {
