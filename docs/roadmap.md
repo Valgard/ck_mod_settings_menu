@@ -1016,6 +1016,37 @@ reachable for admins.
   `TomlTypeConverter`. Both are in use in GMCM and in MSM but were not opened in
   the decompile or in CoreLib's source.
 
+## MSM-29 — A bad declaration costs the consumer its whole box
+
+`BindGuarded` catches what `ConfigFile.Bind` throws, so a setting that cannot be
+written is left out of the menu while the mod keeps its own default. But a widget
+method builds its `ConfigDescription` — and with it any `AcceptableValueRange` —
+as an *argument*, which is evaluated in the caller, before the guard is entered.
+A declaration that throws there leaves `IMod.Init()` entirely, the consumer's
+`Build()` never runs, and its section is never registered.
+
+- **The symptom names nothing useful.** The mod loads and runs; its box simply
+  does not appear, and the log holds a CoreLib exception rather than the line
+  that caused it. Found the honest way: a fixture here passed a stepper's bounds
+  in the wrong order (`min > max`), and the whole of this mod's own box vanished
+  until the log was read.
+- **From 2.0.0 the author who makes that mistake is a stranger** whose log
+  nobody here will ever see, which is what lifts this above a papercut.
+- **`.Group()` already shows the shape of the answer:** it validates its name and
+  refuses the declaration rather than throwing, so a bad group costs its heading
+  and nothing else. The widget methods have no equivalent.
+- **Why it is its own point, not a rider.** The fix moves argument construction
+  inside the guard for *every* widget method, which changes what "a failed
+  declaration" means for the public API — a consumer currently gets an exception
+  it could catch, and would instead get a logged refusal and a detached handle.
+  That deserves deciding on its own rather than arriving inside a feature branch.
+- **Related, smaller:** `AdoptStrandedValue` returns early when the value is
+  already in the target section, which is correct — CoreLib's own `Bind` adopts
+  it — but that return also skips the stranded-value scan. A dead row of the same
+  key under an abandoned section therefore stays unmentioned while a live value
+  exists. No data is lost and nothing renders wrongly; it belongs here because
+  the same pass would touch it.
+
 ## Small fixes
 
 - **MSM-20 — Format-override toggle / misclassification confirmation for
