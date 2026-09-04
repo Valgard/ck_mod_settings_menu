@@ -35,6 +35,7 @@ other still renders as a working Choice — that pair is explained further down:
 <bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestChoiceFixtures/config.cfg
 <bottle>/…/mods/TestGroupFixtures/config.cfg
 <bottle>/…/mods/TestSingleGroupFixtures/config.cfg
+<bottle>/…/mods/TestEmptySectionFixtures/config.cfg
 <bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written)
 <bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written)
 ```
@@ -876,12 +877,14 @@ two adjacent on purpose, and the last one the final row of the box.
       not a defect.)
 
 **Segment sorting needs a temporary edit, and is the one piece of this widget
-the ordinary walk cannot reach.** No fixture combines a heading with a sort:
-this section is `AsDeclared`, `SortOptions` applies to a whole section, and
-setting it permanently would reorder every other fixture here and break the
-ordering claims the checks above rest on. Discovery never produces a heading, so
-nothing else exercises it either. Until a consumer needs both, the check costs a
-one-line edit and a rebuild:
+the ordinary walk cannot reach.** No fixture combines a heading with a sort in
+this mod's own section: it is `AsDeclared`, `SortOptions` applies to a whole
+section, and setting it permanently would reorder every other fixture here and
+break the ordering claims the checks above rest on. Discovery does combine the
+two — `TestGroupFixtures` renders headings under its own `OptionSort.ByKey`,
+see Discovered groups above — but its rows never sit out of alphabetical order
+under a heading, so that walk cannot show the boundary actually holding. Until
+a consumer needs both here, the check costs a one-line edit and a rebuild:
 
 - [ ] Add `.SortOptions(OptionSort.ByLabel)` to this mod's own section
       (`ModSettingsMenuMod.Init`), rebuild, and confirm: the settings between two
