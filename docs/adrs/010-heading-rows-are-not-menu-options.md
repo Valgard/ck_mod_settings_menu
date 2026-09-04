@@ -1,6 +1,8 @@
 # A heading is a plain MonoBehaviour that never enters `menuOptions`
 
-- Status: accepted
+- Status: accepted; **two** of its consequences superseded by [ADR-011](011-a-group-is-declared-not-inferred.md) —
+  discovery now does emit a heading def once a config file carries more than one
+  section, and MSM-15 was built on this widget after all
 - Date: 2026-09-03
 - Implements roadmap point MSM-03, which shipped with this decision and took its
   id with it
