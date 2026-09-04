@@ -629,7 +629,7 @@ namespace ModSettingsMenu
             // A plain Label INSIDE a group: it must render a heading and must NOT change the section
             // its neighbours bind into. The two declarations look alike on screen and differ here.
             section.Label("testLabelInsideGroup");
-            section.Stepper(out _, "testGroupedStepper", 1, 0, 10);
+            section.Stepper(out _, "testGroupedStepper", 0, 10, 1);
             // A second group, so the first one's end is a real boundary rather than the box's end.
             section.Group("testGroupTwo");
             section.Toggle(out _, "testSecondGroupToggle", false);
