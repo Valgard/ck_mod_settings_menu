@@ -58,8 +58,14 @@ namespace ModSettingsMenu
         /// that means a stage-1 term authored in one language only beats a stage-2 term authored in
         /// the player's. That is the stage order working as designed; it is recorded here because
         /// the symptom — English text in a German game — reads like a broken chain and is not
-        /// one.</summary>
-        private static string Lookup(string term)
+        /// one.
+        ///
+        /// Internal rather than private: ForeignConfigDiscovery's naming diagnostic (MSM-28) asks
+        /// this exact question a second time, per stage, purely to COUNT which one answered a
+        /// discovered row's label. It has to see precisely what Lookup sees — empty-is-a-miss
+        /// included — or the count could disagree with what TFirstOf actually rendered, which is
+        /// the one outcome that would make the diagnostic worse than none at all.</summary>
+        internal static string Lookup(string term)
         {
             if (string.IsNullOrEmpty(term))
                 return null;

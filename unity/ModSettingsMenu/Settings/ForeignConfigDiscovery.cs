@@ -14,10 +14,17 @@ namespace ModSettingsMenu.Settings
     internal static class ForeignConfigDiscovery
     {
         /// <summary>A fresh set of foreign sections for the current menu open. NOT registered in
-        /// ModSettings - the screen merges these into its per-open render list.</summary>
+        /// ModSettings - the screen merges these into its per-open render list.
+        ///
+        /// Also runs MSM-28's naming diagnostic, gated on <see cref="ModSettingsMenuMod.NamingDiagnostics"/>
+        /// and off by default: see <see cref="ReportNamingDiagnostics"/>. The switch is read once here
+        /// rather than once per file, because this method itself already runs exactly once per menu
+        /// open (ModSettingsScreen.Populate) — there is no counter to add, only a flag to check before
+        /// paying for it.</summary>
         public static List<ModSection> Discover()
         {
             var result = new List<ModSection>();
+            bool reportNaming = ModSettingsMenuMod.NamingDiagnostics != null && ModSettingsMenuMod.NamingDiagnostics.Value;
             foreach (var cf in ConfigFile.AllConfigFilesReadOnly)
             {
                 if (cf == null || cf.Entries.Count == 0)
@@ -27,10 +34,61 @@ namespace ModSettingsMenu.Settings
                 if (IsCoreLibInternal(cf))
                     continue; // best-effort: hide CoreLib's own config
                 var section = BuildSection(cf);
-                if (section.Settings.Count > 0)
-                    result.Add(section);
+                if (section.Settings.Count == 0)
+                    continue;
+                result.Add(section);
+                if (reportNaming)
+                    ReportNamingDiagnostics(section);
             }
             return result;
+        }
+
+        /// <summary>MSM-28: an aggregate, one-line-per-section report of which naming stage answered
+        /// for a discovered mod's rows — the thing neither the screen nor the log says anywhere else.
+        /// A wrong stage winning (an owner name taken from the wrong folder, a GmcmTerms mis-port) is
+        /// indistinguishable from a mod that ships no terms at all: same raw keys, same silence. This
+        /// turns "my translations are ignored and I cannot find out why" into something a foreign
+        /// author can answer alone, without reading this mod's own source.
+        ///
+        /// Deliberately NOT folded into the real resolution chain (SettingDef.Label, ModSection.Heading):
+        /// this asks the same question a SECOND time per row purely to count, which is exactly the
+        /// doubled cost the design accepts only behind a switch a player will never see (see Discover).
+        /// It reuses Loc.Lookup directly rather than re-deriving "did a stage answer" from TFirstOf's
+        /// own `??` chain — duplicating that logic risks the one outcome worse than no report at all,
+        /// disagreeing with what actually rendered (Loc.Lookup's own doc comment lists three ways an
+        /// I2 lookup can answer surprisingly).
+        ///
+        /// Logged at Log, not Warning: a section whose rows are all raw keys is the ordinary case for
+        /// a mod that ships no terms, and reads as information here, not as a defect.</summary>
+        private static void ReportNamingDiagnostics(ModSection section)
+        {
+            int byMsm = 0;
+            int byGmcm = 0;
+            int byRawKey = 0;
+            foreach (var def in section.Settings)
+            {
+                if (Loc.Lookup(def.Term) != null)
+                    byMsm++;
+                else if (Loc.Lookup(def.GmcmTerm) != null)
+                    byGmcm++;
+                else
+                    byRawKey++;
+            }
+            // The heading takes its OWN, shorter chain (ModSection.Heading): HeadingTerm is already
+            // GMCM's schema — MSM has never published one for a heading — and the other side is
+            // DisplayName itself, a literal, not a lookup. So there is no third, "raw key" stage to
+            // name here the way there is for a row.
+            string headingStage = Loc.Lookup(section.HeadingTerm) != null ? "GMCM's" : "the folder name";
+            // The section's first row, whatever kind it is — a heading FROM this cascade (HeadingFor)
+            // counts too, since it takes the identical three-stage chain a row does. Concrete enough
+            // to copy into a yaml file, and naming a real key beats a synthetic example that may not
+            // match what this file's author is actually looking at.
+            var first = section.Settings[0];
+            UnityEngine.Debug.Log(
+                $"[ModSettingsMenu] '{section.ModId}': {section.Settings.Count} row{(section.Settings.Count == 1 ? "" : "s")} named — "
+                    + $"{byMsm} by MSM's schema, {byGmcm} by GMCM's, {byRawKey} by their raw key. Heading: {headingStage}. "
+                    + $"Tried for '{first.Key}': '{first.Term}', then '{first.GmcmTerm}'."
+            );
         }
 
         private static bool IsCoreLibInternal(ConfigFile cf) => OwnerFromPath(cf.ConfigFilePath).Equals("CoreLib", System.StringComparison.OrdinalIgnoreCase);
