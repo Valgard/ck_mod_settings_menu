@@ -398,6 +398,19 @@ namespace ModSettingsMenu
                     clientScope,
                     info
                 );
+
+                // Two sections in one file, which no other fixture has: the whole point of the
+                // grouping is what happens when there is more than one. Ordinary values, because
+                // what is under test is the heading and the order, not the widgets.
+                var groupFile = new ConfigFile("TestGroupFixtures/config.cfg", saveOnInit: true, info);
+                groupFile.Bind("Zebra", "lastAlphabetically", true, new ConfigDescription("Its section sorts last; it must render second."));
+                groupFile.Bind("alpha", "firstAlphabetically", true, new ConfigDescription("Its section sorts first despite the lower case."));
+                groupFile.Bind("alpha", "second", 3, new ConfigDescription("A second row under the same heading."));
+
+                // Exactly ONE section, which must render NO heading — the case the rule exists for,
+                // and the one a two-section fixture cannot show.
+                var singleGroupFile = new ConfigFile("TestSingleGroupFixtures/config.cfg", saveOnInit: true, info);
+                singleGroupFile.Bind("OnlySection", "value", true, new ConfigDescription("Its file has one section; no heading may appear."));
             }
         }
 
@@ -607,6 +620,30 @@ namespace ModSettingsMenu
             // final row is a heading — the two positions the sorting helper handles without a
             // special case and which nothing else here would put it in.
             section.Label("testLabelTrailing");
+
+            // A declared group: the heading renders like a Label, and everything after it binds into
+            // [testGroup] rather than [Settings]. Verified in the .cfg, not on screen — the screen
+            // shows the same thing either way, which is exactly why this needs checking in the file.
+            section.Group("testGroup");
+            section.Toggle(out _, "testGroupedToggle", true);
+            // A plain Label INSIDE a group: it must render a heading and must NOT change the section
+            // its neighbours bind into. The two declarations look alike on screen and differ here.
+            section.Label("testLabelInsideGroup");
+            section.Stepper(out _, "testGroupedStepper", 1, 0, 10);
+            // A second group, so the first one's end is a real boundary rather than the box's end.
+            section.Group("testGroupTwo");
+            section.Toggle(out _, "testSecondGroupToggle", false);
+            // A group name CoreLib refuses. The declaration must be dropped whole — no heading, and
+            // the two settings after it must still bind into [testGroupTwo], not vanish.
+            section.Group("bad[name]");
+            section.Toggle(out _, "testAfterBadGroup", true);
+            // A declared movedFrom whose source has never existed. Its whole purpose is to stay
+            // SILENT: this is the state every consumer reaches one launch after a real rename, and a
+            // "nothing to migrate" line here would print on every start for every player forever.
+            // It also gives the migration a source to be tested against by hand (Task 5, step 6),
+            // which a fixture cannot stage on its own — a rename is a change to the code.
+            section.Group("testGroupMoved", movedFrom: "testGroupFormer");
+            section.Toggle(out _, "testMovedToggle", true);
         }
 
         public void ModObjectLoaded(Object obj)
