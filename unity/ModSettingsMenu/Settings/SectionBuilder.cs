@@ -741,11 +741,14 @@ namespace ModSettingsMenu.Settings
         // re-keys the orphan onto the target definition, so a satisfied movedFrom — or a group that
         // has simply always bound the same way — both leave nothing under the old section for a
         // later launch to find here. What this DOES find is a value sitting somewhere neither
-        // adoption attempt reached: an unexplained move. The message names whichever remedy the
-        // current binding can actually declare — there is none to name when binding back into
-        // DefaultSection FOR THAT SPECIFIC SECTION, so that branch says what is true instead of
-        // inventing one; a movedFrom aimed at a different section does not change that, because a
-        // match there would already have been adopted above and never reach this scan.
+        // adoption attempt reached: an unexplained move.
+        //
+        // The DefaultSection branch splits on _movedFrom, because a remedy can be named there too now
+        // — not only in the other branch. With no movedFrom declared at all there is genuinely nothing
+        // to point at, so that wording states the situation rather than inventing a fix. With one
+        // declared but aimed elsewhere, a fix exists: name the section actually found here instead. It
+        // can never BE the declared one — a match there would already have been adopted above, before
+        // this method runs at all — so the two wordings never both apply to the same orphan.
         //
         // Reports EVERY matching orphan, not just the first: a key stranded under two abandoned
         // sections — a group renamed twice, movedFrom forgotten both times — is two separate facts,
@@ -760,10 +763,18 @@ namespace ModSettingsMenu.Settings
                 if (!string.Equals(kv.Key.Key, key, System.StringComparison.Ordinal))
                     continue;
                 if (_currentSection == DefaultSection)
-                    Debug.LogWarning(
-                        $"[ModSettingsMenu] '{_section.ModId}': '{key}' now binds into [{DefaultSection}], but a stored value of that name is still sitting in [{kv.Key.Section}] and is not being read. "
-                            + $"There is no declaration for this direction — the value stays under [{kv.Key.Section}] and is not read again until that group exists; restoring it is what brings the value back."
-                    );
+                {
+                    if (_movedFrom == null)
+                        Debug.LogWarning(
+                            $"[ModSettingsMenu] '{_section.ModId}': '{key}' now binds into [{DefaultSection}], but a stored value of that name is still sitting in [{kv.Key.Section}] and is not being read. "
+                                + $"There is no declaration for this direction — the value stays under [{kv.Key.Section}] and is not read again until that group exists; restoring it is what brings the value back."
+                        );
+                    else
+                        Debug.LogWarning(
+                            $"[ModSettingsMenu] '{_section.ModId}': '{key}' now binds into [{DefaultSection}], but a stored value of that name is still sitting in [{kv.Key.Section}] and is not being read. "
+                                + $"The declared movedFrom names a different section, not this one — reach it with .Group(\"{_currentSection}\", movedFrom: \"{kv.Key.Section}\")."
+                        );
+                }
                 else
                     Debug.LogWarning(
                         $"[ModSettingsMenu] '{_section.ModId}': '{key}' now binds into [{_currentSection}], but a stored value of that name is still sitting in [{kv.Key.Section}] and is not being read. "
