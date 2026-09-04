@@ -399,9 +399,11 @@ namespace ModSettingsMenu
                     info
                 );
 
-                // Two sections in one file, which no other fixture has: the whole point of the
-                // grouping is what happens when there is more than one. Ordinary values, because
-                // what is under test is the heading and the order, not the widgets.
+                // Two sections in one file, both NAMED — unlike emptySectionFile below, whose first
+                // section has none. Their casing ("Zebra" vs "alpha") is the actual point: sorting
+                // them proves the display order is case-insensitive, which a same-case pair could not
+                // show. Ordinary values, because what is under test is the heading and the order, not
+                // the widgets.
                 var groupFile = new ConfigFile("TestGroupFixtures/config.cfg", saveOnInit: true, info);
                 groupFile.Bind("Zebra", "lastAlphabetically", true, new ConfigDescription("Its section sorts last; it must render second."));
                 groupFile.Bind("alpha", "firstAlphabetically", true, new ConfigDescription("Its section sorts first despite the lower case."));
