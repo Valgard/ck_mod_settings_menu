@@ -135,6 +135,7 @@ by a section reset.
 | `testListReadOnlyDuplicate` | `ReadOnly` | a repeated default on the declared-order branch |
 | `testListOrderOnlyDuplicate` | `OrderOnly` | the same repeat on the player-order branch — the one the dedupe rewrite touched |
 | `testDupKey` | — | one key bound twice with different types: reaches the guarded-bind path with no filesystem fault |
+| `testReversedRange` | — | a Slider declared with `min > max`: the guard that runs before `BindGuarded`, not a bind failure |
 
 ## Before anything else
 
@@ -633,6 +634,22 @@ the two paths reach the drill-in with different things known about the value.
       entries outside the menu, so losing their position here would undo exactly
       what `OrderOnly` is for.
 
+### A declaration whose own arguments never reach `Bind`
+
+`testDupKey` above fails inside `BindGuarded`, once CoreLib has already been
+asked to bind it. `testReversedRange` fails one step earlier: building its
+`ConfigDescription` throws in the *caller*, before `BindGuarded` is ever
+entered, which used to leave `IMod.Init()` outright and take the whole section
+down with it (MSM-29). The check is what no longer happens.
+
+- [ ] `testReversedRange` does **not** appear — its bounds are declared
+      reversed (`min` 10, `max` 0).
+- [ ] `testAfterReversedRange` appears anyway, right where it is declared —
+      the box did not vanish, only the one bad row did.
+- [ ] `Player.log` carries one line naming `Slider` and both bounds, `min
+      (10)` and `max (0)`, so the log states which way round they were
+      passed.
+
 ### A list that cannot work
 
 - [ ] Opening `testListOrderOnlyEmpty` does **nothing** — no screen is pushed,
@@ -965,9 +982,9 @@ Then relaunch and confirm:
       declined to cycle.
 - [ ] `Player.log` holds no exception from this mod, and no warning **other than**
 the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
-duplicate fixtures, `testDupKey`, `testLabelRestartGuard`, the rejected group name
-`bad[name]`, one line for each `Refuse*` entry, the error from
-`ThrowingConstraint`, and one `changing '…' failed` per press on
+duplicate fixtures, `testDupKey`, `testReversedRange`, `testLabelRestartGuard`,
+the rejected group name `bad[name]`, one line for each `Refuse*` entry, the error
+from `ThrowingConstraint`, and one `changing '…' failed` per press on
 `ChoiceExactNoDescription`). The count no longer depends on the machine's
 culture: `ChoiceFloats` used to add a line here on a comma-decimal host and now
 never does.
