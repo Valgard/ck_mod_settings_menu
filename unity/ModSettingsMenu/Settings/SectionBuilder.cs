@@ -694,30 +694,33 @@ namespace ModSettingsMenu.Settings
         // ever destroyed by getting this wrong; the cost of doing nothing is a value the player set
         // silently reverting to its default.
         //
-        // Adoption itself stays gated to a declared group: outside DefaultSection an orphan is either
-        // the author's own stated movedFrom or MSM's own [Settings] history, both of which state a
-        // fact rather than guess one. Binding back into DefaultSection has neither — there is no
-        // group left to have moved FROM — so this method tries nothing there; only the diagnostic
-        // below still runs, unconditionally, because a value left behind is the same damage whichever
-        // direction the binding moved (see WarnAboutValueLeftElsewhere for why that scan needs no
-        // gate of its own).
+        // The two sources are gated on different things, because only one of them is a guess. The
+        // DECLARED source — movedFrom — is tried whatever section is being bound into, DefaultSection
+        // included: an author who writes .Group("Settings", movedFrom: "oldGroup") has stated a fact
+        // about this key, and gating that on the destination would silently drop the one direction the
+        // parameter exists to serve. The INFERRED source — MSM's own [Settings] history — is gated to
+        // outside DefaultSection, because DefaultSection has no history to infer FROM other than
+        // itself, and that case is already handled above (the orphan would already sit at `target` and
+        // the method would have returned). Either way, the diagnostic below still runs unconditionally
+        // when neither source produced a match, because a value left behind is the same damage
+        // whichever direction the binding moved (see WarnAboutValueLeftElsewhere for why that scan
+        // needs no gate of its own).
         private void AdoptStrandedValue(string key)
         {
             var target = new ConfigDefinition(_currentSection, key);
             if (_file.OrphanedEntries.ContainsKey(target))
                 return; // already where it belongs; CoreLib's own Bind adopts it
-            if (_currentSection != DefaultSection)
-            {
-                // The declared source first — the author's statement outranks the inference below.
-                if (_movedFrom != null && TryAdoptFrom(new ConfigDefinition(_movedFrom, key), target, key))
-                    return;
-                // Then MSM's own history. Not a guess: ConfigStore gives each consumer its own file
-                // and MSM has only ever bound into DefaultSection, so an orphan there is MSM's own
-                // doing. Reached even WITH a declared source, because a player who skipped the
-                // version that introduced the old group still holds the value here.
-                if (TryAdoptFrom(new ConfigDefinition(DefaultSection, key), target, key))
-                    return;
-            }
+            // The declared source first, and unconditionally — the author's statement outranks the
+            // inference below and holds regardless of where this binding lands.
+            if (_movedFrom != null && TryAdoptFrom(new ConfigDefinition(_movedFrom, key), target, key))
+                return;
+            // Then MSM's own history, but only as an inference and only where one exists to make: not
+            // a guess when it runs, since ConfigStore gives each consumer its own file and MSM has only
+            // ever bound into DefaultSection, so an orphan there is MSM's own doing. Reached even WITH
+            // a declared source, because a player who skipped the version that introduced the old group
+            // still holds the value here.
+            if (_currentSection != DefaultSection && TryAdoptFrom(new ConfigDefinition(DefaultSection, key), target, key))
+                return;
             WarnAboutValueLeftElsewhere(key);
         }
 
@@ -740,7 +743,16 @@ namespace ModSettingsMenu.Settings
         // later launch to find here. What this DOES find is a value sitting somewhere neither
         // adoption attempt reached: an unexplained move. The message names whichever remedy the
         // current binding can actually declare — there is none to name when binding back into
-        // DefaultSection, so that branch says what is true instead of inventing one.
+        // DefaultSection FOR THAT SPECIFIC SECTION, so that branch says what is true instead of
+        // inventing one; a movedFrom aimed at a different section does not change that, because a
+        // match there would already have been adopted above and never reach this scan.
+        //
+        // Reports EVERY matching orphan, not just the first: a key stranded under two abandoned
+        // sections — a group renamed twice, movedFrom forgotten both times — is two separate facts,
+        // and naming only one (picked by dictionary enumeration order, which carries no meaning) would
+        // leave the author fixing the section the log happened to name and never learning about the
+        // other. Safe to keep walking rather than stop: nothing here mutates OrphanedEntries, so the
+        // set being enumerated cannot change under the loop.
         private void WarnAboutValueLeftElsewhere(string key)
         {
             foreach (var kv in _file.OrphanedEntries)
@@ -757,7 +769,6 @@ namespace ModSettingsMenu.Settings
                         $"[ModSettingsMenu] '{_section.ModId}': '{key}' now binds into [{_currentSection}], but a stored value of that name is still sitting in [{kv.Key.Section}] and is not being read. "
                             + $"If this setting moved between groups, declare it: .Group(\"{_currentSection}\", movedFrom: \"{kv.Key.Section}\")."
                     );
-                return;
             }
         }
 
