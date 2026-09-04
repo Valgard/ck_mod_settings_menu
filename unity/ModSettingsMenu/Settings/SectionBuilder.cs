@@ -74,6 +74,51 @@ namespace ModSettingsMenu.Settings
             }
         }
 
+        // Every widget method hands its own key straight to `new ConfigDescription(key)` as
+        // the description text, and that constructor throws ArgumentNullException for a null
+        // one — in the CALLER, building the argument, before BindGuarded is ever entered. A
+        // failed bind is caught; this throw is not, because there is nothing here yet to catch
+        // it: it leaves IMod.Init() itself, so the consumer's Build() never runs and the WHOLE
+        // section is lost, not just this one setting (MSM-29). Checked here, once per widget
+        // method, so the log can name which one made the mistake — the key itself is the very
+        // thing missing from the message once it is null.
+        private bool IsUsableKey(string key, string widget)
+        {
+            if (key != null)
+                return true;
+            Debug.LogError(
+                $"[ModSettingsMenu] '{_section.ModId}' called {widget} with a null key; the declaration is left out of the menu and the mod keeps its own default for it."
+            );
+            return false;
+        }
+
+        // Mirrors the two exceptions CoreLib's own AcceptableValueRange<T> constructor throws
+        // (a null bound, or minValue.CompareTo(maxValue) >= 0 — which throws for min == max
+        // too, not only min > max): both of them happen building Slider's or Stepper's own
+        // ConfigDescription, in the caller, before BindGuarded is ever entered. Same blast
+        // radius as a null key above — unchecked, either one takes the whole section down with
+        // it (MSM-29). Both bounds are quoted in the message, because the mistake this exists
+        // for is the two arguments swapped, and only seeing both tells you which way round.
+        private bool IsUsableRange<T>(T min, T max, string widget)
+            where T : IComparable
+        {
+            if (min == null || max == null)
+            {
+                Debug.LogError(
+                    $"[ModSettingsMenu] '{_section.ModId}' called {widget} with a null bound; the declaration is left out of the menu and the mod keeps its own default for it."
+                );
+                return false;
+            }
+            if (min.CompareTo(max) >= 0)
+            {
+                Debug.LogError(
+                    $"[ModSettingsMenu] '{_section.ModId}' called {widget} with min ({min}) not lower than max ({max}); the declaration is left out of the menu and the mod keeps its own default for it."
+                );
+                return false;
+            }
+            return true;
+        }
+
         /// <summary>Optional one-line hint shown under the section heading.</summary>
         public SectionBuilder Hint(string text)
         {
@@ -91,6 +136,12 @@ namespace ModSettingsMenu.Settings
 
         public SectionBuilder Toggle(out SettingHandle<bool> handle, string key, bool def)
         {
+            if (!IsUsableKey(key, nameof(Toggle)))
+            {
+                handle = new SettingHandle<bool>(def);
+                _lastDeclarationFailed = true;
+                return this;
+            }
             var entry = BindGuarded(key, def, new ConfigDescription(key));
             if (entry == null)
             {
@@ -122,6 +173,18 @@ namespace ModSettingsMenu.Settings
             SliderDisplay display = SliderDisplay.Steps
         )
         {
+            if (!IsUsableKey(key, nameof(Slider)))
+            {
+                handle = new SettingHandle<float>(def);
+                _lastDeclarationFailed = true;
+                return this;
+            }
+            if (!IsUsableRange(min, max, nameof(Slider)))
+            {
+                handle = new SettingHandle<float>(def);
+                _lastDeclarationFailed = true;
+                return this;
+            }
             var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)));
             if (entry == null)
             {
@@ -162,6 +225,12 @@ namespace ModSettingsMenu.Settings
         /// </summary>
         public SectionBuilder Choice<T>(out SettingHandle<T> handle, string key, T[] values, T def)
         {
+            if (!IsUsableKey(key, nameof(Choice)))
+            {
+                handle = new SettingHandle<T>(def);
+                _lastDeclarationFailed = true;
+                return this;
+            }
             // Empty/null values would make AcceptableValueList throw a cryptic ArgumentException at
             // bind. Fail gracefully with a clear message and degrade to a single (default) option.
             if (values == null || values.Length == 0)
@@ -204,6 +273,18 @@ namespace ModSettingsMenu.Settings
 
         public SectionBuilder Stepper(out SettingHandle<int> handle, string key, int min, int max, int def)
         {
+            if (!IsUsableKey(key, nameof(Stepper)))
+            {
+                handle = new SettingHandle<int>(def);
+                _lastDeclarationFailed = true;
+                return this;
+            }
+            if (!IsUsableRange(min, max, nameof(Stepper)))
+            {
+                handle = new SettingHandle<int>(def);
+                _lastDeclarationFailed = true;
+                return this;
+            }
             var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)));
             if (entry == null)
             {
@@ -249,6 +330,12 @@ namespace ModSettingsMenu.Settings
         public SectionBuilder List(out SettingHandle<string[]> handle, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)
         {
             string declared = ListTokenizer.Join(defaults);
+            if (!IsUsableKey(key, nameof(List)))
+            {
+                handle = new SettingHandle<string[]>(ListTokenizer.Tokenize(declared).ToArray());
+                _lastDeclarationFailed = true;
+                return this;
+            }
             WarnAboutDefaultsThatWillNotSurvive(key, defaults, editing);
             var entry = BindGuarded(key, declared, new ConfigDescription(key));
             if (entry == null)
