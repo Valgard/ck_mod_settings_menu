@@ -9,6 +9,10 @@ entry is the version published to mod.io; its body is the modfile changelog.
   now put a heading above each group, so its box reads as sections instead of one
   long list. Headings are there to be read: they show no value, and keyboard and
   controller navigation steps straight over them.
+- **A detected mod's settings can show as separate groups, too.** If a mod
+  already organises its own config file into more than one section, this menu
+  now shows each of those sections under its own heading instead of one flat
+  list — a mod that keeps its file tidy now shows the same way here.
 - **Detected mods can show translated names.** A mod that ships translations for
   its own settings now has them used here — for its heading, its setting names,
   and the values of a multiple-choice setting alike. Both naming schemes are
