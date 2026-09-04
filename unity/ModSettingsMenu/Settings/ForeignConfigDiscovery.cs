@@ -116,7 +116,20 @@ namespace ModSettingsMenu.Settings
                 rows.Add(def);
             }
 
-            order.Sort(System.StringComparer.OrdinalIgnoreCase);
+            // Case-insensitive for the reason above, and then ordinal as a TIE-BREAK: List<T>.Sort is
+            // not a stable sort, so two sections differing only by case ("Combat" and "combat" — two
+            // distinct CoreLib sections, per the Ordinal dictionary above) would otherwise land in an
+            // unspecified relative order, one that could differ between runs of the very same file.
+            // The tie-break itself may as well be ordinal — nothing about display order cares which of
+            // the two comes first, only that it stays put — so this reuses the comparer that already
+            // gives every OTHER string in this file a total order, rather than inventing a second rule.
+            order.Sort(
+                (a, b) =>
+                {
+                    int byReadingOrder = System.StringComparer.OrdinalIgnoreCase.Compare(a, b);
+                    return byReadingOrder != 0 ? byReadingOrder : System.StringComparer.Ordinal.Compare(a, b);
+                }
+            );
             // One section is the common case, and its heading would sit directly under the box
             // heading naming the same mod — so it is left out. A CONSUMER's single group is kept, in
             // contrast: there the group is declared, and a declaration is honoured. Discovery infers.
