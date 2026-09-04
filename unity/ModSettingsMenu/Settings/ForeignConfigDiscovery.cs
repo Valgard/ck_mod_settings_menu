@@ -20,11 +20,18 @@ namespace ModSettingsMenu.Settings
         /// and off by default: see <see cref="ReportNamingDiagnostics"/>. The switch is read once here
         /// rather than once per file, because this method itself already runs exactly once per menu
         /// open (ModSettingsScreen.Populate) — there is no counter to add, only a flag to check before
-        /// paying for it.</summary>
-        public static List<ModSection> Discover()
+        /// paying for it.
+        ///
+        /// <paramref name="preWarming"/> is true only for ModSettingsScreen.PreWarm's load-time pass,
+        /// which calls Populate — and therefore this — automatically, once, before any player has
+        /// opened the screen at all. The report must not fire there: it would sit in Player.log
+        /// looking exactly like the result of a real open, for an author who has not interacted with
+        /// anything yet. Defaults to false (a real open) rather than true, so a future caller that
+        /// forgets the argument still gets reported to, instead of silently going unreported.</summary>
+        public static List<ModSection> Discover(bool preWarming = false)
         {
             var result = new List<ModSection>();
-            bool reportNaming = ModSettingsMenuMod.NamingDiagnostics != null && ModSettingsMenuMod.NamingDiagnostics.Value;
+            bool reportNaming = !preWarming && ModSettingsMenuMod.NamingDiagnostics != null && ModSettingsMenuMod.NamingDiagnostics.Value;
             foreach (var cf in ConfigFile.AllConfigFilesReadOnly)
             {
                 if (cf == null || cf.Entries.Count == 0)
@@ -71,7 +78,11 @@ namespace ModSettingsMenu.Settings
                     byMsm++;
                 else if (Loc.Lookup(def.GmcmTerm) != null)
                     byGmcm++;
-                else
+                // Guarded, not an else: TFirstOf treats a blank FALLBACK as no fallback at all (its
+                // own doc comment), so a def whose Key is blank does not land on the raw key either
+                // — it renders as SettingDef.Label()'s "(unnamed)" placeholder instead. Counting it
+                // here would have the report claim a stage the screen never took.
+                else if (!string.IsNullOrEmpty(def.Key))
                     byRawKey++;
             }
             // The heading takes its OWN, shorter chain (ModSection.Heading): HeadingTerm is already
@@ -79,11 +90,18 @@ namespace ModSettingsMenu.Settings
             // DisplayName itself, a literal, not a lookup. So there is no third, "raw key" stage to
             // name here the way there is for a row.
             string headingStage = Loc.Lookup(section.HeadingTerm) != null ? "GMCM's" : "the folder name";
-            // The section's first row, whatever kind it is — a heading FROM this cascade (HeadingFor)
-            // counts too, since it takes the identical three-stage chain a row does. Concrete enough
-            // to copy into a yaml file, and naming a real key beats a synthetic example that may not
-            // match what this file's author is actually looking at.
+            // The section's ORDINALLY-first key, not section.Settings[0]: that index is
+            // ConfigFile.Entries' Dictionary enumeration order, which .NET does not document as
+            // stable, and a value meant to be copied into a yaml file needs to name the same row on
+            // every run rather than whichever one a dictionary happened to hand back first. A
+            // heading FROM this cascade (HeadingFor) is a legitimate candidate too, since it takes
+            // the identical three-stage chain a row does.
             var first = section.Settings[0];
+            for (int i = 1; i < section.Settings.Count; i++)
+            {
+                if (string.CompareOrdinal(section.Settings[i].Key, first.Key) < 0)
+                    first = section.Settings[i];
+            }
             UnityEngine.Debug.Log(
                 $"[ModSettingsMenu] '{section.ModId}': {section.Settings.Count} row{(section.Settings.Count == 1 ? "" : "s")} named — "
                     + $"{byMsm} by MSM's schema, {byGmcm} by GMCM's, {byRawKey} by their raw key. Heading: {headingStage}. "
