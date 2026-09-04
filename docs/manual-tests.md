@@ -25,15 +25,16 @@ They are created through raw CoreLib `ConfigFile`s **outside**
 `ConfigStore.ForMod`, so `ConfigStore.IsOwn` does not recognise them and
 `ForeignConfigDiscovery` treats them exactly as it treats a third-party mod.
 They are not an imitation of the foreign path; they are that path with files we
-own. There are four files. Two hold the ordinary fixtures and are the ones worth
-inspecting after a write; the other two hold one throwing fixture each and can
-never be written at all (below), so only three `(detected)` boxes appear — the
-fourth loses its only row and with it its box, which is the expected outcome
-there:
+own. Most of the files below hold ordinary fixtures and are worth inspecting
+after a write. Two hold one throwing fixture each and can never be written at
+all; one of them additionally loses its row and its box entirely, while the
+other still renders as a working Choice — that pair is explained further down:
 
 ```
 <bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestListFixtures/config.cfg
 <bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestChoiceFixtures/config.cfg
+<bottle>/…/mods/TestGroupFixtures/config.cfg
+<bottle>/…/mods/TestSingleGroupFixtures/config.cfg
 <bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written)
 <bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written)
 ```
@@ -527,8 +528,8 @@ working Choice, and one of them logs a line per keypress by design.
 
 A detected mod's rows are now grouped by the sections its own `.cfg` already has —
 the same grouping a consumer can declare through `.Group()` (below), but inferred
-rather than authored. Two more raw `ConfigFile`s, made the same way as the
-fixtures above, cover it: `TestGroupFixtures`, with two sections, and
+rather than authored. More raw `ConfigFile`s, made the same way as the fixtures
+above, cover it: `TestGroupFixtures`, with two sections, and
 `TestSingleGroupFixtures`, with one.
 
 - [ ] `TestGroupFixtures (detected)` shows two headings — `alpha` first, `Zebra`
