@@ -92,23 +92,16 @@ namespace ModSettingsMenu.Settings
             return false;
         }
 
-        // Mirrors the two exceptions CoreLib's own AcceptableValueRange<T> constructor throws
-        // (a null bound, or minValue.CompareTo(maxValue) >= 0 — which throws for min == max
-        // too, not only min > max): both of them happen building Slider's or Stepper's own
-        // ConfigDescription, in the caller, before BindGuarded is ever entered. Same blast
-        // radius as a null key above — unchecked, either one takes the whole section down with
-        // it (MSM-29). Both bounds are quoted in the message, because the mistake this exists
-        // for is the two arguments swapped, and only seeing both tells you which way round.
+        // AcceptableValueRange<T>'s constructor throws ArgumentException when
+        // minValue.CompareTo(maxValue) >= 0 — which rejects min == max too, not only min >
+        // max — building Slider's or Stepper's own ConfigDescription, in the caller, before
+        // BindGuarded is ever entered. Same blast radius as a null key above — unchecked,
+        // this takes the whole section down with it (MSM-29). Both bounds are quoted in the
+        // message, because the mistake this exists for is the two arguments swapped, and
+        // only seeing both tells you which way round.
         private bool IsUsableRange<T>(T min, T max, string widget)
             where T : IComparable
         {
-            if (min == null || max == null)
-            {
-                Debug.LogError(
-                    $"[ModSettingsMenu] '{_section.ModId}' called {widget} with a null bound; the declaration is left out of the menu and the mod keeps its own default for it."
-                );
-                return false;
-            }
             if (min.CompareTo(max) >= 0)
             {
                 Debug.LogError(
