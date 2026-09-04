@@ -627,6 +627,15 @@ namespace ModSettingsMenu
             // left out, the Toggle and everything after must survive — and RequiresRestart() after a
             // failed declaration must refuse rather than mark the setting before it.
             section.Toggle(out _, "testDupKey", true).Slider(out _, "testDupKey", 0f, 10f, 5f, 1f).RequiresRestart();
+            // MSM-29: a Slider whose own bounds are reversed (min > max) — a mistake made building
+            // the ConfigDescription, in the CALLER, before BindGuarded is ever entered. Unguarded,
+            // that throw used to leave IMod.Init() outright and take the whole section down with it:
+            // this mod's own box vanished from exactly this kind of swap, which is how this fixture
+            // came to exist. The check it makes possible: the row itself is absent, the Toggle
+            // declared right after it still appears, and — the part nothing could show before the
+            // guard existed — the box renders at all.
+            section.Slider(out _, "testReversedRange", 10f, 0f, 5f, 1f);
+            section.Toggle(out _, "testAfterReversedRange", true);
             // RequiresRestart() after a HEADING must be refused too, and for a different reason than
             // the failed declaration above: nothing went wrong here, the row simply holds no value
             // and could never trigger a restart. Accepting it would leave the setting the consumer
