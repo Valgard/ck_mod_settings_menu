@@ -713,32 +713,6 @@ report as one.
 - The de-duplication this needs already exists here — `ForeignConfigDiscovery`
   reports each degradation once, and `ListKindStore` remembers across opens.
 
-## MSM-15 — Group a mod's rows by its `.cfg`'s own sections
-
-Everything binds into the CoreLib section `"Settings"` today, so a discovered mod
-renders as one flat list. GMCM groups by the file's own sections. For a mod with
-twenty values that is the difference between a list and a structure.
-
-- **The widget it rides on now exists.** A section header *is*
-  `SectionBuilder.Label(key)` — full width, no value column, not interactive,
-  skipped by navigation — so this point carries no Editor work of its own and
-  makes it the first real consumer of a widget that otherwise ships exercised
-  only by dev fixtures. What is still open is the half `.Label` does not answer:
-  a heading is *declared* by a consumer, and a discovered mod declares nothing.
-  Something has to build one per `.cfg` section on the discovery path and place
-  it in `ModSection.Settings`, which today is filled one entry per config entry.
-- **Deliberately not collapsible.** Core Keeper has no expand/collapse idiom in
-  its menu UI at all — a search for `Expand`, `Collapse`, `Foldout`,
-  `SwitchExpandState`, `isExpanded` turns up only ECS collider pooling and two
-  inspector attributes. Vanilla uses tabs (`WorldSettingsTab`), sub-menus
-  swapped by `SetActive`, and scrolling. GMCM's accordion is its own invention.
-- **Loc: the same chain as above**, one level up — MSM's own schema, then GMCM's
-  `<path>_<file>/<section>`, then raw. No separate scheme for headers.
-- **Open:** whether a header applies to a *registered* mod at all. A consumer
-  binds everything into `"Settings"`, so there would be exactly one header
-  repeating the box heading. Either grouping stays limited to discovered mods, or
-  `SectionBuilder` gains a way to name sections.
-
 ## MSM-16 — A master switch with sub-values
 
 GMCM's `CombindConfigPage` is a public API a consuming mod registers against: a
@@ -753,7 +727,7 @@ group the switch collapses. MSM has no equivalent.
 - **Open:** is this a `SectionBuilder` declaration (`.EnabledWhen(...)`, already
   an open question there) or a group API like GMCM's? The difference is that
   GMCM's can also *bind* the sub-values, not merely lock them.
-- **Depends on** the grouping point above for the indentation.
+- **Depends on** MSM-15 for the indentation.
 
 ## MSM-17 — A description per entry — undecided, and deferred
 

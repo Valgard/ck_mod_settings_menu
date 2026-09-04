@@ -119,6 +119,7 @@ Each widget method binds a persisted CoreLib entry, hands you a typed
 | `Stepper(out SettingHandle<int> h, string key, int min, int max, int def)` | ←/→ integer | `int` | clamped to `[min, max]` |
 | `List(out SettingHandle<string[]> h, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)` | preview row → full-screen editor | `string[]` | see below |
 | `Label(string key)` | full-width heading, not selectable | — | groups the settings under it; see **Grouping** |
+| `Group(string key, string movedFrom = null)` | same as `Label` | — | **also** binds later declarations into the CoreLib section `key`; see **Grouping** |
 | `RequiresRestart()` | — | — | marks the **last-declared** setting as restart-required (see below) |
 | `Build()` | — | — | registers the section |
 
@@ -289,6 +290,55 @@ Under `SortOptions(ByKey)` or `ByLabel`, a label acts as a **boundary**: the
 settings between two labels are sorted among themselves, and the labels stay
 where you declared them.
 
+### `Group(key, movedFrom)` — a heading that also reorganises the file
+
+`Group` does everything `Label` does — same heading, same term, same sort
+boundary — **and** binds every declaration after it into a CoreLib section
+named `key`, instead of the default `[Settings]`:
+
+```csharp
+ModSettings.Section(this)
+    .Group("display")
+    .Toggle(out _, "showHud", true)
+    .Toggle(out _, "showCoords", false)
+    .Group("behaviour")
+    .Stepper(out _, "delay", 0, 5, 1)
+    .Build();
+```
+
+```ini
+[display]
+showHud = true
+showCoords = false
+
+[behaviour]
+delay = 1
+```
+
+**`Label` orders the screen; `Group` orders the screen *and* the `.cfg`.** Pick
+`Label` for a purely visual heading; pick `Group` when you also want the file
+to read as sections. Nothing changes before the first `.Group()` call — a
+section that never groups keeps binding every setting into `[Settings]`
+exactly as before, so adopting grouping is opt-in and no existing consumer
+needs to change anything.
+
+Moving a setting **out of `[Settings]`** — the common case, adding your first
+group to a mod that had none — needs no declaration: MSM recognises
+`[Settings]` as its own history and recovers the stored value on its own.
+Moving a setting **between two groups** — renaming a group you already
+shipped — does need one, or every player's value for it silently reverts to
+default, because CoreLib keeps the old line under a section nothing reads
+anymore:
+
+```csharp
+.Group("fight", movedFrom: "combat")   // this group used to be called "combat"
+```
+
+`key` doubles as a CoreLib section name, so it must satisfy CoreLib's rules for
+one — no `= \n \t \ " ' [ ]`, and no leading or trailing whitespace. An
+unusable key is refused whole (no heading, no section change), and the
+framework logs which rule it broke.
+
 ---
 
 ## Persistence
@@ -306,7 +356,9 @@ enabled = true
 power = 5
 ```
 
-All settings land under the `[Settings]` section. Writes auto-save immediately
+All settings land under the `[Settings]` section, unless you declare a
+`Group` (see **Grouping** above), in which case everything after it lands
+under that group's own section instead. Writes auto-save immediately
 (setting `handle.Value` or editing in the menu). The file is created on first
 run with the declared defaults. No `System.IO` is involved on your side —
 CoreLib does all file access in its own trusted assembly, so your mod stays

@@ -542,6 +542,73 @@ ModSettings.Section(this)
 | `ByKey` | the raw `key` string |
 | `ByLabel` | the **localized** label — so it re-sorts per active language |
 
+### Grouping settings with headings
+
+`Label(key)` puts a full-width heading between settings — no value, not
+selectable, and skipped by keyboard/controller navigation. Once Glow Mod's
+chain has grown to four widgets, it's worth splitting them up:
+
+```csharp
+ModSettings.Section(this)
+    .Label("visuals")
+    .Slider(out Radius, "radius", 1f, 8f, 4f, 0.5f, SliderDisplay.Number)
+    .Choice(out Colour, "colour",
+            new[] { Tint.Warm, Tint.Neutral, Tint.Cool }, Tint.Neutral)
+    .Label("limits")
+    .Toggle(out Enabled, "enabled", true)
+    .Stepper(out MaxLights, "maxLights", 1, 20, 6)
+    .Build();
+```
+
+The `key` is a loc term leaf like any other (`<ModId>-Config/<key>`), falling
+back to the raw key when you ship no translation for it — so a heading costs
+nothing even if you never touch localization. It shares one key space with
+your settings, so don't reuse a setting's key for a label.
+
+`Group(key, movedFrom)` renders the identical heading and **also** moves every
+following declaration into its own section of the `.cfg`, instead of the
+shared `[Settings]`:
+
+```csharp
+ModSettings.Section(this)
+    .Group("visuals")
+    .Slider(out Radius, "radius", 1f, 8f, 4f, 0.5f, SliderDisplay.Number)
+    .Choice(out Colour, "colour",
+            new[] { Tint.Warm, Tint.Neutral, Tint.Cool }, Tint.Neutral)
+    .Group("limits")
+    .Toggle(out Enabled, "enabled", true)
+    .Stepper(out MaxLights, "maxLights", 1, 20, 6)
+    .Build();
+```
+
+```ini
+[visuals]
+radius = 4
+colour = Neutral
+
+[limits]
+enabled = true
+maxLights = 6
+```
+
+Reach for `Group` once the `.cfg` itself is worth reading as sections; reach
+for `Label` when you only want the on-screen box to read that way. **Nothing
+changes until your first `Group()` call** — a section that never groups still
+binds everything into `[Settings]`, so adding headings to an existing mod
+never disturbs a stored value.
+
+Renaming a `Label` costs nothing but a translation. Renaming a `Group` is not
+free, because the section name in the `.cfg` changes with it — declare where
+the group used to live so MSM carries every player's value across:
+
+```csharp
+.Group("limits", movedFrom: "caps")   // "caps" was this group's old name
+```
+
+Skip `movedFrom` when the group is brand new: moving a setting *out of*
+`[Settings]` for the first time needs no declaration at all — MSM already
+treats `[Settings]` as its own history and recovers the value on its own.
+
 ---
 
 ## 10. Pitfall checklist
@@ -1013,6 +1080,11 @@ b.Choice (out SettingHandle<T>     h, string key, T[] values, T def);   // token
 b.List   (out SettingHandle<string[]> h, string key, string[] defaults,
           ListEditing editing = ListEditing.FreeText);  // FreeText | OrderOnly | ReadOnly
 
+// Headings (no handle, nothing bound):
+b.Label  (string key);                              // full-width heading; sort boundary
+b.Group  (string key, string movedFrom = null);      // same as Label, ALSO rebinds later
+                                                      // declarations into CoreLib section `key`
+
 b.RequiresRestart();                    // marks the LAST-declared setting restart-required
 b.Build();                              // registers the section
 
@@ -1030,7 +1102,8 @@ h.OnChanged += v => { /* react */ };
 | `<ModId>-Config/_hint` | the section hint |
 | `<ModId>-Config/<key>/<token>` | a `Choice` option |
 
-**Persistence:** `mods/<ModId>/config.cfg`, section `[Settings]`.
+**Persistence:** `mods/<ModId>/config.cfg`, section `[Settings]` — or a
+`Group`'s own section, for everything declared after it.
 Throughout, `<ModId>` = your `metadata.name`.
 
 ## Appendix B: glossary
