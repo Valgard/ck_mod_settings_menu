@@ -874,9 +874,16 @@ checkable without touching `localization.yaml` at all.
       `ModSettingsMenu.cfg`, or `false`), open the settings screen:
       `Player.log` carries no `[ModSettingsMenu]` line containing "rows
       named". Off must mean silent, not merely unread.
-- [ ] Add `reportForeignNamingStages = true` under `[Settings]` in
-      `ModSettingsMenu.cfg`, then open the settings screen: the log now
-      carries exactly one such line per discovered section — one for each
+- [ ] Set `reportForeignNamingStages = true` under `[Settings]` in
+      `ModSettingsMenu.cfg` and relaunch. **Before opening the settings
+      screen even once**, check `Player.log`: it still carries no such line.
+      `ModSettingsMenuMod.Update` pre-warms this screen automatically, once,
+      on the first frame the menu instance exists — before any player
+      interaction — and that pass must not report, or a line would sit in
+      the log looking exactly like the result of an open that never
+      happened.
+- [ ] Now open the settings screen for the first time this session: the log
+      gains exactly one such line per discovered section — one for each
       fixture file above that renders at least one row, and one more for
       PlacementPlus if it is loaded. `TestThrowingConstraint` gets none: its
       only row never registers, so the whole box is dropped before
@@ -889,17 +896,16 @@ checkable without touching `localization.yaml` at all.
       Regard any other outcome (a nonzero count under MSM's or GMCM's
       schema, or `Heading: GMCM's`) as this walk's terms not actually having
       been removed.
-- [ ] The trailing sentence names one of the section's own rows twice, once
-      per schema, in the form `Tried for '<key>': '<term>', then '<term>'` —
-      e.g. for `TestListFixtures`, `<term>` reads
-      `TestListFixtures-Config/<key>` for the first form and
-      `TestListFixtures_config_Settings/<key>` for the second. Both are
-      concrete enough to paste into a yaml file as-is; that they resolve to
-      nothing right now is the point of running this check before the terms
-      exist. The key named is not necessarily the same row the screen shows
-      first — the report reads the section before its own alphabetical
-      `ByKey` sort runs — so match it by the key printed, not by on-screen
-      position.
+- [ ] The trailing sentence names the section's ordinally-first key twice,
+      once per schema, in the form `Tried for '<key>': '<term>', then
+      '<term>'`. For `TestListFixtures` that key is `Long` (its seven keys —
+      `Long`, `LongReadOnly`, `Overlong`, `ProseNotAList`, `Short`,
+      `ShortRestart`, `WithSpaces` — put it first under plain ordinal
+      comparison), so the line reads `Tried for 'Long':
+      'TestListFixtures-Config/Long', then
+      'TestListFixtures_config_Settings/Long'`. Both terms are concrete
+      enough to paste into a yaml file as-is; that they resolve to nothing
+      right now is the point of running this check before the terms exist.
 - [ ] Open the settings screen a second time without closing the game: the
       log gains a **second**, identical set of lines rather than none. This
       diagnostic is not deduplicated across opens the way a `Degraded`
