@@ -411,6 +411,21 @@ namespace ModSettingsMenu
                 // and the one a two-section fixture cannot show.
                 var singleGroupFile = new ConfigFile("TestSingleGroupFixtures/config.cfg", saveOnInit: true, info);
                 singleGroupFile.Bind("OnlySection", "value", true, new ConfigDescription("Its file has one section; no heading may appear."));
+
+                // A section with an EMPTY name — CoreLib's own encoding for every line it files before
+                // a file's first [Header] — beside a named one. ADR-011 spends its longest decision on
+                // this branch and nothing exercised it before this fixture: the unnamed row must
+                // render with NO heading above it, while the named section still gets one — proving
+                // both that the empty group is suppressed AND that it still counts toward the
+                // two-group threshold that decides whether headings appear at all.
+                var emptySectionFile = new ConfigFile("TestEmptySectionFixtures/config.cfg", saveOnInit: true, info);
+                emptySectionFile.Bind(
+                    "",
+                    "beforeAnyHeader",
+                    true,
+                    new ConfigDescription("Filed under the empty section; must render with no heading above it.")
+                );
+                emptySectionFile.Bind("named", "afterHeader", true, new ConfigDescription("Its own named section; must get a heading."));
             }
         }
 
