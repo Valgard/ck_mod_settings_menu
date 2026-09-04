@@ -238,12 +238,27 @@ namespace ModSettingsMenu.UI
         // and disabling in the same frame means no active frame is ever rendered (no flash).
         public void PreWarm()
         {
-            Populate();
+            // preWarming: true — this pass exists to pay a load-time cost, not to open the menu,
+            // and MSM-28's naming diagnostic must not confuse the two. See Populate's own doc.
+            Populate(preWarming: true);
             gameObject.SetActive(true);
             gameObject.SetActive(false);
         }
 
-        public void Populate()
+        /// <summary><paramref name="preWarming"/> tells this pass apart from a player's own
+        /// Activate() — both call Populate, and PreWarm is the ONLY one where an open has not
+        /// actually happened yet. It exists for MSM-28's naming diagnostic
+        /// (<see cref="ForeignConfigDiscovery.Discover"/>): PreWarm fires automatically, once, as
+        /// soon as the menu instance exists (ModSettingsMenuMod.Update), which is before any
+        /// player interaction — so without this, a foreign author who had just switched the
+        /// diagnostic on would find a report already sitting in Player.log and reasonably read it
+        /// as the result of an open they never made.
+        ///
+        /// Defaults to false (a real open), not true: a parameter a future call site can forget is
+        /// only safe to default toward the outcome that keeps working — reporting fires unless a
+        /// caller deliberately opts out, rather than staying silent unless a caller remembers to
+        /// opt in.</summary>
+        public void Populate(bool preWarming = false)
         {
             _scroll = GetComponent<UIScrollWindow>();
             if (contentRoot == null || settingTemplate == null || sectionTemplate == null)
@@ -290,7 +305,7 @@ namespace ModSettingsMenu.UI
             // turned it off via MSM's own master toggle (null before Init -> default on).
             bool showForeign = ModSettingsMenuMod.ShowForeignConfigs == null || ModSettingsMenuMod.ShowForeignConfigs.Value;
             if (showForeign)
-                sortedSections.AddRange(ForeignConfigDiscovery.Discover());
+                sortedSections.AddRange(ForeignConfigDiscovery.Discover(preWarming));
             // Heading() reaches I2 through Loc, and List.Sort would rewrap a throw from a comparator
             // as InvalidOperationException("Failed to compare two elements") — a first log line naming
             // the sort rather than the cause. It is not a new hazard: RenderTitle below already calls
