@@ -523,6 +523,23 @@ working Choice, and one of them logs a line per keypress by design.
       describe. Discovery routes both, and a Choice case placed wrongly in the
       cascade would take entries from the list path.
 
+## Discovered groups
+
+A detected mod's rows are now grouped by the sections its own `.cfg` already has —
+the same grouping a consumer can declare through `.Group()` (below), but inferred
+rather than authored. Two more raw `ConfigFile`s, made the same way as the
+fixtures above, cover it: `TestGroupFixtures`, with two sections, and
+`TestSingleGroupFixtures`, with one.
+
+- [ ] `TestGroupFixtures (detected)` shows two headings — `alpha` first, `Zebra`
+      second — each with its own rows beneath (`firstAlphabetically` and `second`
+      under `alpha`, `lastAlphabetically` under `Zebra`). The ordering is the
+      check: `alpha` is lower case and still sorts first, which only holds if the
+      display order ignores case. An ordinal sort would put `Zebra` first.
+- [ ] `TestSingleGroupFixtures (detected)` shows its single row with **no**
+      heading at all — a file with one section gets none, because it would only
+      repeat the box heading already above it.
+
 ## The declared list path
 
 These run against the four fixtures in this mod's **own** section, not the
@@ -867,6 +884,66 @@ one-line edit and a rebuild:
       row. Then take the line out again — leaving it in invalidates the ordering
       checks above.
 
+## Groups
+
+`.Group(key, movedFrom)` behaves like `.Label()` on screen — same heading row,
+same navigation and mouse behaviour — but it also switches which CoreLib section
+every declaration after it binds into. These checks are about that second effect,
+which `.Label()` alone cannot have and nothing on screen shows.
+
+- [ ] In the `Mod Settings Menu` box the order runs: heading `testGroup`, row
+      `testGroupedToggle`, heading `testLabelInsideGroup`, row
+      `testGroupedStepper`, heading `testGroupTwo`, rows `testSecondGroupToggle`
+      and `testAfterBadGroup`, heading `testGroupMoved`, row `testMovedToggle`.
+      Two things this proves: a plain `.Label()` inside a group renders a heading
+      without moving its neighbours into a different section, and the rejected
+      group name `bad[name]` produces **no** heading while the setting declared
+      after it still appears.
+- [ ] Neither keyboard nor controller can land on any of these headings —
+      navigation steps over all of them, exactly as it does for every heading in
+      this box.
+- [ ] The section reset (`R`) restores every value across all of this box's
+      groups to its default, with no error about a row that holds no value.
+- [ ] **The file, which the screen cannot show:** `ModSettingsMenu.cfg` holds
+      `[testGroup]` with `testGroupedToggle` and `testGroupedStepper`,
+      `[testGroupTwo]` with `testSecondGroupToggle` and `testAfterBadGroup`,
+      `[testGroupMoved]` with `testMovedToggle`, `[Settings]` with everything
+      else, and **no** `[bad[name]]` section.
+
+### Migration
+
+Needs the game closed for a hand edit; one relaunch afterwards covers all three
+cases the adoption logic handles. Edit `ModSettingsMenu.cfg`: move
+`testGroupedToggle` into `[Settings]`, `testMovedToggle` into a section called
+`[testGroupFormer]`, and `testSecondGroupToggle` into a section called
+`[somewhereElse]`.
+
+**Give each planted value the opposite of its default** — `false`, `false` and
+`true` respectively. This is the point of the whole check: with the default value
+planted instead, "the value was adopted" and "the value fell back to its default"
+look identical on screen, and the check proves nothing.
+
+Then relaunch and confirm:
+
+- [ ] `testGroupedToggle` reads **aus** — adopted automatically, because
+      `[Settings]` is the section MSM itself used before groups existed.
+- [ ] `testMovedToggle` reads **aus** — adopted because the mod declares
+      `.Group("testGroupMoved", movedFrom: "testGroupFormer")`.
+- [ ] `testSecondGroupToggle` reads **aus**, i.e. its default — **not** adopted,
+      because nobody declared `[somewhereElse]`. Reading **an** here is the
+      failure.
+- [ ] In `ModSettingsMenu.cfg` afterwards: the `[Settings]` and
+      `[testGroupFormer]` entries are gone (consumed, and the latter's section
+      with them), while `[somewhereElse]` still stands untouched — an
+      unexplained move costs visibility, never data.
+- [ ] `Player.log` carries one line each for the two adoptions, naming both
+      sections, and one warning for the third that spells out the remedy —
+      `.Group("testGroupTwo", movedFrom: "somewhereElse")`.
+- [ ] On a later launch, with nothing left to migrate, `testMovedToggle`'s
+      declared `movedFrom` produces **no** log line at all. Silence is the
+      requirement: that declaration stays in the consumer's chain forever, so a
+      "nothing to migrate" line would print on every start for every player.
+
 ## After the walk
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly
@@ -879,8 +956,9 @@ one-line edit and a rebuild:
       declined to cycle.
 - [ ] `Player.log` holds no exception from this mod, and no warning **other than**
 the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
-duplicate fixtures, `testDupKey`, `testLabelRestartGuard`, one line for each
-`Refuse*` entry, the error from `ThrowingConstraint`, and one `changing '…'
-failed` per press on `ChoiceExactNoDescription`). The count no longer depends on
-the machine's culture: `ChoiceFloats` used to add a line here on a comma-decimal
-host and now never does.
+duplicate fixtures, `testDupKey`, `testLabelRestartGuard`, the rejected group name
+`bad[name]`, one line for each `Refuse*` entry, the error from
+`ThrowingConstraint`, and one `changing '…' failed` per press on
+`ChoiceExactNoDescription`). The count no longer depends on the machine's
+culture: `ChoiceFloats` used to add a line here on a comma-decimal host and now
+never does.
