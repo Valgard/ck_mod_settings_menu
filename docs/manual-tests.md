@@ -128,6 +128,7 @@ by a section reset.
 |---|---|---|
 | `testChoiceFloat` | — | the only declared **Choice**: SectionBuilder's own token rendering |
 | `testListFreeText` | `FreeText` | the declared path reaching the same behaviour discovery produces |
+| `testListWordJump` | `FreeText` | the only entry with enough word boundaries to show a **held** word jump repeating rather than crawling |
 | `testListOrderOnly` | `OrderOnly` | six entries: reordering with no add row, and the arrow columns |
 | `testListOrderOnlySingle` | `OrderOnly` | one entry — the row with no neighbour to wrap to |
 | `testListReadOnly` | `ReadOnly` | declared inert, as opposed to inert through a scope |
@@ -228,10 +229,13 @@ The two paths fail asymmetrically, which is why both need checking: a glyph-list
 fault costs the click alone, while an unreadable counter costs all three, the
 click included, since it needs the caret's own index to aim a relative move.
 
-Two fixtures, and the difference matters. `Overlong` for anything that scrolls —
-its 57-character token is far wider than the field. `WithSpaces` for the word
-jump: `Overlong`'s rows are each a single word, so a jump inside one finds no
-boundary and lands on 0, where an off-by-one would be invisible.
+Three fixtures, and the differences matter. `Overlong` for anything that scrolls
+— its 57-character token is far wider than the field. `WithSpaces` for a single
+word jump: `Overlong`'s rows are each a single word, so a jump inside one finds no
+boundary and lands on 0, where an off-by-one would be invisible. And
+`testListWordJump` for a *held* one, which `WithSpaces` cannot show: discovery's
+heuristic caps its tokens at two words, so a held key reaches the start of the
+line in two jumps and ends up there whether it jumped or crawled.
 
 - [ ] Press Home, then type `xyz` — the value begins with `xyz`, in the order
       typed. Three characters rather than one: the caret path and the
@@ -250,6 +254,19 @@ boundary and lands on 0, where an off-by-one would be invisible.
       every case it could see. Only an auto-repeating key in the same frame
       differed, and that is not cleanly provokable by hand. So this guards the
       jump against regression; it does not verify the removal.
+- [ ] In `testListWordJump`'s **first** entry, put the caret at the end and
+      **hold** Ctrl+Left (or Alt+Left). The caret travels word by word for as long
+      as the key is down, and the view follows it. Number words are what make this
+      checkable: where it stopped is readable off the screen rather than counted in
+      characters. What it used to do is the reason the check exists — one jump,
+      then a crawl one character at a time at vanilla's own repeat rate, which
+      looks like movement and passes a glance. Hold Ctrl+Right back the same way.
+- [ ] **Tap** the same combination once: exactly one word, not two. Vanilla treats
+      a fresh press and the first repeat as the same kind of event, so a patch that
+      reads its cooldown carelessly double-fires here and nowhere else.
+- [ ] Hold Ctrl+Left in the **second** entry, which fits the field. Same word-by-
+      word travel with no scrolling involved — this is what separates a jump that
+      genuinely repeats from a view that merely scrolls back.
 - [ ] Click into the middle of a row's text — the caret lands on the character
       pointed at, and the next keystroke goes there.
 - [ ] Activate a row and hold **Right** (or press End) until the text has
