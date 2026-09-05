@@ -267,6 +267,14 @@ namespace ModSettingsMenu.UI
         // (it makes TextManager.ShouldUseDynamicFont return before it even looks at the language,
         // Pug.Other:272035-272038), and that line is there for a localisation-term reason that says
         // nothing about fonts.
+        //
+        // Two things ride on that one line; only the first was ever written down. The other is
+        // dimensions itself: RenderDynamicText builds it from TMP mesh bounds (Pug.Other:352042)
+        // rather than from the alignment branches, so ApplyOffset's scroll clamp loses its xMin
+        // basis in the same move that empties this list. A second door into that path exists, and
+        // the prefab is what holds it shut — SetFont tests isWrittenToByUser before it consults any
+        // language at all (Pug.Other:351520), and every PugText here carries 0 there, which is
+        // worth knowing on a field whose whole purpose is being written to by the user.
         private bool IndexSpaceIsSound()
         {
             // An unbound viewport has no text to measure against. No warning from here: Bind() logs
@@ -379,12 +387,16 @@ namespace ModSettingsMenu.UI
         private const float CaretMarginUnits = 1.005f;
 
         // Same off-grid reasoning as CaretMarginUnits, applied to the OTHER place ApplyOffset can
-        // land the offset: the end-of-text scroll clamp below. _text.dimensions.width is derived
-        // from the same whole-pixel glyph metrics as localCharacterEndPositions, so an UNNUDGED
-        // "scroll until the text's own right edge meets the field's" (textWidth - _fieldWidth, both
-        // whole numbers of pixels) would land exactly on a texel boundary — the fragmentation bug
-        // again, just concentrated at the one caret position instead of spread across the field.
+        // land the offset: the end-of-text scroll clamp below. _text.dimensions is derived from the
+        // same whole-pixel glyph metrics as localCharacterEndPositions, so an UNNUDGED
+        // "scroll until the text's own right edge meets the field's" (xMin + width - _fieldWidth,
+        // all whole numbers of pixels) would land exactly on a texel boundary — the fragmentation
+        // bug again, concentrated at the one caret position instead of spread across the field.
         // Same fix, same already-verified-imperceptible magnitude, applied to the other clamp.
+        //
+        // "All whole numbers" is itself one of the xMin == 0 assumptions ApplyOffset lists: the
+        // style's rightToLeftXOffset is a free float, so a non-zero xMin could put this clamp back
+        // on the pixel grid the nudge exists to leave.
         private const float EndOfTextNudge = 0.005f;
 
         // Ported from ChatWindow.AdjustInputFieldPosition (Pug.Other:317599), which is CK's own
@@ -450,7 +462,27 @@ namespace ModSettingsMenu.UI
                 // backspace. maxScroll is how far there actually IS to scroll — once the text's own
                 // right edge has met the field's, scrolling further only exposes blank space behind
                 // it — and the lower bound stops the left branch from scrolling before the text start.
-                float maxScroll = Mathf.Max(0f, _text.dimensions.width - _fieldWidth + EndOfTextNudge);
+                //
+                // That right edge is dimensions.xMin + width, not width alone: scroll comes from
+                // CaretLocalX, and the caret's x carries xMin as its basis. The derivation — and what
+                // else sets xMin — is docs/ck/ui-framework.md § "The caret's x has a basis, and the
+                // render path sets it"; a second copy of it here would age on its own.
+                //
+                // Numerically this changes nothing today: xMin is 0 for this row, so the expression is
+                // bit-identical to the old `width - _fieldWidth`. The line is about the basis, not the
+                // result — simplifying it back would silently reinstate the divergence. What holds
+                // xMin at 0 is the prefab, and only in part: EditField/Label is authored left-aligned
+                // with rightToLeftXOffset 0, but also with invertHorizontalAlignment set — the flag a
+                // shipped RTL language would use to turn it right, and xMin with it to exactly -width.
+                //
+                // Still reading the text as starting at 0, deliberately: the Clamp's lower bound, an
+                // inactive row's resting offset, and the [0, _fieldWidth] window caretInField is
+                // measured against. The two ends of this Clamp therefore agree only while xMin >= 0;
+                // below that the lower bound would be wrong too, which is the larger change this is
+                // not. _fieldOriginX is a fifth term of the same kind, and a likelier one to move: the
+                // window's left edge is 0 only because FieldMask happens to be centred on half its own
+                // width, which an Editor nudge undoes without touching anything here.
+                float maxScroll = Mathf.Max(0f, _text.dimensions.xMin + _text.dimensions.width - _fieldWidth + EndOfTextNudge);
                 offset = -1f * Mathf.Clamp(scroll, 0f, maxScroll);
             }
 
