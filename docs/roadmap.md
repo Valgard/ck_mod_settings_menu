@@ -1054,3 +1054,23 @@ reachable for admins.
   current lifecycle. What raised the stakes is that the cache stopped being an
   internal basis for the per-frame fit and became the published answer to what
   the prefab said. Found by the review gate 2026-09-05.
+- **MSM-31 — The word-jump repeat could read vanilla's verdict instead of its
+  timer.** MSM-23 shipped a prefix on `HandleTypingInput` that reads
+  `MenuManager.typingInputCooldown` through `API.Reflection`, and a postfix that
+  acts on what it captured. It works and is verified in game, but it
+  reconstructs a decision the game already makes and publishes: `IsKeyDown` is an
+  ordinary private method with a single declaration (`Pug.Other:269693`), so a
+  Harmony postfix on it receives `__result` beside the `keyCode` — vanilla's own
+  verdict, per key, needing no timer read at all. That retires the member
+  lookup, its warning latch, the reconstructed predicate and the over-set
+  together, and with them the one imprecision the current shape carries: it
+  fires in frames where Backspace or Delete claimed the chain and no arrow
+  moved. Harmless there, because the jump is recomputed from where the caret is
+  — but harmless by argument rather than by construction. Deliberately not done
+  in the same pass: no mod in the corpus patches `IsKeyDown` at all (the two
+  that need its verdict ship an accessor assembly or read the timer instead), so
+  it is an untrodden route, and trading a verified fix for an untested one buys
+  no behaviour. Found by the `ck-docs-review` lanes on 2026-09-06, while they
+  were reviewing the handbook passage rather than this code. Mechanism and the
+  half-condition trap: `docs/ck/ui-framework.md`, the section on the typing
+  path's key repeat.
