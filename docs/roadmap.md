@@ -1022,20 +1022,6 @@ reachable for admins.
   moment of typing. `ShakeAndClear` despite its name clears only its own
   coroutine handle, not the text. Carried over 2026-08-23 from the
   drill-in-frame work, which shipped the rest of that section.
-- **MSM-23 — Holding a word-jump key crawls after the first jump.** Vanilla's
-  arrow branch repeats on a cooldown (`MenuManager.IsKeyDown` is `GetKeyDown(k)
-  || (GetKey(k) && cooldown elapsed)`), while the word-jump postfix triggers on
-  `Input.GetKeyDown` alone — so holding the key jumps one word and then crawls
-  character by character at the repeat rate. Not a one-line change, though the
-  reason has changed: this used to say the cooldown could not be read at all,
-  which [ADR-009](adrs/009-caret-index-from-the-counter.md) disproves — a private field is legally readable through
-  `API.Reflection`, and `MenuManager.typingInputCooldown` is one
-  (`Pug.Other:269210`). What remains is that reading it is not the same as
-  sharing it: the postfix would still have to decide *its own* repeat behaviour
-  from a timer vanilla restarts on its own terms. Switching to `GetKey` instead
-  is the shape to avoid — it would fire every frame while vanilla still moves on
-  its own ticks, racing the caret through the string at frame rate. Cursor
-  position only — no text is lost. Found by the review gate 2026-08-26.
 - **MSM-26 — Prove that the reset poll's action id is the one that works.** The poll binds
   Rewired action 223 (`OpenProfile`) rather than vanilla's own `ResetDefaults`
   (300), and the reasoning is on paper rather than measured: 300 belongs to the
