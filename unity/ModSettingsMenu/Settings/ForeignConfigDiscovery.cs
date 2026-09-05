@@ -65,15 +65,33 @@ namespace ModSettingsMenu.Settings
         /// disagreeing with what actually rendered (Loc.Lookup's own doc comment lists three ways an
         /// I2 lookup can answer surprisingly).
         ///
+        /// A within-file heading (SettingKind.Label, from HeadingFor) is skipped entirely — not
+        /// counted, not eligible as the example. It is not a row an author names with a SETTING
+        /// term: it takes the mechanically identical three-stage chain a setting does (Term/GmcmTerm/
+        /// Key), but its GmcmTerm comes from GmcmTerms.Section ("&lt;Mod&gt;_&lt;file&gt;/&lt;Section&gt;"), a
+        /// DIFFERENT shape from a setting's ("&lt;Mod&gt;_&lt;file&gt;_&lt;Section&gt;/&lt;key&gt;") — so including one
+        /// prints a term of the wrong shape for whatever the reader is actually trying to name.
+        /// Worse, it is not a rare mispick: a heading's key is a bare CoreLib section name, which
+        /// routinely starts with a capital letter, so it wins the ordinally-first-key scan below
+        /// against almost any lower-case setting key. Found on the very first real run
+        /// (TestGroupFixtures' "Zebra") — an earlier version of this method reasoned a heading was a
+        /// "legitimate candidate" because the MECHANISM matches; the shape of the printed term does
+        /// not, which is what the line is actually for.
+        ///
         /// Logged at Log, not Warning: a section whose rows are all raw keys is the ordinary case for
         /// a mod that ships no terms, and reads as information here, not as a defect.</summary>
         private static void ReportNamingDiagnostics(ModSection section)
         {
+            int total = 0;
             int byMsm = 0;
             int byGmcm = 0;
             int byRawKey = 0;
+            SettingDef first = null;
             foreach (var def in section.Settings)
             {
+                if (def.Kind == SettingKind.Label)
+                    continue;
+                total++;
                 if (Loc.Lookup(def.Term) != null)
                     byMsm++;
                 else if (Loc.Lookup(def.GmcmTerm) != null)
@@ -84,26 +102,29 @@ namespace ModSettingsMenu.Settings
                 // here would have the report claim a stage the screen never took.
                 else if (!string.IsNullOrEmpty(def.Key))
                     byRawKey++;
+                // The ORDINALLY-first key among the rows counted above, not section.Settings[0]:
+                // that index is ConfigFile.Entries' Dictionary enumeration order, which .NET does
+                // not document as stable, and a value meant to be copied into a yaml file needs to
+                // name the same row on every run rather than whichever one a dictionary happened to
+                // hand back first.
+                if (first == null || string.CompareOrdinal(def.Key, first.Key) < 0)
+                    first = def;
             }
+            // Reachable only in principle: a heading is never added without at least one setting
+            // landing in the same CoreLib section right after it (BuildSection appends
+            // groups[sectionName] immediately following its own HeadingFor call), so a discovered
+            // section that reaches here — Discover() already requires Settings.Count > 0 — cannot
+            // consist of headings alone today. Guarded anyway rather than indexing `first` blindly,
+            // since nothing enforces that invariant AT THIS SITE.
+            if (total == 0)
+                return;
             // The heading takes its OWN, shorter chain (ModSection.Heading): HeadingTerm is already
             // GMCM's schema — MSM has never published one for a heading — and the other side is
             // DisplayName itself, a literal, not a lookup. So there is no third, "raw key" stage to
             // name here the way there is for a row.
             string headingStage = Loc.Lookup(section.HeadingTerm) != null ? "GMCM's" : "the folder name";
-            // The section's ORDINALLY-first key, not section.Settings[0]: that index is
-            // ConfigFile.Entries' Dictionary enumeration order, which .NET does not document as
-            // stable, and a value meant to be copied into a yaml file needs to name the same row on
-            // every run rather than whichever one a dictionary happened to hand back first. A
-            // heading FROM this cascade (HeadingFor) is a legitimate candidate too, since it takes
-            // the identical three-stage chain a row does.
-            var first = section.Settings[0];
-            for (int i = 1; i < section.Settings.Count; i++)
-            {
-                if (string.CompareOrdinal(section.Settings[i].Key, first.Key) < 0)
-                    first = section.Settings[i];
-            }
             UnityEngine.Debug.Log(
-                $"[ModSettingsMenu] '{section.ModId}': {section.Settings.Count} row{(section.Settings.Count == 1 ? "" : "s")} named — "
+                $"[ModSettingsMenu] '{section.ModId}': {total} row{(total == 1 ? "" : "s")} named — "
                     + $"{byMsm} by MSM's schema, {byGmcm} by GMCM's, {byRawKey} by their raw key. Heading: {headingStage}. "
                     + $"Tried for '{first.Key}': '{first.Term}', then '{first.GmcmTerm}'."
             );

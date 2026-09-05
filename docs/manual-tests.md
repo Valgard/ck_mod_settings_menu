@@ -906,6 +906,14 @@ checkable without touching `localization.yaml` at all.
       'TestListFixtures_config_Settings/Long'`. Both terms are concrete
       enough to paste into a yaml file as-is; that they resolve to nothing
       right now is the point of running this check before the terms exist.
+- [ ] `TestGroupFixtures` reports **3** rows, not 5, and `Tried for
+      'firstAlphabetically'` — not for `alpha` or `Zebra`. Those two are its
+      within-file headings (`SettingKind.Label`), not settings, so both are
+      excluded from the count and from the example scan. A capitalised
+      section name sorts ordinally before every lower-case setting key here,
+      so without the exclusion the example lands on a heading — `Zebra`
+      specifically, printing a term of the wrong shape (a section's, not a
+      setting's) for whatever the reader is actually trying to name.
 - [ ] Open the settings screen a second time without closing the game: the
       log gains a **second**, identical set of lines rather than none. This
       diagnostic is not deduplicated across opens the way a `Degraded`
