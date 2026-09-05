@@ -1036,16 +1036,6 @@ reachable for admins.
   is the shape to avoid — it would fire every frame while vanilla still moves on
   its own ticks, racing the caret through the string at frame rate. Cursor
   position only — no text is lost. Found by the review gate 2026-08-26.
-- **MSM-24 — The click collider's fallback reads a transform that moves every frame.**
-  `UpdateClickCollider` falls back to the field mask's `localScale`/
-  `localPosition` when `fieldBorder` is missing, but `FitMaskToViewport` rewrites
-  exactly those two values each frame to the mask's intersection with the list
-  viewport. The hit area would then shrink with the row instead of being the
-  fixed upper bound its own comment promises. `TextFieldViewport` already caches
-  the authored geometry (`_fieldWidth`, `_fieldOriginX`) precisely because the
-  live transform stops being a witness to it after the first frame — the row
-  should ask there. Dead today: the branch runs only on a mis-wired prefab. Found
-  by the review gate 2026-08-26.
 - **MSM-26 — Prove that the reset poll's action id is the one that works.** The poll binds
   Rewired action 223 (`OpenProfile`) rather than vanilla's own `ResetDefaults`
   (300), and the reasoning is on paper rather than measured: 300 belongs to the
