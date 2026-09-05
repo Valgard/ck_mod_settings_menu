@@ -50,6 +50,42 @@ namespace ModSettingsMenu.UI
             _fieldOriginX = t.localPosition.x - _fieldWidth / 2f;
         }
 
+        /// <summary>The field rectangle as the prefab AUTHORED it: <paramref name="width"/>,
+        /// <paramref name="height"/>, and <paramref name="centerX"/> — the centre, not the edge — in the
+        /// row's local x. False while unbound, silently, for the same reason TryCaretIndex is: the only
+        /// way to get here unbound is an unwired fieldMask, and Bind()'s caller logs that by name.</summary>
+        // Exists so that a caller wanting this rectangle does not read it off the mask's live transform,
+        // which Bind's comment above explains is no longer a witness to it once Tick has run.
+        //
+        // In y that is the whole point of FitMaskToViewport ("bounds them vertically", see there): a row
+        // straddling the list's top or bottom edge has a localScale.y below the authored 1.5 written
+        // into it every frame, and a row scrolled fully out keeps the last short value, since the
+        // empty-intersection branch disables the mask and returns without restoring anything. So the
+        // HEIGHT this method now also publishes reads correctly off the live transform only while the
+        // row is unclipped — and a clipped row is exactly when a short collider costs something. That
+        // is what makes the cache load-bearing today rather than a guard against a future relayout.
+        //
+        // In x nothing is ever clamped: the field spans [-10, +5.625] inside the viewport's [-12.5,
+        // +12.5], so minX and maxX resolve to the field's own edges and the write-back restores what
+        // was already there. There the objection is the DEPENDENCY alone — 2.5 units of slack at the
+        // left edge is all that separates a silent equality from a silent error, and nothing in the
+        // code holds the viewport wider than the field.
+        public bool TryFieldRect(out float width, out float height, out float centerX)
+        {
+            width = 0f;
+            height = 0f;
+            centerX = 0f;
+            if (_fieldMask == null)
+                return false;
+            width = _fieldWidth;
+            height = _fieldHeight;
+            // The exact inverse of Bind's own subtraction, so it hands back the localPosition.x Bind
+            // read. That this doubles as the field's CENTRE — and is therefore usable as a collider
+            // centre — is what the mask's centred pivot buys; the round trip itself is only algebra.
+            centerX = _fieldOriginX + _fieldWidth / 2f;
+            return true;
+        }
+
         /// <summary>Call once per frame from the owning row's Update. <paramref name="isActive"/> is
         /// whether THIS row currently holds Manager.input.activeInputField — see ApplyOffset for why
         /// that matters.</summary>

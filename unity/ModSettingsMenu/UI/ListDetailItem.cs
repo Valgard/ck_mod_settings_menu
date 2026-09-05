@@ -456,9 +456,10 @@ namespace ModSettingsMenu.UI
         // maxWidth moved to a different width — the exact failure mode a derivation cannot have.
         //
         // The frame sprite's pivot is centred, so its localPosition IS the collider centre; the
-        // fallback below derives from the field mask instead when a row has no frame reference. A
-        // read-only row does NOT take either fallback path: its renderer is merely disabled, so size
-        // and transform still read correctly.
+        // fallback below asks TextFieldViewport for the field mask's authored rectangle instead, when
+        // a row has no frame reference. A read-only row takes neither that path nor the fieldBorder
+        // fallback in RowHeightPx above: its renderer is merely disabled, so size and transform still
+        // read correctly.
         protected override void UpdateClickCollider()
         {
             base.UpdateClickCollider();
@@ -480,20 +481,30 @@ namespace ModSettingsMenu.UI
             // No frame wired: fall back to the field mask's width, not maxWidth — maxWidth is 0 now
             // that the field mask defines the row's visible/typeable window (see the class-level note
             // above), so sizing from it here would collapse this fallback to a zero-width collider,
-            // silently unhittable, the opposite of what this comment used to promise. The mask's own
-            // transform gives both size and centre directly, mirroring FitColliderToFrame's
-            // convention (its pivot is centred too, same as the frame's). Height stays whatever the
-            // base measured.
+            // silently unhittable, the opposite of what this comment used to promise.
             //
-            // If fieldMask is unwired as well, Bind() has already logged that fault loudly (see
-            // there) — this method does not repeat the warning, it just leaves the collider at
-            // whatever the base class measured from rendered text rather than guessing further.
-            if (fieldMask != null)
+            // Asked of the VIEWPORT rather than of the mask, although the mask is what both would be
+            // describing: its live transform is rewritten every frame, and in y that rewrite genuinely
+            // does shrink a row at the list's edge. TryFieldRect states what that costs per axis.
+            //
+            // The height comes from there too, and has to. The base sizes the collider from rendered
+            // text and PugText.Render reports Rect.zero for an empty string, so leaving size.y alone
+            // would hand a blank row the zero-height box the note above the frame branch calls the
+            // failure that bites hardest — reached through the fallback instead of through the base,
+            // but the same unhittable row. The mask is authored at the frame's own height and shares
+            // the 7.8125 both are centred on, so the two paths agree on height and x-centre alike;
+            // only the width differs, the mask being inset by the half unit of air at each end that
+            // the old maxWidth used to provide.
+            //
+            // A false verdict is left alone deliberately: it means an unwired fieldMask, which Bind()
+            // has already logged by name, and repeating it from a per-frame method would only spam.
+            if (_viewport.TryFieldRect(out float fieldWidth, out float fieldHeight, out float fieldCenterX))
             {
                 var size = clickCollider.size;
                 var center = clickCollider.center;
-                size.x = fieldMask.transform.localScale.x;
-                center.x = fieldMask.transform.localPosition.x;
+                size.x = fieldWidth;
+                size.y = fieldHeight;
+                center.x = fieldCenterX;
                 clickCollider.size = size;
                 clickCollider.center = center;
             }
