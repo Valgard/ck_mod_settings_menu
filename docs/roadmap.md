@@ -1048,3 +1048,23 @@ reachable for admins.
   an error, only as "the button does nothing" — the same combination that
   already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
   not in code.
+- **MSM-30 — A second `Bind` would cache the clipped geometry as the authored
+  one.** `TextFieldViewport.Bind` reads the field mask's transform into
+  `_fieldWidth`, `_fieldHeight` and `_fieldOriginX`, and that transform is a
+  witness to the prefab only until the first `Tick`: `FitMaskToViewport` then
+  rewrites it to the mask's intersection with the list viewport. Binding a
+  viewport whose `Tick` has already run can therefore store clipped values under
+  the name "authored", and `TryFieldRect` would hand them out with nothing to
+  mark them wrong. The exposure is in **y** and only while the row is actually
+  clipped — an interior row re-fits to the authored 1.5, and x is never clamped
+  at all on this prefab; a screen whose `ViewportMask` is missing takes
+  `FitMaskToViewport`'s early return and never rewrites anything, so the premise
+  does not arise there either. Unreachable today, and for a reason outside the
+  class —
+  `ListDetailScreen` instantiates a fresh row per rebuild and destroys the old
+  ones, so no viewport is bound twice. That is what makes it a guard rather than
+  a fix: capture on the first bind only (or when the mask reference itself
+  changes), so the invariant holds by construction instead of by the screen's
+  current lifecycle. What raised the stakes is that the cache stopped being an
+  internal basis for the per-frame fit and became the published answer to what
+  the prefab said. Found by the review gate 2026-09-05.
