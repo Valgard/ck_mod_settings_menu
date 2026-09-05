@@ -1046,12 +1046,6 @@ reachable for admins.
   live transform stops being a witness to it after the first frame — the row
   should ask there. Dead today: the branch runs only on a mis-wired prefab. Found
   by the review gate 2026-08-26.
-- **MSM-25 — `maxScroll` and the caret reader disagree about `dimensions.xMin`.**
-  `TryCaretIndexFromLocalX` subtracts it, matching vanilla's own blinker formula;
-  `ApplyOffset`'s end-of-text clamp does not. The two agree while the row's text
-  is left-aligned, which it is — change that and the clamp silently stops short
-  of the text end or overshoots it. `_text.dimensions.xMin + _text.dimensions.width
-  - _fieldWidth` holds either way. Found by the review gate 2026-08-26.
 - **MSM-26 — Prove that the reset poll's action id is the one that works.** The poll binds
   Rewired action 223 (`OpenProfile`) rather than vanilla's own `ResetDefaults`
   (300), and the reasoning is on paper rather than measured: 300 belongs to the
