@@ -73,6 +73,10 @@ entry is the version published to mod.io; its body is the modfile changelog.
   stays intact however long it is, the view follows the cursor as you move
   through it, and you can jump to the start or end of the line, move a word at
   a time, or click straight to the spot you want to edit.
+- **Fixed: holding a word-jump key crawled instead of repeating.** Holding Ctrl
+  (or Alt) together with an arrow key jumped one word and then moved a single
+  character at a time for as long as the key stayed down. It now keeps jumping
+  word by word, at the same repeat rate the game uses for every other held key.
 - **A setting you cannot change still looks like itself.** A read-only value
   used to collapse into a plain text row; it now keeps its native widget — a
   locked toggle still reads as on/off, a locked slider still shows its

@@ -1,5 +1,8 @@
 using System;
+using System.Linq;
 using HarmonyLib;
+using Pug.UnityExtensions;
+using PugMod;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -347,6 +350,131 @@ namespace ModSettingsMenu
             );
         }
 
+        // Whether vanilla's shared typing cooldown was ready to let a HELD key repeat this frame,
+        // captured before vanilla consumed it. Read by the word-jump postfix below; see the prefix.
+        private static bool _typingRepeatWasReady;
+
+        // Vanilla's typing repeat, read rather than re-timed.
+        //
+        // Every key MenuManager.HandleTypingInput handles repeats off ONE shared timer, not one per
+        // key: typingInputCooldown (Pug.Other:269210). IsKeyDown (Pug.Other:269693-269702) reports a
+        // key as down on GetKeyDown, or on GetKey once that timer has elapsed, and restarts it on
+        // every true — 0.3 s after a fresh press, 0.05 s after a repeat (Pug.Other:269696-269698).
+        // So a held arrow moves vanilla's caret twenty times a second, while the postfix below, keyed
+        // on GetKeyDown alone, fired exactly once: one word jump, then a character-by-character crawl
+        // at vanilla's own repeat rate.
+        //
+        // A PREFIX, and that is the whole reason this is a second patch rather than a few lines in
+        // the postfix: by the time the postfix runs, vanilla has already called Start() on the timer,
+        // so it no longer says whether it HAD elapsed — only that it was just reset. The prefix reads
+        // the state vanilla is about to consume.
+        //
+        // Not a second timer of our own carrying the same two constants. Vanilla's is restarted by
+        // whichever key claims the else-if chain first, so an independent copy drifts out of step in
+        // exactly the frames that matter, and the constants would go stale at a game update with
+        // nothing to catch it.
+        [HarmonyPatch(typeof(MenuManager), "HandleTypingInput"), HarmonyPrefix]
+        public static void MenuManager_PreHandleTypingInput(MenuManager __instance)
+        {
+            // Cleared unconditionally, ahead of every early return: a true left over from the
+            // previous frame would let the postfix repeat a jump vanilla never armed one for.
+            _typingRepeatWasReady = false;
+            if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem)
+                return;
+            if (!Manager.input.SystemPrefersKeyboardAndMouse())
+                return;
+            // No arrow held, no question to answer — and no reflection read to pay for. A fresh press
+            // needs no timer at all, so this flag speaks only for the held case.
+            if (!Input.GetKey(KeyCode.LeftArrow) && !Input.GetKey(KeyCode.RightArrow))
+                return;
+            if (!TryTypingCooldown(__instance, out var cooldown))
+                return;
+            _typingRepeatWasReady = cooldown.isTimerElapsed || !cooldown.isRunning;
+        }
+
+        // Resolved once and held: GetMembersChecked allocates an array of every member of the type on
+        // each call. Wrapped rather than left to throw, for the same reason TextFieldViewport's is —
+        // the CLR caches a TypeInitializationException permanently, and the warning latch below is a
+        // static of this same class, so it would die with the fault it exists to report. The lookup
+        // goes to MenuManager itself, which is where the field is declared, and InvokeChecker admits
+        // it on the Pug assembly-name prefix; TextFieldViewport.TryCaretIndex carries the full account
+        // of the two gates and why confusing them sends the next reader to the wrong place.
+        private static readonly MemberInfo TypingInputCooldownField = ResolveTypingInputCooldownField();
+
+        private static MemberInfo ResolveTypingInputCooldownField()
+        {
+            try
+            {
+                return typeof(MenuManager).GetMembersChecked().FirstOrDefault(m => m.GetNameChecked() == "typingInputCooldown");
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        // Reflection hands back a BOXED COPY of the struct (Pug.UnityExtensions:7793), and that is
+        // what makes reading it free of consequence: isTimerElapsed goes through elapsedTime, whose
+        // getter ticks the timer forward (Pug.UnityExtensions:7805-7816). On a copy that is exactly
+        // the reading we want; on vanilla's own field it would be a write into the thing being asked
+        // about.
+        private static bool TryTypingCooldown(MenuManager menu, out TimerSimple cooldown)
+        {
+            cooldown = default;
+            if (TypingInputCooldownField == null)
+            {
+                WarnRepeatUnreadableOnce("MenuManager has no member named 'typingInputCooldown'");
+                return false;
+            }
+
+            // A blanket catch, for the same reason TextFieldViewport's read has one: API.Reflection
+            // signals every refusal by throwing and never by returning, so there is no narrower
+            // channel to listen on — and the name match alone rules nothing out, since it matches a
+            // member of any KIND and any TYPE. A game update that keeps the name and changes the
+            // shape lands here rather than in a stack trace per frame.
+            //
+            // e.ToString() rather than e.GetType().Name: Type.Name IS MemberInfo.Name, so the tidier
+            // form is a System.Reflection reference and fails the sandbox at compile time.
+            object raw;
+            try
+            {
+                raw = TypingInputCooldownField.GetValueChecked(menu);
+            }
+            catch (Exception e)
+            {
+                WarnRepeatUnreadableOnce("reading it threw — " + e.ToString());
+                return false;
+            }
+            if (raw is not TimerSimple value)
+            {
+                WarnRepeatUnreadableOnce("'typingInputCooldown' is no longer a TimerSimple");
+                return false;
+            }
+            cooldown = value;
+            return true;
+        }
+
+        // Latched for the session, like the two above it: whatever stops the read — a renamed field,
+        // a changed type, a refusal — holds for as long as the process runs, so an unlatched line
+        // would repeat itself once per frame of every held arrow key.
+        private static bool _warnedRepeatUnreadable;
+
+        private static void WarnRepeatUnreadableOnce(string reason)
+        {
+            if (_warnedRepeatUnreadable)
+                return;
+            _warnedRepeatUnreadable = true;
+            Debug.LogWarning(
+                "[ModSettingsMenu] Could not read MenuManager.typingInputCooldown — "
+                    + reason
+                    + ". A held word-jump key falls back to one jump per press instead of repeating; nothing else is affected. "
+                    + "Logged once per session."
+            );
+        }
+
+        // Fires on the fresh press AND on every repeat vanilla itself armed this frame.
+        private static bool ArrowFires(KeyCode key) => Input.GetKeyDown(key) || (_typingRepeatWasReady && Input.GetKey(key));
+
         // Cursor navigation (Home/End, Ctrl+Arrow word jumps) for a drill-in row, as a POSTFIX on
         // MenuManager.HandleTypingInput rather than a poll inside ListDetailItem.Update(). That
         // private method handles the raw arrow keys itself, with NO Ctrl check (Pug.Other:269659-
@@ -383,6 +511,11 @@ namespace ModSettingsMenu
 
             // Home/End need no index at all: MoveCharMarker is relative AND clamped (Pug.Other:
             // 343455), so a full-length move in either direction lands exactly on the end.
+            //
+            // They keep plain GetKeyDown rather than the repeat-aware ArrowFires below, and that is
+            // not an oversight: a second Home does nothing the first did not, so repeating one is a
+            // no-op rather than a missing feature. Vanilla never touches these two keycodes either,
+            // so there is no repeat of its own here to fall behind.
             int length = row.pugText.GetTextLength();
             if (Input.GetKeyDown(KeyCode.Home))
             {
@@ -403,9 +536,23 @@ namespace ModSettingsMenu
             if (!wordModifier)
                 return;
 
+            // Left before right, matching the order of vanilla's own else-if chain (Pug.Other:
+            // 269659-269666), so a frame with both arrows held resolves the same way it does there.
+            //
+            // ArrowFires is deliberately an OVER-set of vanilla's condition rather than a copy of it.
+            // The prefix asks only whether the shared timer was ready, not which branch of the chain
+            // will claim it, so a Backspace auto-repeating alongside the arrow arms the flag in a
+            // frame where vanilla takes its Backspace branch and moves no caret at all. That costs
+            // nothing here: the jump below is computed from where the caret IS, so it still lands on
+            // a real word boundary. Only the opposite error — vanilla repeating while this stays
+            // silent — is the crawl this replaces, and an over-set cannot produce it. Reproducing the
+            // whole chain would be more code to prevent a harmless outcome.
+            //
+            // With no flag to read (a reflection read that failed, a prefix that did not bind) it
+            // falls back to GetKeyDown alone: the jump still works, it just stops repeating.
             int direction =
-                Input.GetKeyDown(KeyCode.LeftArrow) ? -1
-                : Input.GetKeyDown(KeyCode.RightArrow) ? 1
+                ArrowFires(KeyCode.LeftArrow) ? -1
+                : ArrowFires(KeyCode.RightArrow) ? 1
                 : 0;
             if (direction == 0)
                 return;
