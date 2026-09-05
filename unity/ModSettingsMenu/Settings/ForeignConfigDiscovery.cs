@@ -79,7 +79,18 @@ namespace ModSettingsMenu.Settings
         /// not, which is what the line is actually for.
         ///
         /// Logged at Log, not Warning: a section whose rows are all raw keys is the ordinary case for
-        /// a mod that ships no terms, and reads as information here, not as a defect.</summary>
+        /// a mod that ships no terms, and reads as information here, not as a defect.
+        ///
+        /// `total` counts only rows that LANDED in one of the three stages, not every non-Label row —
+        /// so it always equals byMsm+byGmcm+byRawKey by construction, rather than by coincidence. The
+        /// gap between the two is a def whose Key is blank (CoreLib permits one): TFirstOf treats a
+        /// blank FALLBACK as no fallback at all (its own doc comment), so such a row lands on none of
+        /// the three stages and renders as SettingDef.Label()'s "(unnamed)" placeholder instead — which
+        /// already logs its own warning, an independent signal the reader still gets. Counting it here
+        /// regardless would print a line whose parts do not sum to its own total and whose "named"
+        /// claims something that did not happen; in a feature whose only value is that its numbers can
+        /// be trusted against the screen, that costs more than the edge case is worth. Do not "fix" the
+        /// total back to every non-Label row — that is the bug this paragraph exists to prevent.</summary>
         private static void ReportNamingDiagnostics(ModSection section)
         {
             int total = 0;
@@ -91,31 +102,46 @@ namespace ModSettingsMenu.Settings
             {
                 if (def.Kind == SettingKind.Label)
                     continue;
-                total++;
+                bool landed;
                 if (Loc.Lookup(def.Term) != null)
+                {
                     byMsm++;
+                    landed = true;
+                }
                 else if (Loc.Lookup(def.GmcmTerm) != null)
+                {
                     byGmcm++;
-                // Guarded, not an else: TFirstOf treats a blank FALLBACK as no fallback at all (its
-                // own doc comment), so a def whose Key is blank does not land on the raw key either
-                // — it renders as SettingDef.Label()'s "(unnamed)" placeholder instead. Counting it
-                // here would have the report claim a stage the screen never took.
+                    landed = true;
+                }
                 else if (!string.IsNullOrEmpty(def.Key))
+                {
                     byRawKey++;
+                    landed = true;
+                }
+                else
+                {
+                    landed = false;
+                }
+                if (!landed)
+                    continue;
+                total++;
                 // The ORDINALLY-first key among the rows counted above, not section.Settings[0]:
                 // that index is ConfigFile.Entries' Dictionary enumeration order, which .NET does
                 // not document as stable, and a value meant to be copied into a yaml file needs to
                 // name the same row on every run rather than whichever one a dictionary happened to
-                // hand back first.
+                // hand back first. Scanning only landed rows also keeps a blank-Key def (which sorts
+                // ordinally before everything) from winning this slot with nothing to show for it.
                 if (first == null || string.CompareOrdinal(def.Key, first.Key) < 0)
                     first = def;
             }
-            // Reachable only in principle: a heading is never added without at least one setting
-            // landing in the same CoreLib section right after it (BuildSection appends
-            // groups[sectionName] immediately following its own HeadingFor call), so a discovered
-            // section that reaches here — Discover() already requires Settings.Count > 0 — cannot
-            // consist of headings alone today. Guarded anyway rather than indexing `first` blindly,
-            // since nothing enforces that invariant AT THIS SITE.
+            // total == 0 is reachable now in a way it was not before "landed" existed: a section
+            // whose every non-Label row has a blank Key and no registered term (see the method's own
+            // doc comment) never lands anywhere. Nothing to report there either — the line is about
+            // which stage answered, and none did for any row — so return rather than index `first`,
+            // which stays null. (An all-heading section still cannot reach here on its own: a heading
+            // is never added without at least one setting landing in the same CoreLib section right
+            // after it, per BuildSection. This guard is what makes that fact irrelevant to indexing
+            // safety rather than something this method has to keep relying on.)
             if (total == 0)
                 return;
             // The heading takes its OWN, shorter chain (ModSection.Heading): HeadingTerm is already
