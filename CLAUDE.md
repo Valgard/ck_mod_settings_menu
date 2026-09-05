@@ -122,18 +122,22 @@ traps, each verified in-game. Some carry fuller detail (with the code paths) in
   renders as `<missing>`; Core Keeper passes `false` in all of its own popups that carry
   a literal.
 - **A drill-in row's geometry has one source of truth — the frame — and one hand-kept
-  literal.** The frame sprites (`Border` / `SelectedMarker` on `ItemTemplate`) are
-  22×1.5; the click collider *and* the row's layout height are both derived from that
-  renderer at runtime (`UpdateClickCollider`, and `RowHeightPx` via the shared
-  `ModSettingsScreen.FrameHeightPx`), so an Editor resize needs no code change and a
-  copied literal cannot go stale — one already did. `ListDetailItem.maxWidth` is now
-  `0`: the visible window is defined by the row's own `FieldMask` (21 units from
-  row-local 0), not by a capacity that discards characters. The frame is 22 units
-  centred at 10.5 and therefore spans `[-0.5, 21.5]`, so a mask sized from the frame
-  would let text run past it — the mask keeps the half unit of air the old `maxWidth`
-  used to provide. Deriving the height from the *text* instead is doubly wrong: the
-  frame is taller than its text-measured slot (which used to overhang into the viewport
-  mask at the first and last row, where `gapBetweenItems: 5` cannot absorb it — hence
+  literal.** The frame sprites (`Border` / `SelectedMarker` under
+  `ItemTemplate/EditField`) are 16.625×1.5; the click collider *and* the row's layout
+  height are both derived from that renderer at runtime (`UpdateClickCollider`, and
+  `RowHeightPx` via the shared `ModSettingsScreen.FrameHeightPx`), so an Editor resize
+  needs no code change and a copied literal cannot go stale — one already did.
+  `ListDetailItem.maxWidth` is now `0`: the visible window is defined by the row's own
+  `FieldMask` (15.625 units from row-local 0), not by a capacity that discards
+  characters. The frame is 16.625 units centred at 7.8125 and therefore spans `[-0.5,
+  16.125]`, so a mask sized from the frame would let text run past it — the mask keeps
+  the half unit of air the old `maxWidth` used to provide. Those widths were 22 and 21
+  until the three row buttons took the space from 17.625 rightwards; the derivation held
+  without a code change, exactly as this bullet promises, but every *prose* number
+  beside it went stale unnoticed for a week. Measure the prefab, do not quote this
+  paragraph. Deriving the height from the *text* instead is doubly wrong: the frame is
+  taller than its text-measured slot (which used to overhang into the viewport mask at
+  the first and last row, where `gapBetweenItems: 5` cannot absorb it — hence
   `paddingStart`/`paddingEnd` are now `0`, the padding that compensated for it being
   obsolete), and `PugText.Render` reports `Rect.zero` for an empty string, so a blank
   row would collapse to nothing and become unreachable by mouse. The row's own

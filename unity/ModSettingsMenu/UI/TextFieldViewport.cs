@@ -26,10 +26,14 @@ namespace ModSettingsMenu.UI
         // all three in would let a caller bind a viewport to one row's caret and another's glyphs.
         //
         // The field rectangle comes from the mask's OWN prefab transform, never from the frame.
-        // The frame is 22 units centred at 10.5 and spans [-0.5, 21.5], while the text starts at 0 —
-        // sizing the clip from it lets the text run half a unit PAST the frame, which is what a first
-        // attempt did. The prefab mask is authored at 21 units from 0: the window the old maxWidth
-        // used to define.
+        // The frame is 16.625 units centred at 7.8125 and spans [-0.5, 16.125], while the text starts
+        // at 0 — sizing the clip from it lets the text run half a unit PAST the frame, which is what a
+        // first attempt did. The prefab mask is authored at 15.625 units from 0, which keeps that half
+        // unit of air at both ends.
+        //
+        // Those two numbers are the prefab's and have moved once already: the row was 22 and 21 until
+        // the three buttons arrived and took the space from 17.625 rightwards. Re-measure them there
+        // rather than trusting this paragraph if the row is ever re-laid-out again.
         //
         // Read once, here: re-fitting moves the mask every frame, so its live transform stops being
         // a witness to its authored geometry after the first Tick.
@@ -370,13 +374,13 @@ namespace ModSettingsMenu.UI
         // How far short of the right clip edge the caret is kept while typing — just enough that it
         // is not flush against the mask. A PROPORTIONAL margin (an earlier version used
         // _fieldWidth/5f, taken uncritically from ChatWindow.AdjustInputFieldPosition's own
-        // maskWidth/16f ratio) is wrong here: at this field's 21-unit width a fifth is ~4.2 units,
-        // roughly ten characters — the caret then sits far short of the edge with a large blank gap
+        // maskWidth/16f ratio) is wrong here: at this field's 15.625-unit width a fifth is ~3.1 units,
+        // several characters — the caret then sits far short of the edge with a large blank gap
         // behind it. A small fixed margin keeps that gap proportional to a character, not to the
-        // field.
+        // field, which is also what stops it from changing the next time the field is resized.
         //
         // NOT a round number, and that is deliberate, not sloppy: glyphs are point-filtered pixel art
-        // at 16 px/unit, _fieldWidth (21) is itself a whole number of pixels, and every caret position
+        // at 16 px/unit, _fieldWidth (15.625, i.e. 250 px) is a whole number of pixels, and every caret position
         // (from localCharacterEndPositions) is too — so with a margin of exactly 1, ApplyOffset's
         // offset (fieldWidth - margin - caret) would land EXACTLY on a texel boundary for every caret
         // position once scrolling engages. A point-filtered sprite sitting exactly on that boundary
