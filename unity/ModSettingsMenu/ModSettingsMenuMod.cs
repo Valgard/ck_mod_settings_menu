@@ -648,6 +648,18 @@ namespace ModSettingsMenu
             // the box cannot produce.
             section.Label("testLabelLists");
             section.List(out _, "testListFreeText", new[] { "Alpha", "Beta", "Gamma" });
+            // The only fixture with enough word boundaries inside ONE entry to tell a repeating word
+            // jump from the character-by-character crawl it replaced. WithSpaces cannot: discovery's
+            // own heuristic refuses a token of more than two words, so a held key reaches the start
+            // of the line in two jumps and ends up there whether it jumped or crawled. That limit is
+            // the discovery path's, not the API's, which is why this one is declared.
+            //
+            // Number words on purpose, so where the caret stopped is readable off the screen ("it
+            // stopped before 'seven'") instead of being counted in characters; their unequal lengths
+            // are what keeps a fixed-size step from passing as a word jump. The first entry is also
+            // wider than the field, so the same check covers the view following a JUMPING caret
+            // rather than a stepping one — the second is short enough to keep the two apart.
+            section.List(out _, "testListWordJump", new[] { "one two three four five six seven eight nine ten eleven twelve", "alpha beta gamma delta" });
             // Long enough that reordering has somewhere to travel, and that the arrow columns can be
             // walked past the visible edge — the read-only fixture in EarlyInit covers a long list
             // with no columns at all, which is a different chain.
