@@ -224,6 +224,16 @@ namespace ModSettingsMenu
             // the note above). Replicated rather than assumed away: our rows ship an empty
             // characterWhiteList today (prefab-verified), but that is an unenforced assumption a
             // future row template could break silently.
+            //
+            // The row prefab ships trim: 0, and that is deliberate — do NOT turn it back on in the
+            // Editor. AppendString receives ONE typed character at a time, so `s.Trim()` on a typed
+            // space is `""` and the space is swallowed: with trim on, a list entry cannot be given a
+            // space at all, and the word navigation has nothing to navigate except in tokens a
+            // foreign config already contained. What trim was wanted for — no leading or trailing
+            // space on a stored token — happens at commit instead, in ListTokenizer.Sanitize, which
+            // is also where the separator is stripped. One rule, applied once, at the moment the
+            // token is written rather than on every keystroke. The branch stays because a future row
+            // template may legitimately want it and because this prefix mirrors the base class.
             if (__instance.trim)
                 s = s.Trim();
             for (int i = s.Length - 1; i >= 0; i--)
