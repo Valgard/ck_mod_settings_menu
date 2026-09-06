@@ -247,26 +247,43 @@ line in two jumps and ends up there whether it jumped or crawled.
 - [ ] Repeat the first check with **End**. This one is a control, not a proof:
       appending at the end is exactly what the fallback does, so its verdict
       comes from the log check below rather than from the screen.
-- [ ] In `WithSpaces`, **Ctrl+Left / Alt+Left from the end of an entry** lands on
-      the word boundary; Ctrl+Right walks forward the same way. What this does
-      **not** establish: the ordinary word jump behaves identically with and
-      without the compensation term ADR-009 removed — that term was correct in
-      every case it could see. Only an auto-repeating key in the same frame
-      differed, and that is not cleanly provokable by hand. So this guards the
-      jump against regression; it does not verify the removal.
-- [ ] In `testListWordJump`'s **first** entry, put the caret at the end and
-      **hold** Ctrl+Left (or Alt+Left). The caret travels word by word for as long
-      as the key is down, and the view follows it. Number words are what make this
-      checkable: where it stopped is readable off the screen rather than counted in
-      characters. What it used to do is the reason the check exists — one jump,
-      then a crawl one character at a time at vanilla's own repeat rate, which
-      looks like movement and passes a glance. Hold Ctrl+Right back the same way.
-- [ ] **Tap** the same combination once: exactly one word, not two. Vanilla treats
-      a fresh press and the first repeat as the same kind of event, so a patch that
-      reads its cooldown carelessly double-fires here and nowhere else.
-- [ ] Hold Ctrl+Left in the **second** entry, which fits the field. Same word-by-
-      word travel with no scrolling involved — this is what separates a jump that
+- [ ] In `WithSpaces`, **tap** Ctrl+Left / Alt+Left from the end of an entry — it
+      lands on the word boundary; Ctrl+Right walks forward the same way. **Tap, not
+      hold:** these tokens are two words each, so a press held past 0.3 s now takes
+      a second jump and lands on 0, which the paragraph above says is where an
+      off-by-one is invisible. Landing at the front here means the press was long,
+      not that the jump was wrong. What this does **not** establish: the ordinary
+      word jump behaves identically with and without the compensation term ADR-009
+      removed — that term was correct in every case it could see. Only a
+      **Backspace** auto-repeating in the same frame differed, and that is not
+      cleanly provokable by hand. So this guards the jump against regression; it
+      does not verify the removal.
+- [ ] In `testListWordJump`'s **first** entry, put the caret at the end, **hold**
+      Ctrl+Left (or Alt+Left) for about half a second, and let go. **The caret has
+      passed `nine` — somewhere around `seven` or `eight`.** Where exactly depends
+      on how long you held and on the frame rate, so do not read a word either way
+      as a failure; vanilla arms the first repeat after 0.3 s and then ticks every
+      0.05 s, which puts five or six jumps inside half a second. The **failure** is
+      unambiguous and is what this check is for: still inside `eleven` or `twelve`
+      means it crawled and the repeat is not working — that is what this replaced: one jump,
+      then a character at a time at vanilla's own rate, which looks like movement
+      and passes a glance. Holding until it stops proves nothing either way: both
+      behaviours end at index 0, because `MoveCharMarker` clamps there. Number
+      words exist so the stopping place is readable off the screen instead of
+      counted. Hold Ctrl+Right back the same way, and the view follows.
+- [ ] **Tap** the same combination once — **well under a quarter second** — and it
+      moves exactly one word. A deliberate slow tap legitimately gives two: vanilla
+      arms the first repeat 0.3 s after the press. The check is aimed at a shape
+      this code does not currently have — one keyed on vanilla's per-key verdict,
+      where a fresh press and its first repeat are indistinguishable (MSM-31). Keep
+      it: it costs a second and guards the change that is already planned.
+- [ ] Hold Ctrl+Left in the **second** entry, which fits the field, for about half
+      a second: the caret reaches the front. Crawling leaves it around `gamma`.
+      Same travel with no scrolling involved — this is what separates a jump that
       genuinely repeats from a view that merely scrolls back.
+- [ ] With **no modifier**, a held arrow still moves one character at a time, not
+      one word. The repeat-aware path sits behind the modifier check, and a
+      regression that lifted it out would be invisible in every check above.
 - [ ] Click into the middle of a row's text — the caret lands on the character
       pointed at, and the next keystroke goes there.
 - [ ] Activate a row and hold **Right** (or press End) until the text has
@@ -278,11 +295,18 @@ line in two jumps and ends up there whether it jumped or crawled.
       `TestListFixtures/config.cfg` carries those characters at the front of that
       entry. What appears on screen and what reaches another mod's file are
       separate claims, and only the second one outlives the menu.
-- [ ] The log carries **no `[ModSettingsMenu]` line about the caret** and **no
-      exception naming `currentCharIndex`**. Two different warnings can land here
-      — one for the counter, one for the glyph list — and neither wording
-      contains the other's. Without this, checks above can pass for the wrong
-      reason: an unreadable counter still types, just at the end.
+- [ ] The log carries **no `[ModSettingsMenu]` line about the caret**, **no
+      exception naming `currentCharIndex`**, and **no line naming
+      `typingInputCooldown`**, and **no line about another mod skipping
+      `HandleTypingInput`**. Four different warnings can land here — the counter,
+      the glyph list, the repeat timer, and a foreign patch taking the typing path
+      over — and no wording contains another's. Without this, checks above can pass
+      for the wrong reason: an unreadable counter still types, just at the end.
+      The last two are the only observable signs of the repeat falling back, and
+      the hold check above is the only other witness — so if that one was
+      ambiguous, these decide it. The fourth exists because that state would
+      otherwise be silent: the repeat simply stops, and nothing distinguishes it
+      from working correctly.
 
 The clamp on the insertion index has no step, and cannot have one: every path
 that writes a row's text also moves the marker, so no manual walk leaves the
@@ -1066,3 +1090,10 @@ from `ThrowingConstraint`, and one `changing '…' failed` per press on
 `ChoiceExactNoDescription`). The count no longer depends on the machine's
 culture: `ChoiceFloats` used to add a line here on a comma-decimal host and now
 never does.
+- [ ] Type into a **vanilla** menu text field — the world name on the create-world
+screen will do. Characters, arrows and Backspace behave exactly as they do without
+this mod. `MenuManager.HandleTypingInput` is the game's own typing entry point,
+called once a frame for every active menu field, and this mod now holds two patches
+on it: a throwing one would take vanilla's typing down with it, everywhere, not
+just in this screen. Nothing above would notice, because nothing above leaves this
+mod's own drill-in.

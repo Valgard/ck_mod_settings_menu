@@ -657,8 +657,11 @@ namespace ModSettingsMenu
             // Number words on purpose, so where the caret stopped is readable off the screen ("it
             // stopped before 'seven'") instead of being counted in characters; their unequal lengths
             // are what keeps a fixed-size step from passing as a word jump. The first entry is also
-            // wider than the field, so the same check covers the view following a JUMPING caret
-            // rather than a stepping one — the second is short enough to keep the two apart.
+            // wider than the field at 62 characters — five more than the `Overlong` fixture the docs
+            // already call far wider — so the same check covers the view following a JUMPING caret
+            // rather than a stepping one. The second is meant to fit without scrolling and separate
+            // the two; nothing here measures the field's character capacity, so that is an intent
+            // the manual walk confirms, not a fact this comment can assert.
             section.List(out _, "testListWordJump", new[] { "one two three four five six seven eight nine ten eleven twelve", "alpha beta gamma delta" });
             // Long enough that reordering has somewhere to travel, and that the arrow columns can be
             // walked past the visible edge — the read-only fixture in EarlyInit covers a long list
