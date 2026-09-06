@@ -273,10 +273,13 @@ line in two jumps and ends up there whether it jumped or crawled.
       counted. Hold Ctrl+Right back the same way, and the view follows.
 - [ ] **Tap** the same combination once — **well under a quarter second** — and it
       moves exactly one word. A deliberate slow tap legitimately gives two: vanilla
-      arms the first repeat 0.3 s after the press. The check is aimed at a shape
-      this code does not currently have — one keyed on vanilla's per-key verdict,
-      where a fresh press and its first repeat are indistinguishable (MSM-31). Keep
-      it: it costs a second and guards the change that is already planned.
+      arms the first repeat 0.3 s after the press, and that has always been so —
+      both the old timer-reading shape and the current one lead with the same
+      `Input.GetKeyDown` term. This check was written anticipating the shape the
+      code now has, keyed on vanilla's own per-key verdict; the anticipated
+      difference did not materialise, so two words after a slow tap is correct
+      behaviour here exactly as it was before. What the check catches is a jump
+      firing on a frame where no key fired at all.
 - [ ] Hold Ctrl+Left in the **second** entry, which fits the field, for about half
       a second: the caret reaches the front. Crawling leaves it around `gamma`.
       Same travel with no scrolling involved — this is what separates a jump that
@@ -296,17 +299,20 @@ line in two jumps and ends up there whether it jumped or crawled.
       entry. What appears on screen and what reaches another mod's file are
       separate claims, and only the second one outlives the menu.
 - [ ] The log carries **no `[ModSettingsMenu]` line about the caret**, **no
-      exception naming `currentCharIndex`**, and **no line naming
-      `typingInputCooldown`**, and **no line about another mod skipping
-      `HandleTypingInput`**. Four different warnings can land here — the counter,
-      the glyph list, the repeat timer, and a foreign patch taking the typing path
-      over — and no wording contains another's. Without this, checks above can pass
-      for the wrong reason: an unreadable counter still types, just at the end.
-      The last two are the only observable signs of the repeat falling back, and
-      the hold check above is the only other witness — so if that one was
-      ambiguous, these decide it. The fourth exists because that state would
-      otherwise be silent: the repeat simply stops, and nothing distinguishes it
-      from working correctly.
+      exception naming `currentCharIndex`**, and **no line about another mod
+      skipping `HandleTypingInput`**. Three different warnings can land here — the
+      counter, the glyph list, and a foreign patch taking the typing path over —
+      and no wording contains another's. Without this, checks above can pass for
+      the wrong reason: an unreadable counter still types, just at the end. A
+      fourth used to belong here, naming `typingInputCooldown`, and it retired
+      with the timer read it reported on: the repeat now keys on vanilla's own
+      per-key verdict, which is a patched return value and so has nothing to fail
+      to read. The third is the only observable sign left of the word jump going
+      quiet, and the hold check above is the only other witness — so if that one
+      was ambiguous, this decides it. It exists because that state would otherwise
+      be silent: with the game's own typing body skipped the jump has nothing to
+      key off, and a key that does nothing looks exactly like a key that was never
+      pressed.
 
 The clamp on the insertion index has no step, and cannot have one: every path
 that writes a row's text also moves the marker, so no manual walk leaves the

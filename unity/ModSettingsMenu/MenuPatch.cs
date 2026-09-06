@@ -1,8 +1,5 @@
 using System;
-using System.Linq;
 using HarmonyLib;
-using Pug.UnityExtensions;
-using PugMod;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -350,213 +347,108 @@ namespace ModSettingsMenu
             );
         }
 
-        // Whether vanilla's shared typing cooldown was ready to let a HELD key repeat this frame,
-        // captured before vanilla consumed it. The postfix below CONSUMES this rather than reading
-        // it, because the prefix's own clear only holds in frames where the prefix actually runs.
-        private static bool _typingRepeatWasReady;
+        // Vanilla's own verdict for this frame, per arrow key — set by the IsKeyDown postfix below
+        // and consumed by the HandleTypingInput postfix further down.
+        //
+        // Two fields rather than one nullable KeyCode. Not because both arrows can be reported in
+        // one frame — vanilla's chain short-circuits, so a true for Left means Right is never asked
+        // about — but because nothing here depends on that staying true: a foreign patch that
+        // reaches IsKeyDown by another route could set both, and two plain bools make that
+        // representable instead of forcing a choice at the point where it is written. The consumer
+        // resolves the pair the way the chain would, left first.
+        private static bool _leftArrowFired;
+        private static bool _rightArrowFired;
 
-        // Vanilla's typing repeat, read rather than re-timed.
+        // Vanilla's typing repeat, OBSERVED rather than reconstructed.
         //
         // Every key MenuManager.HandleTypingInput handles shares ONE timer, not one per key:
         // typingInputCooldown (Pug.Other:269210). IsKeyDown (Pug.Other:269693-269702) reports a key
         // as down on GetKeyDown, or on GetKey once that timer has elapsed OR is not running, and
         // restarts it on every true — 0.3 s after a fresh press, 0.05 s after a repeat
-        // (Pug.Other:269696-269698). Return and KeypadEnter opt out of the repeat half by passing
-        // checkOnlyOnPressedDown: true (Pug.Other:269636); they still share the field.
-        // So a held arrow moves vanilla's caret twenty times a second, while the postfix below, keyed
-        // on GetKeyDown alone, fired exactly once: one word jump, then a character-by-character crawl
-        // at vanilla's own repeat rate.
+        // (Pug.Other:269696-269698). So a held arrow moves vanilla's caret twenty times a second,
+        // while a postfix keyed on GetKeyDown alone fires exactly once: one word jump, then a
+        // character-by-character crawl at vanilla's own repeat rate. That crawl is what this exists
+        // to prevent, and docs/manual-tests.md checks for it by name.
         //
-        // A PREFIX, and that is the whole reason this is a second patch rather than a few lines in
-        // the postfix: by the time the postfix runs, vanilla has already called Start() on the timer,
-        // so it no longer says whether it HAD elapsed — only that it was just reset. The prefix reads
-        // the state vanilla is about to consume.
+        // This USED to reconstruct the decision from the timer, read through API.Reflection in a
+        // prefix, because the postfix runs after vanilla has already called Start() and the field no
+        // longer says whether it HAD elapsed. That worked and was verified in game. It is gone
+        // because the verdict itself is patchable: IsKeyDown has a single declaration and, in the
+        // whole assembly, six call sites on five lines — all of them inside HandleTypingInput's own
+        // else-if chain (Pug.Other:269628, :269632, :269636 twice, :269659, :269663), the doubled
+        // line being Return and KeypadEnter sharing one branch. So a postfix here receives the
+        // answer vanilla acts on, per key, and the member lookup, its warning latch, the
+        // reconstructed predicate and the boxed-copy read all retire with it.
         //
-        // Not a second timer of our own carrying the same two constants. Vanilla's is restarted by
-        // whichever key claims the else-if chain first, so an independent copy drifts out of step in
-        // exactly the frames that matter, and the constants would go stale at a game update with
-        // nothing to catch it.
+        // Whether the JIT would inline a private method this small was the one thing reading could
+        // not settle, and inlining is a known Harmony pitfall in this project
+        // (docs/ck/world-and-mechanics.md records it for PetExtensions). Measured instead, in game:
+        // the postfix fires, first observed call `Backspace -> False`. It is not inlined.
+        //
+        // The chain is why this is more precise than the timer was, and the improvement is
+        // structural rather than a better condition. The timer says only that SOME key may repeat
+        // this frame, so a Backspace auto-repeating alongside a held arrow armed a jump in a frame
+        // where vanilla took its Backspace branch and moved no caret. Here that frame produces no
+        // arrow verdict at all — the chain short-circuits after Backspace and never asks about the
+        // arrows.
+        //
+        // That holds for the game's own calls, not for every call there could be, and the
+        // difference is not theoretical: BetterTextInput ships an accessor assembly and calls
+        // MenuManager.IsKeyDown for both arrows from its OWN HandleTypingInput prefix, ahead of the
+        // chain that would have short-circuited. A postfix cannot tell whose call it is answering,
+        // so with that mod loaded an arrow verdict can exist in a frame vanilla never asks about
+        // arrows. What comes back is much less than what this removes, and the reason is the second
+        // parameter: every one of those probes passes checkOnlyOnPressedDown: true, which drops the
+        // GetKey-and-timer half of the condition (Pug.Other:269696) — the same opt-out Return and
+        // KeypadEnter use at :269636. So the probes answer true on a press edge only, one frame per
+        // press, where the surplus removed here was a HELD arrow's 20 Hz repeat stream. A stray
+        // verdict per fresh press, not the stream back. Whether the clearing prefix below happens to
+        // run after that probe and erase it is Harmony's load order, which is not a guarantee. Not
+        // measured, because the mod is not loaded on this machine; docs/roadmap.md MSM-32 owns that
+        // pairing and now records this alongside it.
+        [HarmonyPatch(typeof(MenuManager), "IsKeyDown"), HarmonyPostfix]
+        public static void MenuManager_IsKeyDown(KeyCode keyCode, bool __result)
+        {
+            if (!__result)
+                return;
+            if (keyCode == KeyCode.LeftArrow)
+                _leftArrowFired = true;
+            else if (keyCode == KeyCode.RightArrow)
+                _rightArrowFired = true;
+        }
+
+        // Clears the verdicts before vanilla's body re-answers them.
+        //
+        // The postfix below already consumes them, so in an ordinary frame this clear finds nothing
+        // to do. It earns its place in the one frame the consume cannot reach: the one AFTER our
+        // postfix failed to run, which a foreign postfix of higher priority throwing would cause.
+        // There the flags stand as the body left them, and only this clear retires them.
+        //
+        // A cancelled body is NOT that case, and reading it as one is the easy mistake: the previous
+        // frame's postfix consumed on its way in, so the flags are already false and a body that
+        // never runs writes nothing over them. Nor can the consume cover a prefix that throws — an
+        // exception there takes the body and the postfixes with it, so neither half runs that frame.
+        // Two mechanisms, one frame each, and neither is the other's fallback.
+        //
+        // No gating on the active field or the input device. This is two assignments, the guards
+        // would cost more than they save, and every one of them would be a second place to keep in
+        // step with the postfix's own.
         [HarmonyPatch(typeof(MenuManager), "HandleTypingInput"), HarmonyPrefix]
-        public static void MenuManager_PreHandleTypingInput(MenuManager __instance)
+        public static void MenuManager_PreHandleTypingInput()
         {
-            // Cleared unconditionally, ahead of every early return: a true left over from the
-            // previous frame would let the postfix repeat a jump vanilla never armed one for.
-            _typingRepeatWasReady = false;
-            if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem)
-                return;
-            if (!Manager.input.SystemPrefersKeyboardAndMouse())
-                return;
-            // No arrow down at all, no question to answer. Not a saving on the press frame — Unity's
-            // GetKey is true there too, so a fresh press passes this gate and pays the read like any
-            // other frame. What the flag means is narrower than what the gate admits: it speaks only
-            // for the HELD case, because a press fires through GetKeyDown without consulting a timer.
-            if (!Input.GetKey(KeyCode.LeftArrow) && !Input.GetKey(KeyCode.RightArrow))
-                return;
-            if (!TryTypingCooldown(__instance, out var cooldown))
-                return;
-            _typingRepeatWasReady = cooldown.isTimerElapsed || !cooldown.isRunning;
+            _leftArrowFired = false;
+            _rightArrowFired = false;
         }
 
-        // Resolved once and held: GetMembersChecked allocates an array of every member of the type on
-        // each call. The lookup goes to MenuManager itself, which is where the field is declared, and
-        // InvokeChecker admits it on the Pug assembly-name prefix; the comment above
-        // TextFieldViewport.CurrentCharIndexField carries the full account of the two gates and why
-        // confusing them sends the next reader to the wrong place.
+        // Latched for the session. It used to sit beside a second latch for an unreadable cooldown
+        // field; that one retired with the reflection read, so this is the only typing-path warning
+        // left and the reason for keeping them apart is gone with it.
         //
-        // Wrapped rather than left to throw, and the stakes here are higher than at the read this
-        // borrows the pattern from. A throwing static initialiser is cached permanently by the CLR,
-        // so every later touch of ANY static on this class rethrows it — and this class is the mod's
-        // Harmony host. MenuManager_PostInit would take the whole menu down with it, the UIMouse
-        // prefix would throw once per hover frame, and the typing prefix throws out of a method every
-        // text field in the game runs through, taking vanilla's own typing with it. The warning latch
-        // below is a static of this class too, so it would die with the fault it exists to report.
-        // Why the fault is kept rather than swallowed: null has two causes — the member is absent, or
-        // looking for it threw — and they want different next steps. Reporting the second as the
-        // first sends the next reader hunting a rename that never happened, while the real cause is
-        // gone for good.
-        //
-        // Declared ABOVE the field whose initialiser writes it, and that ordering is load-bearing
-        // rather than tidy: static field initialisers run in textual order, so an initialiser added
-        // here later — even `= null` — would run after the resolver and erase the very fault this
-        // exists to keep. Above the resolver's field, nothing can.
-        //
-        // What is inside the catch is `e.ToString()` and an assignment. The assignment cannot throw;
-        // ToString() is the one thing that could, and it would escape into the type initialiser and
-        // cache the exception described below permanently. It is an object override over a Mono
-        // exception, so this is a residual risk rather than a real one — but "writing a field cannot
-        // throw" would name the wrong operation as the reason it is safe.
-        private static string _typingCooldownResolveFault;
-
-        private static readonly MemberInfo TypingInputCooldownField = ResolveTypingInputCooldownField();
-
-        private static MemberInfo ResolveTypingInputCooldownField()
-        {
-            try
-            {
-                return typeof(MenuManager).GetMembersChecked().FirstOrDefault(m => m.GetNameChecked() == "typingInputCooldown");
-            }
-            catch (Exception e)
-            {
-                _typingCooldownResolveFault = e.ToString();
-                return null;
-            }
-        }
-
-        // Reflection hands back a BOXED COPY of the struct (Pug.UnityExtensions:7793), and that is
-        // what makes reading it free of consequence: isTimerElapsed goes through elapsedTime, whose
-        // getter ticks the timer forward (Pug.UnityExtensions:7805-7816). On a copy that is exactly
-        // the reading we want; on vanilla's own field it would be a write into the thing being asked
-        // about.
-        private static bool TryTypingCooldown(MenuManager menu, out TimerSimple cooldown)
-        {
-            cooldown = default;
-            if (TypingInputCooldownField == null)
-            {
-                WarnRepeatUnreadableOnce(
-                    _typingCooldownResolveFault != null
-                        ? "looking it up on MenuManager threw — " + _typingCooldownResolveFault
-                        : "MenuManager has no member named 'typingInputCooldown'"
-                );
-                return false;
-            }
-
-            // A blanket catch, for the same reason TextFieldViewport's read has one: API.Reflection
-            // signals every refusal by throwing and never by returning, so there is no narrower
-            // channel to listen on — and the name match alone rules nothing out, since it matches a
-            // member of any KIND and any TYPE. A game update that keeps the name and changes the
-            // shape lands here rather than in a stack trace per frame.
-            //
-            // e.ToString() rather than e.GetType().Name: Type.Name IS MemberInfo.Name, so the tidier
-            // form is a System.Reflection reference and fails the sandbox at compile time.
-            object raw;
-            try
-            {
-                raw = TypingInputCooldownField.GetValueChecked(menu);
-            }
-            catch (Exception e)
-            {
-                WarnRepeatUnreadableOnce("reading it threw — " + e.ToString());
-                return false;
-            }
-            if (raw is not TimerSimple value)
-            {
-                WarnRepeatUnreadableOnce("'typingInputCooldown' is no longer a TimerSimple");
-                return false;
-            }
-            cooldown = value;
-            return true;
-        }
-
-        // Latched for the session, like the two above it: whatever stops the read — a renamed field,
-        // a changed type, a refusal — holds for as long as the process runs, so an unlatched line
-        // would repeat itself once per frame of every held arrow key.
-        //
-        // One latch serves both callers, and that is safe for a reason worth stating because it is
-        // not obvious: ArrowFires only reaches its read in frames where the PREFIX's read already
-        // succeeded (repeatReady gates it). So the postfix call site cannot report a fault the prefix
-        // would not have reported first, and cannot be silenced by one it did report. Move that gate
-        // and the argument goes with it.
-        private static bool _warnedRepeatUnreadable;
-
-        private static void WarnRepeatUnreadableOnce(string reason)
-        {
-            if (_warnedRepeatUnreadable)
-                return;
-            _warnedRepeatUnreadable = true;
-            // Names what TAKES OVER, not just what is lost: vanilla's own arrow branch keeps
-            // repeating either way, so a held key does not go still — it jumps once and then crawls
-            // a character at a time, which looks like the mod working badly rather than degrading.
-            // The precedent in TextFieldViewport words its fallback the same way, and this line used
-            // to omit exactly that half.
-            Debug.LogWarning(
-                "[ModSettingsMenu] Could not read MenuManager.typingInputCooldown — changed by a Core Keeper update? ("
-                    + reason
-                    + "). A word jump fires once per press again: holding the key jumps one word and then falls back to vanilla's own "
-                    + "single-character repeat, so the caret keeps crawling while the key is down. Tap once per word instead. Nothing "
-                    + "else is affected and no text is lost. Logged once per session."
-            );
-        }
-
-        // Fires on the fresh press, and on a repeat only once vanilla has actually SPENT the timer
-        // this frame. Two guards past the captured flag, and both exist for the same hazard: another
-        // mod's prefix can cancel vanilla's body (HarmonyX branches over it when any prefix returns
-        // false). With the body skipped the timer is never restarted, stays elapsed, and the prefix
-        // arms the flag again the next frame — so a held key would jump once per FRAME instead of
-        // once per tick, the runaway this patch exists to avoid.
-        //
-        // bodyRan is the exact signal and says so out loud. The timer read is the general one:
-        // IsKeyDown calls Start() on every true (Pug.Other:269698), and Start zeroes the timer and
-        // marks it running (Pug.UnityExtensions:7866-7875), so "vanilla spent it" reads exactly as
-        // "running and no longer elapsed". What it does NOT establish is WHICH key spent it — a
-        // Backspace repeat is indistinguishable — so the over-set described at the call site is
-        // unchanged.
-        //
-        // The warning is here rather than at the top of the method on purpose: it should fire only in
-        // the frames where the repeat WOULD have gone out and does not, never merely because some
-        // other mod handles typing while nothing of ours is due.
-        //
-        // No mod in the corpus actually does this to us today. BetterTextInput is the only one with a
-        // prefix on this method, and while an arrow is held it returns TRUE — its own IsKeyDown probe
-        // sets typingActionWasClicked through GetKey (Pug.Other:269695), so it falls through to the
+        // No mod in the corpus does this to us today. BetterTextInput is the only one with a prefix
+        // on this method, and while an arrow is held it returns TRUE — its own IsKeyDown probe sets
+        // typingActionWasClicked through GetKey (Pug.Other:269695), so it falls through to the
         // pass-through return. It cancels for Escape, Home/End, Ctrl+A and the selection and IME
         // paths. So this is hardening against the class, not against that mod.
-        private static bool ArrowFires(MenuManager menu, KeyCode key, bool repeatReady, bool bodyRan)
-        {
-            if (Input.GetKeyDown(key))
-                return true;
-            if (!repeatReady || !Input.GetKey(key))
-                return false;
-            if (!bodyRan)
-            {
-                WarnForeignTypingPrefixOnce();
-                return false;
-            }
-            return TryTypingCooldown(menu, out var spent) && spent.isRunning && !spent.isTimerElapsed;
-        }
-
-        // Its own latch, not the unreadable-cooldown one: a foreign prefix taking over the typing
-        // path and a member that cannot be read are different faults with different next steps, and
-        // sharing a latch would let whichever happened first hide the other for the session.
         private static bool _warnedForeignTypingPrefix;
 
         private static void WarnForeignTypingPrefixOnce()
@@ -564,10 +456,14 @@ namespace ModSettingsMenu
             if (_warnedForeignTypingPrefix)
                 return;
             _warnedForeignTypingPrefix = true;
+            // Names what takes over, not only what is lost. With the body skipped vanilla moves no
+            // caret either, so the row does not half-work: the key does nothing at all rather than
+            // jumping once and then crawling, which is what the previous shape degraded to.
             Debug.LogWarning(
                 "[ModSettingsMenu] Another mod's patch is skipping MenuManager.HandleTypingInput, so the game's own typing body does "
-                    + "not run. A word jump still fires once per press, but holding the key no longer repeats it — tap once per word "
-                    + "instead. Nothing else is affected and no text is lost. Logged once per session."
+                    + "not run and word jumps have nothing to key off — Ctrl+Arrow (or Alt+Arrow) does nothing in a settings list "
+                    + "while that patch is active. The game's own caret movement is skipped by the same patch, so nothing is "
+                    + "half-applied and no text is lost. Logged once per session."
             );
         }
 
@@ -600,20 +496,26 @@ namespace ModSettingsMenu
         // by parameter name rather than by type, so it needs no HarmonyLib reference and stays inside
         // the Roslyn sandbox. WritePostfixes guarantees the variable exists even with no prefix at all
         // (0Harmony:10671-10676).
-        public static void MenuManager_HandleTypingInput(MenuManager __instance, bool __runOriginal)
+        public static void MenuManager_HandleTypingInput(bool __runOriginal)
         {
-            // Consumed, not merely read, and ahead of every early return.
+            // Consumed, not merely read, and ahead of every early return. The early part is what
+            // matters most: the IsKeyDown postfix sets these flags for EVERY text field in the game,
+            // long before the row check below, so consuming here is what stops a verdict raised
+            // while some vanilla field had focus from reaching a drill-in row in a later frame.
             //
-            // The game ships HarmonyX, and it does NOT skip the remaining prefixes when one returns
-            // false: WritePrefixes calls every prefix unconditionally and folds a false return into
-            // one accumulator, emitting its single branch — over the original BODY — only after the
-            // loop (0Harmony:10287-10323). So this prefix always runs and rewrites the flag every
-            // frame, which makes the consume a no-op today. It is kept for the case that reading
-            // does leave open: a foreign patch that THROWS before this prefix, where the flag would
-            // otherwise stand from the previous frame. Cheap, and it makes the invariant hold by
-            // construction instead of by Harmony's current dispatch order.
-            bool repeatReady = _typingRepeatWasReady;
-            _typingRepeatWasReady = false;
+            // The clearing prefix does not make this redundant, and the two cover different frames
+            // rather than one backing the other up. The game ships HarmonyX, which does NOT skip the
+            // remaining prefixes when one returns false: WritePrefixes calls every prefix
+            // unconditionally and folds a false return into one accumulator, emitting its single
+            // branch — over the original BODY — only after the loop (0Harmony:10287-10323). So the
+            // prefix runs in every frame this method is entered at all. The frame it cannot reach is
+            // the one where an exception in a foreign prefix takes the body and the postfixes with
+            // it; the frame THIS cannot reach is the one after our own postfix was skipped. See the
+            // prefix's own comment.
+            bool leftFired = _leftArrowFired;
+            bool rightFired = _rightArrowFired;
+            _leftArrowFired = false;
+            _rightArrowFired = false;
 
             if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem row)
                 return;
@@ -625,9 +527,10 @@ namespace ModSettingsMenu
             // Home/End need no index at all: MoveCharMarker is relative AND clamped (Pug.Other:
             // 343455), so a full-length move in either direction lands exactly on the end.
             //
-            // They keep plain GetKeyDown rather than the repeat-aware ArrowFires below, and that is
-            // not an oversight: a second Home does nothing the first did not, so repeating one is a
-            // no-op rather than a missing feature.
+            // They keep plain GetKeyDown rather than the repeat-aware arrow verdicts below, and that
+            // is not an oversight: a second Home does nothing the first did not, so repeating one is
+            // a no-op rather than a missing feature. Vanilla never reads these keycodes at all, so
+            // there is no verdict of its own to observe here even if one were wanted.
             int length = row.pugText.GetTextLength();
             if (Input.GetKeyDown(KeyCode.Home))
             {
@@ -650,24 +553,58 @@ namespace ModSettingsMenu
 
             // Left before right, matching the order of vanilla's own else-if chain (Pug.Other:
             // 269659-269666), so a frame with both arrows held resolves the same way it does there.
+            // Both flags can be set in one frame only if vanilla asked about both, which its chain
+            // does not — but the order is written to match anyway, so the two cannot disagree.
             //
-            // ArrowFires is deliberately an OVER-set of vanilla's condition rather than a copy of it.
-            // The prefix asks only whether the shared timer was ready, not which branch of the chain
-            // will claim it, so a Backspace auto-repeating alongside the arrow arms the flag in a
-            // frame where vanilla takes its Backspace branch and moves no caret at all. That costs
-            // nothing here: the jump below is computed from where the caret IS, so it still lands on
-            // a real word boundary. Only the opposite error — vanilla repeating while this stays
-            // silent — is the crawl this replaces, and an over-set cannot produce it. Reproducing the
-            // whole chain would be more code to prevent a harmless outcome.
+            // These are vanilla's OWN verdicts now, not an over-set of them. The distinction is not
+            // a nicety: the shared timer this used to read says a key may repeat, never WHICH branch
+            // will claim the frame, so a Backspace auto-repeating alongside a held arrow armed a
+            // jump in a frame where vanilla moved no caret at all. It cost nothing — the jump is
+            // computed from where the caret IS, so it still landed on a word boundary — but it was
+            // harmless by argument. Now the chain itself decides: a Backspace frame returns before
+            // the arrows are asked about, so no verdict exists to act on.
             //
-            // With no flag to read (a reflection read that failed, a prefix that did not bind) it
-            // falls back to GetKeyDown alone: the jump still works, it just stops repeating.
+            // The verdict does not say WHETHER it is a press or a repeat, and this code does not
+            // ask: both should jump, so one bool is the whole question. Worth stating because the
+            // absence looks like a limitation and is not one — a postfix holds keyCode and runs
+            // inside the same MenuManager.Update() frame, so Input.GetKeyDown(keyCode) there is
+            // literally vanilla's own first disjunct (Pug.Other:269696) and separates the two
+            // exactly. Nothing here needs it. Holding past the 0.3 s arming delay taking a second
+            // jump is therefore not a change this brought: the previous shape led with the same
+            // GetKeyDown term and behaved identically.
+            //
+            // What DID change: a press landing in a frame Backspace or Delete has claimed is now
+            // dropped rather than acted on, because the old shape read GetKeyDown regardless of the
+            // chain. Dropping it is the right half of the trade — vanilla's own ±1 is absent in
+            // exactly those frames too, so the row moves as one thing rather than two — and a held
+            // key recovers on the next tick 0.05 s later. Only a tap short enough to fall entirely
+            // inside such a frame is lost, and it is lost the way vanilla loses it.
+            //
+            // Nothing to fall back to any more, and nothing that can fail to be read: with no
+            // verdict the direction is 0 and the frame passes. What used to degrade here was the
+            // reflection read; it is gone.
             int direction =
-                ArrowFires(__instance, KeyCode.LeftArrow, repeatReady, __runOriginal) ? -1
-                : ArrowFires(__instance, KeyCode.RightArrow, repeatReady, __runOriginal) ? 1
+                leftFired ? -1
+                : rightFired ? 1
                 : 0;
             if (direction == 0)
+            {
+                // Diagnosis only, and deliberately kept after the modifier check so it speaks for
+                // frames where a word jump was actually asked for. It reports the state it can
+                // observe — no verdict, and vanilla's body skipped — rather than a cause, and the
+                // wording is chosen for that reason: a cancelled body USUALLY means IsKeyDown never
+                // ran, but not always, since a mod can probe the arrows before deciding to cancel,
+                // which BetterTextInput does (see the IsKeyDown postfix above). In that frame a
+                // verdict exists, direction is non-zero, and this branch is never entered — which is
+                // correct, and is why the guard keys on the absent verdict rather than on
+                // __runOriginal alone. What is lost when nothing was published is the jump the
+                // timer-reading shape would still have fired off GetKeyDown; that is the price of
+                // taking the verdict from the one place vanilla makes it, and saying so out loud is
+                // not.
+                if (!__runOriginal && (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow)))
+                    WarnForeignTypingPrefixOnce();
                 return;
+            }
             // Reading the caret's own counter rather than its on-screen position is what leaves this
             // a plain subtraction, and the reason is weaker than "vanilla always shifted by ±1" — it
             // does not always. Its arrow handling sits in an else-if chain that Backspace, Delete,
