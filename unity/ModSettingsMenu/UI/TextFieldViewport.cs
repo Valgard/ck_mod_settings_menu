@@ -35,19 +35,86 @@ namespace ModSettingsMenu.UI
         // the three buttons arrived and took the space from 17.625 rightwards. Re-measure them there
         // rather than trusting this paragraph if the row is ever re-laid-out again.
         //
-        // Read once, here: re-fitting moves the mask every frame, so its live transform stops being
-        // a witness to its authored geometry after the first Tick.
+        // Read once, here: re-fitting rewrites the mask's transform every frame, so it stops being a
+        // witness to its authored geometry after the first Tick. ("Rewrites", not "moves": in x the
+        // write-back restores what was already there, as the TryFieldRect block below sets out.) The
+        // capture is therefore gated on the mask REFERENCE changing, instead of storing a clipped
+        // rectangle under the name "authored" — which TryFieldRect would hand out with nothing to
+        // mark it wrong.
+        //
+        // What that gate enforces is narrower than the invariant, and the difference is the whole
+        // reason to state it: a mask is never re-measured while it is still the one this viewport
+        // holds. It is not "measured at most once" — only the most recent mask is remembered, so
+        // A, then B, then A again would measure A twice. That the measurement is the AUTHORED
+        // rectangle still rests on the mask arriving un-fitted, which the screen supplies by
+        // instantiating a fresh row (and with it a fresh mask) per rebuild and destroying the old
+        // ones — ListDetailScreen.RebuildRows, so a viewport is bound once and dies with its row. A
+        // viewport reused across DIFFERENT rows would defeat this, because a first capture is by
+        // definition ungated. So the gate removes the dependency on the screen's lifecycle for a
+        // second bind of the same mask and narrows it elsewhere; it does not abolish it, and a later
+        // reader introducing row pooling should know which half they are standing on. Pooling itself
+        // is safe: the same row rebinding its own mask hits the gate and keeps the authored numbers
+        // from its first life.
+        //
+        // The same mask means the same row, so nothing is torn by carrying geometry across a rebind.
+        // The prefab says so — fieldMask is a [SerializeField] on ListDetailItem, authored per row
+        // beside the frame — but the binding is what settles it: this method has one call site, which
+        // passes the row it lives on, so _input cannot change across the binds of one viewport at
+        // all. Keying the gate on the ROW instead would therefore be strictly worse, declining to
+        // re-measure even a genuinely different mask. And the geometry is a property of the mask
+        // rather than of the row that owns it, which is why keeping it is right rather than merely
+        // tolerable.
+        //
+        // What raised the stakes is that this cache stopped being an internal basis for the
+        // per-frame fit and became the published answer to what the prefab said. Which is not to say
+        // the answer is being read: TryFieldRect's only consumer is the click collider's no-frame
+        // fallback, and the branch above it returns whenever fieldBorder is wired, which the shipped
+        // prefab does — so that consumer is dead today (docs/roadmap.md, MSM-34), and what keeps the
+        // cache load-bearing is FitMaskToViewport, which reads all three every frame, and
+        // ApplyOffset, which reads _fieldWidth while the row is being edited.
+        //
+        // ReferenceEquals, not Unity's ==: the question is whether this is the same INSTANCE already
+        // measured, not whether it is still alive. Liveness is answered before the comparison, by
+        // reading the transform first — see below — and by the caller, whose `fieldMask == null` is
+        // Unity's own operator and so reports a destroyed object as null too (ListDetailItem.Bind
+        // logs an unwired mask by name and returns).
+        //
+        // Both arguments are read out before anything is published, which makes the method atomic
+        // under a throw: a null or destroyed mask throws on fieldMask.transform, and a null row on
+        // its pugText, before a single field is written — so either fails as loudly as it did before
+        // this gate existed and leaves the viewport exactly as it was. Publishing first would leave
+        // some of the fields below describing the NEW row beside geometry describing the old mask,
+        // and _fieldMask not being null there, TryFieldRect would answer true and hand out the wrong
+        // mask's rectangle, which is worse than the clipped one this gate exists to prevent. It also
+        // means the gate needs no null test of its own: ReferenceEquals is true for two nulls, but a
+        // null argument can no longer reach it.
+        //
+        // The early return is a PARTIAL rebind, not a no-op: the row, its text, its blinker and the
+        // viewport mask are all rewritten, and only the field geometry is declined. That split is
+        // deliberate — _viewportMask is re-resolved per bind by name (ListDetailItem looks it up with
+        // transform.Find) and may legitimately differ between binds, while the authored geometry may
+        // not. The transform read on that path is not waste either: it is what makes a destroyed mask
+        // throw there rather than the viewport silently keeping geometry for an object that is gone.
         public void Bind(RadicalMenuOptionTextInput input, SpriteMask fieldMask, SpriteMask viewportMask)
         {
-            _input = input;
-            _text = input.pugText;
-            _blinker = input.characterMarkBlinker;
-            _fieldMask = fieldMask;
-            _viewportMask = viewportMask;
             var t = fieldMask.transform;
-            _fieldWidth = t.localScale.x;
-            _fieldHeight = t.localScale.y;
-            _fieldOriginX = t.localPosition.x - _fieldWidth / 2f;
+            float width = t.localScale.x;
+            float height = t.localScale.y;
+            float originX = t.localPosition.x - width / 2f;
+            var text = input.pugText;
+            var blinker = input.characterMarkBlinker;
+
+            _input = input;
+            _text = text;
+            _blinker = blinker;
+            _viewportMask = viewportMask;
+
+            if (ReferenceEquals(_fieldMask, fieldMask))
+                return;
+            _fieldMask = fieldMask;
+            _fieldWidth = width;
+            _fieldHeight = height;
+            _fieldOriginX = originX;
         }
 
         /// <summary>The field rectangle as the prefab AUTHORED it: <paramref name="width"/>,
@@ -62,8 +129,15 @@ namespace ModSettingsMenu.UI
         // into it every frame, and a row scrolled fully out keeps the last short value, since the
         // empty-intersection branch disables the mask and returns without restoring anything. So the
         // HEIGHT this method now also publishes reads correctly off the live transform only while the
-        // row is unclipped — and a clipped row is exactly when a short collider costs something. That
-        // is what makes the cache load-bearing today rather than a guard against a future relayout.
+        // row is unclipped — and a clipped row is exactly when a short collider costs something.
+        //
+        // That is why THIS method must not read the live transform, but it is not what keeps the
+        // cache load-bearing, and the difference took a round to see: this method's one consumer sits
+        // behind a branch that returns whenever fieldBorder is wired, which the shipped prefab does,
+        // so nothing reaches here today at all (docs/roadmap.md, MSM-34). What reads the cache every
+        // frame is FitMaskToViewport, and _fieldWidth also reaches ApplyOffset while a row is being
+        // edited. So the collider argument above is what this method owes a future caller, not a
+        // description of what runs.
         //
         // In x nothing is ever clamped: the field spans [-10, +5.625] inside the viewport's [-12.5,
         // +12.5], so minX and maxX resolve to the field's own edges and the write-back restores what
