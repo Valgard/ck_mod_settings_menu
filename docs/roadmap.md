@@ -1074,3 +1074,18 @@ reachable for admins.
   were reviewing the handbook passage rather than this code. Mechanism and the
   half-condition trap: `docs/ck/ui-framework.md`, the section on the typing
   path's key repeat.
+- **MSM-32 — A double word jump when BetterTextInput is installed.** That mod's
+  prefix on `RadicalMenuOptionTextInput.Awake` attaches its own
+  `TextInputController` to every such row, and `ListDetailItem` declares no
+  `Awake` of its own, so our rows get one too. On a Ctrl+Left press frame it then
+  moves the caret a word itself — `MoveToWord(-1)`, writing the same
+  `currentCharIndex` this mod reads back — returns true so vanilla's arrow branch
+  also shifts −1, and this mod's postfix jumps a further word from the resulting
+  index. Roughly two words per press instead of one. Not introduced by MSM-23: the
+  word jump predates it, and the repeat work neither caused nor worsened this.
+  Also not measured — it comes from reading both mods' sources, and
+  BetterTextInput is not loaded on this machine, so the first step is a manual
+  pass with it enabled rather than a fix. Whether it is even ours to fix is part
+  of that question: two mods that both implement word navigation on the same row
+  will collide however carefully either behaves. Found by the `pr-review-toolkit`
+  lanes on 2026-09-06.
