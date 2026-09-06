@@ -1034,21 +1034,56 @@ reachable for admins.
   an error, only as "the button does nothing" — the same combination that
   already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
   not in code.
-- **MSM-32 — A double word jump when BetterTextInput is installed.** That mod's
-  prefix on `RadicalMenuOptionTextInput.Awake` attaches its own
-  `TextInputController` to every such row, and `ListDetailItem` declares no
-  `Awake` of its own, so our rows get one too. On a Ctrl+Left press frame it then
-  moves the caret a word itself — `MoveToWord(-1)`, writing the same
-  `currentCharIndex` this mod reads back — returns true so vanilla's arrow branch
-  also shifts −1, and this mod's postfix jumps a further word from the resulting
-  index. Roughly two words per press instead of one. Not introduced by MSM-23: the
-  word jump predates it, and the repeat work neither caused nor worsened this.
-  Also not measured — it comes from reading both mods' sources, and
-  BetterTextInput is not loaded on this machine, so the first step is a manual
-  pass with it enabled rather than a fix. Whether it is even ours to fix is part
-  of that question: two mods that both implement word navigation on the same row
-  will collide however carefully either behaves. Found by the `pr-review-toolkit`
-  lanes on 2026-09-06.
+- **MSM-32 — A double word jump on Ctrl+Left when BetterTextInput is installed.**
+  That mod's prefix on `RadicalMenuOptionTextInput.Awake` attaches its own
+  `TextInputController` to every such row, unconditionally, and our rows are such
+  rows. `ListDetailItem` declaring no `Awake` is *sufficient* for that but not
+  necessary, and the difference matters because the necessary reading suggests a
+  fix that would not work: `Awake` is `protected override` and calls
+  `base.Awake()`, so a derived class declaring its own would still reach the
+  patched method. Only one that omitted the base call would escape, and that
+  breaks the row. The attachment also does not stay passive — our
+  `OnActivated` calls `base.OnActivated()` → `SetActiveInputField(this)`, which
+  that mod postfixes to make our row's controller the *active* one.
+  On a Ctrl+Left press frame it then moves the caret a word itself,
+  `MoveToWord(-1)` writing the same `currentCharIndex` this mod reads back — one
+  field, not two that agree — falls through to its pass-through return so
+  vanilla's arrow branch also shifts −1, and this mod's postfix jumps a further
+  word from the resulting index. Two words per press instead of one.
+  **Ctrl+Right does not collide**, and the reason is structural rather than
+  lucky: that mod's forward target is the *current word's end*, ours the *next
+  word's start*, so once it and vanilla have parked the caret on the word end our
+  forward scan degenerates to +1 and lands where it would have anyway. Traced on
+  `alpha beta gamma` from three starting points. Backwards its landing is exactly
+  a boundary our scan skips past, hence the extra word. So the earlier claim here
+  that two word-navigation implementations "will collide however carefully either
+  behaves" is false — one direction already composes cleanly. Punctuated text is
+  untraced and could differ, since its `\b\w+\b` and our space scan diverge there.
+  **The doubling is confined to the press edge.** That mod's arrow probes pass
+  `checkOnlyOnPressedDown: true`, so on auto-repeat frames its `MoveToWord` never
+  fires while vanilla's own `IsKeyDown` keeps returning true off the timer. With
+  both mods loaded the shape is therefore: first press jumps two words, then one
+  word per tick. Which also answers whether this is ours to fix, and the answer is
+  not "detect the other mod and stand down": on the press edge that mod is the one
+  built to compose with vanilla (its ±1 offsets exist for exactly that), so ours
+  is the surplus; on repeat frames it does nothing at all and ours is the only
+  thing preventing the character crawl. The gate wanted is "did the caret already
+  move further than vanilla's ±1 this frame", which our own `MenuPatch` comment
+  already establishes is answerable — a postfix holds `keyCode` and can read
+  `Input.GetKeyDown` in the same frame — and which needs no knowledge of any
+  particular mod. A `currentCharIndex` delta across the clearing prefix would be
+  exact.
+  Not introduced by MSM-23: the word jump landed 2026-08-26, eleven days earlier.
+  Still unmeasured — that mod is subscribed but sits in `disabledMods`, so
+  enabling it means editing `state.json` with the game closed, never the in-game
+  Mods menu, which would wipe the fake-ID dev install. The check is one string and
+  one tap: type `alpha beta gamma`, then Ctrl+Left once, briefly. Landing before
+  `gamma` means one of the two won; before `beta` means they doubled. Do **not**
+  use Ctrl+Right for this — it converges either way and would close the point
+  wrongly. Verify from the log which copy of this mod loaded first: the mod.io
+  build carries no such patch, and testing it would prove nothing. Mechanism
+  confirmed against both mods' sources by the `ckdocs-corpus-checker` lane on
+  2026-09-06; found by the `pr-review-toolkit` lanes the same day.
   **A second collision arrived with the `IsKeyDown` postfix** and belongs to the
   same manual pass: BetterTextInput ships an accessor assembly and calls
   `MenuManager.IsKeyDown(LeftArrow)` from its own `HandleTypingInput` **prefix**,
@@ -1060,10 +1095,18 @@ reachable for admins.
   so they answer true on a press edge only — one stray verdict per fresh press
   against the 20 Hz repeat stream the vanilla-install shape is rid of. Whether the
   clearing prefix happens to run after that probe and erase it is Harmony's load
-  order rather than a guarantee. Also unmeasured for the same reason as the rest
-  of this point. Found by the `ckdocs-source-verifier` lane on 2026-09-06, while
-  it was checking a handbook claim that said the surplus was gone "by
-  construction".
+  order rather than a guarantee — neither mod declares a priority. That ordering
+  is moot on an ordinary arrow frame, where vanilla's body re-asks `IsKeyDown`
+  after every prefix and sets the flag regardless; it decides the outcome only in
+  the frames that mod *cancels* the body in, having probed the arrows first. Those
+  need an arrow press edge and one of its cancelling keys (Escape, Home, End,
+  Ctrl+A, a selection path) inside the same frame, which is not reliably
+  reproducible by hand — a temporary log line where `direction != 0 &&
+  !__runOriginal` would settle both this and the ordering question at once. This
+  half genuinely did arrive with the `IsKeyDown` postfix: the timer-reading shape
+  read a shared field rather than per-key verdicts, so a foreign probe could not
+  reach it. Found by the `ckdocs-source-verifier` lane on 2026-09-06, while it was
+  checking a handbook claim that said the surplus was gone "by construction".
 - **MSM-33 — Three same-typed floats cross a boundary whose neighbour needs no
   scalars at all.** `TextFieldViewport.TryFieldRect` hands out `width`, `height`
   and `centerX` as three `out float`s, and its one consumer lands them in
