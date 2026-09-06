@@ -1645,7 +1645,7 @@ MonoBehaviour:
   maxWidth: 0
   resetTextOnActivate: 0
   dontAllowNewLines: 1
-  trim: 1
+  trim: 0
   characterWhiteList: 
   ignoreCapitalizationInWhiteList: 0
   radicalMenuOptionToggleVisibility: {fileID: 0}
