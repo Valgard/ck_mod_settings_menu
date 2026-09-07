@@ -372,6 +372,21 @@ namespace ModSettingsMenu
         private static bool _leftArrowFired;
         private static bool _rightArrowFired;
 
+        // Whether Backspace or Delete answered true this frame. Vanilla's chain is an else-if
+        // cascade and never asks about the arrows after those two (Pug.Other:269628, :269632), so an
+        // arrow verdict beside such a true did not come from the game, and the postfix declines it.
+        //
+        // Strictly this reports a PROBE, not a branch — the postfix cannot tell whose call it
+        // answers, the same limit the arrows have. A foreign probe could answer Backspace true,
+        // restart the shared cooldown, and leave vanilla's own probe false so the cascade reaches
+        // the arrows after all; the jump would then be declined although the game did handle it.
+        // Not reachable through the one mod that probes here: its repeat-capable Backspace/Delete
+        // probe sits behind a selection and CANCELS when it fires, so __runOriginal returns above
+        // this, and its other probe is press-edge-only, where GetKeyDown is timer-independent and
+        // vanilla answers alike. A mod probing repeat-capably without cancelling would break the
+        // inference, at the cost of one declined jump recovered on the next tick.
+        private static bool _editBranchClaimed;
+
         // Vanilla's typing repeat, OBSERVED rather than reconstructed.
         //
         // Every key MenuManager.HandleTypingInput handles shares ONE timer, not one per key:
@@ -416,7 +431,10 @@ namespace ModSettingsMenu
         //
         //   1. The arrow probes are UNGATED — a || chain at the top of its HandleSpecialKeys with no
         //      modifier test at all. Its own word jump is gated on LeftControl much further down, so
-        //      a probe fires in frames where that mod then does nothing.
+        //      a probe fires in frames where that mod then does nothing. That word jump is itself
+        //      press-edge-only — its probe passes the same flag — so on a repeat tick it does
+        //      nothing, and this mod's jump is the only thing between a held key and vanilla's
+        //      character-by-character crawl. Every guard below lets those ticks through.
         //   2. They pass checkOnlyOnPressedDown: true, dropping the GetKey-and-timer half of the
         //      condition (Pug.Other:269696) — the same opt-out Return and KeypadEnter use at
         //      :269636. So they answer on a press edge only: one stray verdict per fresh press, not
@@ -432,15 +450,23 @@ namespace ModSettingsMenu
         // cancelled, the distance can be zero — selecting text moves no caret — and the postfix
         // returns on __runOriginal before reading the verdict at all.
         //
-        // ONE FRAME CLASS ESCAPES BOTH, and cannot be caught with what is available here: an arrow
-        // press edge in a frame vanilla's chain gives to Backspace or Delete. The body ran, so
-        // __runOriginal is true; Backspace's RemoveCharBehindMarker decrements the index by exactly
-        // one (Pug.Other:343485), so the distance reads 1 and is indistinguishable from vanilla's
-        // own arrow step. The jump then fires on a frame the user was deleting in. That is the
-        // over-set MSM-31 removed, returning while this mod is loaded and only in that coincidence,
-        // and harmless in the same way it was then: the jump is computed from where the caret IS, so
-        // it lands on a real word boundary. Telling it apart would mean knowing which branch of
-        // vanilla's chain claimed the frame, which neither the verdict nor the caret reports.
+        // A THIRD FRAME CLASS escapes both of those, and closing it is what _editBranchClaimed is
+        // for: an arrow press edge in a frame vanilla's chain gives to Backspace or Delete. The body
+        // ran, so __runOriginal is true; Backspace's RemoveCharBehindMarker decrements the index by
+        // exactly one (Pug.Other:343485), which the distance gate cannot tell from vanilla's own
+        // arrow step, and Delete's RemoveCharAtMarker moves it not at all, which reads as "nobody
+        // jumped". Not confined to Alt and RightControl frames: with LeftControl held, that mod's
+        // MoveToWord runs while vanilla's compensating ±1 does not, so the distance falls one short
+        // of its jump — 1 for a two-character word, 0 for a one-character one — and the distance
+        // gate passes both. This flag is what declines them.
+        //
+        // The signal that resolves it was already arriving here and being discarded: this postfix
+        // sees EVERY keyCode vanilla probes, and a Backspace or Delete answering true is a positive
+        // report that the cascade took that branch — after which the arrows are never asked about.
+        // So a verdict beside it did not come from the game. An earlier version of this paragraph
+        // called the class uncatchable and leaned on the jump landing on a real boundary anyway;
+        // that is the "harmless by argument" reasoning MSM-31 was written to retire, and it was
+        // wrong twice over — the signal exists, and it costs one bool.
         [HarmonyPatch(typeof(MenuManager), "IsKeyDown"), HarmonyPostfix]
         public static void MenuManager_IsKeyDown(KeyCode keyCode, bool __result)
         {
@@ -450,6 +476,8 @@ namespace ModSettingsMenu
                 _leftArrowFired = true;
             else if (keyCode == KeyCode.RightArrow)
                 _rightArrowFired = true;
+            else if (keyCode == KeyCode.Backspace || keyCode == KeyCode.Delete)
+                _editBranchClaimed = true;
         }
 
         // Clears the verdicts before vanilla's body re-answers them.
@@ -481,10 +509,11 @@ namespace ModSettingsMenu
         // to registration order, and only [HarmonyBefore] would truly pin that — not worth it
         // against a case that does not exist. auto-rail-bridges is the corpus precedent, and for the
         // same reason as here rather than a different one: it needs its context captured before
-        // PlacementPlus's prefix does its own placement work. (Its comment explains the attribute
-        // with "Harmony skips remaining prefixes" — that is stock-Harmony folklore and false under
-        // the HarmonyX this game ships, as the postfix below documents with the citation. The
-        // attribute is right there; the reason given for it is not.)
+        // PlacementPlus's prefix does its own placement work. (A different comment in that file —
+        // on its postfix, not on the attribute — says "Harmony skips remaining prefixes", which is
+        // stock-Harmony folklore and false under the HarmonyX this game ships, as the postfix below
+        // documents with the citation. It does not affect the attribute's reason, but it is wrong
+        // where it stands.)
         //
         // No gating on the input device. There is a row check, but only because the caret read needs
         // a row to ask; the flags are cleared for every frame regardless, which is what the postfix's
@@ -494,6 +523,7 @@ namespace ModSettingsMenu
         {
             _leftArrowFired = false;
             _rightArrowFired = false;
+            _editBranchClaimed = false;
             _caretBeforeBody = CaretUnknown;
             if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row && row.Viewport.TryCaretIndex(out int caret))
                 _caretBeforeBody = caret;
@@ -509,8 +539,13 @@ namespace ModSettingsMenu
         // field; that one retired with the reflection read, so this is the only typing-path warning
         // left and the reason for keeping them apart is gone with it.
         //
-        // BetterTextInput reaches this: it cancels for Home, End, Ctrl+A and the selection and IME
-        // paths (see the IsKeyDown postfix above for the full model). Its own Ctrl+Arrow word jump
+        // BetterTextInput reaches this: it cancels for Escape, Home, End, Ctrl+A and the selection
+        // paths (see the IsKeyDown postfix above for the full model). Escape is in this list and not
+        // in that one, deliberately — that list is about frames carrying an arrow VERDICT, and
+        // Escape returns before the arrows are probed, while this guard keys on the arrow being
+        // physically down, which Escape does not prevent. Its IME paths cannot reach here at all:
+        // they need typingActionWasClicked false, and a probe of an arrow that IS down sets it
+        // (Pug.Other:269695) — which this guard's own condition guarantees. Its own Ctrl+Arrow word jump
         // is NOT one of those frames, so this fires from a coincidence rather than from a mod that
         // has taken the feature over — which is what the message has to convey.
         private static bool _warnedForeignTypingPrefix;
@@ -520,17 +555,23 @@ namespace ModSettingsMenu
             if (_warnedForeignTypingPrefix)
                 return;
             _warnedForeignTypingPrefix = true;
-            // Reports the frame, not a verdict on the session. The condition moved when the guard
-            // did: it used to require that no arrow verdict existed, and now fires whenever the body
-            // was skipped with an arrow down — including frames where a verdict existed and was
-            // deliberately discarded. So the wording says what happened once, not what is broken
-            // from now on, and names no key combination: with the mod that reaches this, Alt+Arrow
-            // and its own Ctrl+Arrow both keep working.
+            // Reports the frame it saw, and claims nothing beyond it. The condition moved when the
+            // guard did: it used to require that no arrow verdict existed, and now fires whenever
+            // the body was skipped with an arrow down — including frames where a verdict existed and
+            // was deliberately discarded. So the wording says what happened once.
+            //
+            // Deliberately not "word jumps keep working" either, though it is true of the one mod
+            // that reaches this today: the condition is any foreign prefix returning false, and a
+            // patch that cancels every frame satisfies it every frame, for which that reassurance
+            // would be exactly wrong. Latched and one-frame, so the honest scope is the frames this
+            // one saw. The previous wording erred the other way — it promised permanent breakage —
+            // and both errors come from a class-generic condition described as if it were about one
+            // mod.
             Debug.LogWarning(
                 "[ModSettingsMenu] Another mod's patch skipped MenuManager.HandleTypingInput while an arrow key was down, so a word "
                     + "jump in a settings list was not applied for that frame — the game's own caret movement was skipped by the same "
-                    + "patch, so nothing is half-applied and no text is lost. This is a per-frame coincidence, not a feature being "
-                    + "taken over: word jumps keep working otherwise. Logged once per session."
+                    + "patch, so nothing is half-applied and no text is lost. Word jumps still work in frames that patch lets through; "
+                    + "how often it takes one over is that patch's business. Logged once per session."
             );
         }
 
@@ -581,9 +622,11 @@ namespace ModSettingsMenu
             // prefix's own comment.
             bool leftFired = _leftArrowFired;
             bool rightFired = _rightArrowFired;
+            bool editClaimed = _editBranchClaimed;
             int caretBefore = _caretBeforeBody;
             _leftArrowFired = false;
             _rightArrowFired = false;
+            _editBranchClaimed = false;
             _caretBeforeBody = CaretUnknown;
 
             if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem row)
@@ -646,8 +689,10 @@ namespace ModSettingsMenu
             // will claim the frame, so a Backspace auto-repeating alongside a held arrow armed a
             // jump in a frame where vanilla moved no caret at all. It cost nothing — the jump is
             // computed from where the caret IS, so it still landed on a word boundary — but it was
-            // harmless by argument. Now the chain itself decides: a Backspace frame returns before
-            // the arrows are asked about, so no verdict exists to act on.
+            // harmless by argument. Now the chain itself decides: in a vanilla install a Backspace
+            // frame returns before the arrows are asked about, so no verdict exists to act on. A mod
+            // that probes the arrows ahead of the chain can produce one anyway, which is what
+            // _editBranchClaimed handles — see the IsKeyDown postfix.
             //
             // The verdict does not say WHETHER it is a press or a repeat, and this code does not
             // ask: both should jump, so one bool is the whole question. Worth stating because the
@@ -660,7 +705,9 @@ namespace ModSettingsMenu
             //
             // What DID change: a press landing in a frame Backspace or Delete has claimed is now
             // dropped rather than acted on, because the old shape read GetKeyDown regardless of the
-            // chain. Dropping it is the right half of the trade — vanilla's own ±1 is absent in
+            // chain. In a vanilla install the chain achieves that by never asking about the arrows
+            // there; where a foreign probe asks anyway, _editBranchClaimed does. Dropping it is the
+            // right half of the trade — vanilla's own ±1 is absent in
             // exactly those frames too, so the row moves as one thing rather than two — and a held
             // key recovers on the next tick 0.05 s later. Only a tap short enough to fall entirely
             // inside such a frame is lost, and it is lost the way vanilla loses it.
@@ -735,6 +782,23 @@ namespace ModSettingsMenu
             // reports above, and falls through to jumping: the behaviour before this gate, which is
             // right for the install where nothing else patches this row.
             if (caretBefore != CaretUnknown && Mathf.Abs(current - caretBefore) > 1)
+                return;
+
+            // Vanilla gave this frame to Backspace or Delete, so the arrow verdict is not its own.
+            // Its chain is an else-if cascade: once one of those answers true it never asks about
+            // the arrows, so a verdict existing alongside can only have come from a foreign probe.
+            //
+            // "This frame", strictly. A held Backspace claims only its repeat TICKS — IsKeyDown runs
+            // it through the same shared cooldown, so at 60 fps roughly every third frame answers
+            // true and the rest fall through to the arrows. So holding Backspace while tapping a
+            // word jump still jumps, in the frames vanilla handled the arrow itself, and that is
+            // correct rather than a gap this misses: vanilla moved the caret there too. Worth
+            // stating because the flag reads like "no jumping while deleting", which it is not.
+            // Without this the distance gate lets it through, because RemoveCharBehindMarker
+            // decrements the index by exactly one (Pug.Other:343485) — indistinguishable from
+            // vanilla's own arrow step — and RemoveCharAtMarker moves it not at all, which reads as
+            // "nobody jumped". Free where nothing else patches this: vanilla never produces both.
+            if (editClaimed)
                 return;
 
             row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current);
