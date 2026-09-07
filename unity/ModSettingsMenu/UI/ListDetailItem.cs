@@ -498,13 +498,13 @@ namespace ModSettingsMenu.UI
             //
             // A false verdict is left alone deliberately: it means an unwired fieldMask, which Bind()
             // has already logged by name, and repeating it from a per-frame method would only spam.
-            if (_viewport.TryFieldRect(out float fieldWidth, out float fieldHeight, out float fieldCenterX))
+            if (_viewport.TryFieldRect(out var field))
             {
                 var size = clickCollider.size;
                 var center = clickCollider.center;
-                size.x = fieldWidth;
-                size.y = fieldHeight;
-                center.x = fieldCenterX;
+                size.x = field.Width;
+                size.y = field.Height;
+                center.x = field.CenterX;
                 clickCollider.size = size;
                 clickCollider.center = center;
             }

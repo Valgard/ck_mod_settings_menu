@@ -1034,28 +1034,6 @@ reachable for admins.
   an error, only as "the button does nothing" — the same combination that
   already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
   not in code.
-- **MSM-33 — Three same-typed floats cross a boundary whose neighbour needs no
-  scalars at all.** `TextFieldViewport.TryFieldRect` hands out `width`, `height`
-  and `centerX` as three `out float`s, and its one consumer lands them in
-  `size.x`, `size.y` and `center.x`. Two are x-axis quantities and one is y,
-  nothing enforces the order, and a transposition compiles and produces a
-  wrong-shaped collider in silence. Earlier in the same method, the frame branch
-  does the same job through
-  `ModSettingsScreen.FitColliderToFrame(clickCollider, fieldBorder)` — no scalars
-  cross that boundary and no transposition is expressible. So one method holds
-  two implementations of "size this collider", and only one of them can be got
-  wrong. That one is currently unreachable, since the frame branch returns for
-  every row of the shipped prefab (MSM-34) — which argues *for* the change rather
-  than against it: the safe path is the one that runs, and the hazard sits in the
-  path nobody exercises and nobody would notice going wrong. A `readonly struct`
-  for the rectangle would carry the ordering in the type; this repo already does
-  exactly that in `RowSelection`, beside this file, including the reasoning about
-  a `default` value that looks valid — which applies here too, so the `bool`
-  verdict stays rather than the struct being returned bare. Deliberately not done
-  alongside MSM-30 (whose reasoning now lives in `TextFieldViewport.Bind`'s
-  comment): a new type, a new file and a changed call site are not a guard, and
-  bundling them would have made a two-line behaviour change hard to read. Found
-  by the `pr-review-toolkit` lanes on 2026-09-06.
 - **MSM-34 — An unwired `fieldBorder` changes three behaviours and announces
   none.** Two of the references `ListDetailItem.Bind` checks warn by name when
   missing: the serialized `fieldMask`, and the `ViewportMask` it looks up on its
