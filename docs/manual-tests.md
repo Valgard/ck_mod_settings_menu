@@ -182,6 +182,45 @@ and the base implementation would dereference null on one. A row with an empty
 text field once had a zero-height collider and nobody noticed, because keyboard
 and controller reach such a row regardless.
 
+- [ ] **A blank row answers the mouse.** In `testListFreeText` — the declared
+      list under `testLabelLists`, in this mod's own section — **click** **Add
+      entry** to append a blank row at the end. Judge nothing yet: right after
+      the click nothing is highlighted, which is normal, and the pointer may
+      still be sitting on the button. Hover one of the filled rows above, whose
+      frame must light up, then move down onto the blank one — the frame around
+      it must light the same way. The frame only: a filled row also recolours
+      its text when selected, and a blank row has none to recolour. Expect the
+      highlight to drop for an instant as the pointer crosses the gap between
+      the rows; staying dark is the failure. That settles that the row has a
+      hit area at all, without a click, since the highlight comes from the same
+      raycast a click uses. The filled row is the control: if it lights and the
+      blank one does not, `PugText.Render` reported `Rect.zero` for the empty
+      string and the collider was sized from that, which is the failure the
+      paragraph above describes.
+      Then walk the pointer right along the blank row. The highlight must stay
+      on across essentially the whole drawn frame, drop for a short gap, and
+      return on the ↑ button. Do not try to judge the exact edge — the cursor
+      graphic is wider than that gap — but a dark stretch several cursor widths
+      before the frame's right end is the fault. Watch the **cursor**, not the
+      highlight: the highlight is a sprite the size of the frame and always
+      ends there, so a too-narrow or off-centre collider shows up only in where
+      the cursor has to be for it to be lit. Delete the row afterwards with the
+      last of the three buttons — ✕ on a blank row asks nothing.
+- [ ] **A blank row can be edited, including one that lost its text.** Add an
+      entry and click it: the caret appears at the field's left edge and the
+      highlight stays. **Leave edit mode after every click**, with Enter or Escape —
+      both release the field without leaving the screen, and neither discards
+      anything: this mod commits on the way out, so Escape is not a cancel here.
+      Leaving matters because while a row holds the input field this mod pins every
+      click to that row, so nothing clicked before you leave proves anything, and
+      its ✕ will not answer either. Click the row again, type into it and commit;
+      click it once more — to the right of the text, so the caret lands at the end —
+      then clear it and commit. It stays on screen, since the rows are re-derived
+      from the stored value only when the drill-in opens. Click it a last time for
+      the same caret, leave edit mode, and delete it. The fixture ends as it began,
+      because clearing writes the value back *without* the empty token — but only on
+      a complete run: stop after the first commit and the typed entry stays in the
+      file.
 - [ ] Click each of the three buttons on a middle row — each responds.
 - [ ] Click a button on the first row and on the last row.
 - [ ] Click a greyed-out edge arrow — nothing happens.
