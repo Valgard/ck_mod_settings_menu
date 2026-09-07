@@ -95,6 +95,20 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning(
                     "[ModSettingsMenu] ListAddRow has no labelText assigned — it renders blank and has no click collider (CK only creates one when labelText or valueText is set, and that decision was already made in Awake)."
                 );
+            // Its own slot, not the one ListDetailItem.Bind reports: this button's frame lives on the
+            // live AddRow object, the rows' on their template, so neither warning can stand in for the
+            // other. Reported here for the same reason as above — Bind is the one place that runs once
+            // and knows what it is looking at, while both consumers of the reference cannot say it.
+            //
+            // Milder than the row case only in that a caption is never empty, so the collider keeps a
+            // box rather than the zero-height one PugText.Render reports for an empty string. It is
+            // the wrong box: FitColliderToFrame returns without a frame to fit to, leaving whatever
+            // the base class sized from the caption — which is the state UpdateClickCollider's own
+            // note below calls most of the button dead to the mouse.
+            if (fieldBorder == null)
+                Debug.LogWarning(
+                    "[ModSettingsMenu] ListAddRow has no fieldBorder assigned (the Border under Options/Scroll/AddRow) — the button is laid out and click-tested from its caption instead of its frame, so most of it stops answering the mouse."
+                );
         }
 
         // ACTIVE only for a live (cloned, SetActive(true)) instance — the inactive prefab template

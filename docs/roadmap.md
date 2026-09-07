@@ -1034,37 +1034,6 @@ reachable for admins.
   an error, only as "the button does nothing" — the same combination that
   already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
   not in code.
-- **MSM-34 — An unwired `fieldBorder` changes three behaviours and announces
-  none.** Two of the references `ListDetailItem.Bind` checks warn by name when
-  missing: the serialized `fieldMask`, and the `ViewportMask` it looks up on its
-  owner. `fieldBorder` does not, and neither does `rowButtons`, so "the only
-  silent one" is not the claim — `fieldBorder` is the one whose silence costs the
-  most, because three separate behaviours change at once and only one of them
-  survives it intact. `RowHeightPx` stops measuring the frame and falls back to
-  the text formula, which is not a correct alternative but the very basis that
-  once let the frame overhang its slot and clip the first and last row — its own
-  comment calls the fallback "laid out rather than collapsed".
-  `UpdateClickCollider` falls back to the field mask's authored rectangle, and
-  that one genuinely is correct. And the row's border **stays visible** rather
-  than disappearing: `fieldBorder.enabled = !readOnly` is what hides it on a
-  read-only row, so an unwired reference means that line never runs and a locked
-  row draws a frame promising an edit it will refuse. (The focus marker is not
-  affected — it hangs off the inherited `selectedMarker`, a different reference.)
-  Second consequence: the reachability MSM-30 leaned on — that the no-frame
-  branch publishes the cached rectangle to a hit area — cannot be observed,
-  because on the shipped prefab the frame is wired and that branch is dead. The
-  cache is load-bearing through `FitMaskToViewport` and `ApplyOffset` instead,
-  which `TextFieldViewport`'s own comments now say.
-  **Grepping `fieldBorder` will find a warning, and it is the wrong one.**
-  `ListRowButton.Refresh` already logs its own missing `fieldBorder` — by role,
-  by row index, and naming the consequence — which is the model to copy and also
-  the reason this entry can read as already-done. The silent one is
-  `ListDetailItem`'s.
-  **Not in tension with MSM-30's deliberate silence** when its own gate skips a
-  rebind, though the two look alike: an unwired reference is a wiring fault, with
-  something missing from the prefab and behaviour quietly degraded, while a
-  same-mask rebind is neither — nothing is missing and nothing degrades. Found by
-  the `pr-review-toolkit` lanes on 2026-09-06.
 - **MSM-35 — The blank-row click that `manual-tests.md` names but never makes.**
   The `### Mouse` preamble states the historical failure in as many words: a row
   with an empty text field once had a zero-height collider and nobody noticed,
