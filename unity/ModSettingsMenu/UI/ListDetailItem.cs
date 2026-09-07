@@ -105,7 +105,11 @@ namespace ModSettingsMenu.UI
         // went unnoticed between rows and clipped the first and last row against the viewport mask.
         //
         // Falls back to the text measurement when there is no frame to ask, which keeps a row
-        // without frame references laid out rather than collapsed.
+        // without frame references laid out rather than collapsed — at the very measurement
+        // described above. Bind() logs the missing reference, so this fallback is a degraded row and
+        // not a silent one. It does not repeat the warning: this getter runs at Bind's own cadence,
+        // so it would only say the same thing twice, and a property getter is the wrong place for a
+        // side effect nobody can predict from the call site.
         public int RowHeightPx => fieldBorder != null ? ModSettingsScreen.FrameHeightPx(fieldBorder) : ModSettingsScreen.RowHeightPx(pugText);
 
         // Which drill-in session this row belongs to. A row does NOT receive this; it takes it from
@@ -261,8 +265,47 @@ namespace ModSettingsMenu.UI
             // RadicalMenuOption, which has no selectedMarker, so it declares and drives its own with
             // SetActive. The rule is "do not fight the owner of the flag" — here the base class owns
             // it, there this mod does.
+            //
+            // Reported from here and nowhere else, and the reason is different for each of the
+            // reference's other two consumers. UpdateClickCollider runs every frame, where a warning
+            // is pure spam. RowHeightPx runs at exactly this method's own cadence — once per row per
+            // rebuild — so a warning there would not say anything this one does not; it is also a
+            // property getter, the wrong place for a side effect the call site cannot predict.
+            // (Availability is NOT the reason: _rowIndex is a field, and both of them could name it.)
+            //
+            // Two of the three degrade. RowHeightPx stops measuring the frame and falls back to the
+            // text formula, which keeps the row laid out rather than collapsed and is what that
+            // fallback is for — but it is also the basis that once let the frame overhang its slot
+            // and clip the first and last row against the viewport mask. And the line below never
+            // runs, so a read-only row keeps drawing the frame that promises an edit it will refuse.
+            //
+            // The third is named in the message precisely because it is NOT a symptom:
+            // UpdateClickCollider falls back to the field mask's rectangle, and the mask is authored
+            // at the frame's own height and x-centre, so the mouse still lands where it should. Left
+            // unsaid, the next reader spends the search on a hit-testing bug that is not there. The
+            // message carries the two qualifiers that claim needs, because both can be false at once:
+            // the box is a half unit narrower at each end (the mask is 15.625 to the frame's 16.625),
+            // and the fallback only happens at all while fieldMask is wired — with both references
+            // open, Bind returns below before binding the viewport, TryFieldRect refuses, and a blank
+            // row gets the zero-height box that this file calls the failure which bites hardest.
+            //
+            // No row index in the message, unlike ListRowButton's. There the index sits beside a role
+            // and distinguishes three separate prefab slots; here every row is a clone of one
+            // template, so an unwired reference is one authoring fault and an index would invent a
+            // per-row difference that cannot exist. Naming the object instead gives someone the
+            // address to open in the Editor. That also makes this read like its two neighbours below,
+            // which are plain strings for the same reason.
+            //
+            // No return, unlike the fieldMask check below: the row still lays out, still edits, still
+            // scrolls. Only its height and a read-only row's frame are wrong.
             if (fieldBorder != null)
                 fieldBorder.enabled = !readOnly;
+            else
+                Debug.LogWarning(
+                    "[ModSettingsMenu] ListDetailItem has no fieldBorder assigned (the Border under ItemTemplate/EditField) — rows are sized from "
+                        + "their text instead of the frame, so they can overhang their slot and clip at the list edge, and a read-only row keeps "
+                        + "drawing the edit frame it refuses. Clicks still land, a half unit short at each end, for as long as fieldMask is wired."
+                );
             var focus = selectedMarker != null ? selectedMarker.GetComponent<SpriteRenderer>() : null;
             if (focus != null)
                 focus.enabled = !readOnly;
@@ -271,7 +314,8 @@ namespace ModSettingsMenu.UI
             // (Update -> _viewport.Tick) so it scrolls out cleanly instead of clipping past the list
             // edge. screenMask is looked up by name because ListDetailScreen owns it, not this row.
             //
-            // Both references are logged loudly when missing rather than left to degrade silently.
+            // Both of the viewport's references are logged loudly when missing rather than left to
+            // degrade silently, as fieldBorder is above.
             // An unwired fieldMask leaves _viewport unbound, and an unbound viewport has no row to
             // ask for a caret index — so it reports no index at all and every caret-derived feature
             // falls back (typing appends at the row's end, word jumps and click-to-place do
@@ -460,6 +504,11 @@ namespace ModSettingsMenu.UI
         // a row has no frame reference. A read-only row takes neither that path nor the fieldBorder
         // fallback in RowHeightPx above: its renderer is merely disabled, so size and transform still
         // read correctly.
+        //
+        // That fallback is the one consequence of an unwired fieldBorder that costs almost nothing —
+        // the mask is authored at the frame's own height and x-centre, and differs only in being a
+        // half unit narrower at each end. Bind()'s warning names it for that reason, with the two
+        // conditions it depends on.
         protected override void UpdateClickCollider()
         {
             base.UpdateClickCollider();

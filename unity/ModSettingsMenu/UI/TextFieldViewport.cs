@@ -69,9 +69,10 @@ namespace ModSettingsMenu.UI
         // per-frame fit and became the published answer to what the prefab said. Which is not to say
         // the answer is being read: TryFieldRect's only consumer is the click collider's no-frame
         // fallback, and the branch above it returns whenever fieldBorder is wired, which the shipped
-        // prefab does — so that consumer is dead today (docs/roadmap.md, MSM-34), and what keeps the
-        // cache load-bearing is FitMaskToViewport, which reads all three every frame, and
-        // ApplyOffset, which reads _fieldWidth while the row is being edited.
+        // prefab does — so that consumer is dead until someone unwires the frame, which
+        // ListDetailItem.Bind now warns about by name. What keeps the cache load-bearing is
+        // FitMaskToViewport, which reads all three every frame, and ApplyOffset, which reads
+        // _fieldWidth while the row is being edited.
         //
         // ReferenceEquals, not Unity's ==: the question is whether this is the same INSTANCE already
         // measured, not whether it is still alive. Liveness is answered before the comparison, by
@@ -134,10 +135,11 @@ namespace ModSettingsMenu.UI
         // That is why THIS method must not read the live transform, but it is not what keeps the
         // cache load-bearing, and the difference took a round to see: this method's one consumer sits
         // behind a branch that returns whenever fieldBorder is wired, which the shipped prefab does,
-        // so nothing reaches here today at all (docs/roadmap.md, MSM-34). What reads the cache every
-        // frame is FitMaskToViewport, and _fieldWidth also reaches ApplyOffset while a row is being
-        // edited. So the collider argument above is what this method owes a future caller, not a
-        // description of what runs.
+        // so nothing reaches here today at all — an unwired frame is the only way in, and
+        // ListDetailItem.Bind warns when that happens. What reads the cache every frame is
+        // FitMaskToViewport, and _fieldWidth also reaches ApplyOffset while a row is being edited. So
+        // the collider argument above is what this method owes a future caller, not a description of
+        // what runs.
         //
         // In x nothing is ever clamped: the field spans [-10, +5.625] inside the viewport's [-12.5,
         // +12.5], so minX and maxX resolve to the field's own edges and the write-back restores what

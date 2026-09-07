@@ -157,6 +157,21 @@ by a section reset.
       duplicates (which inherit it) and the glyphs newly created (which do not).
 - [ ] Nothing overhangs the box; the buttons are clipped by the viewport mask
       like the rows are, and scroll with them.
+- [ ] **Not checkable here, and recorded so nobody looks for it:** the warnings
+      for an unwired frame reference — `ListDetailItem`'s and `ListAddRow`'s —
+      cannot fire on a walk, because the shipped prefab wires both. They exist
+      for an Editor pass that drops one, which is the same regression class as
+      the `trim` flag further down. Provoking one costs a line: set that
+      component's `fieldBorder` to `{fileID: 0}` in
+      `unity/ModSettingsMenu/Prefabs/ListDetailScreen.prefab`, rebuild, open the
+      drill-in, then `git checkout --` the prefab. (With the Editor closed, as
+      every prefab edit here.) Done once on 2026-09-07 with both references
+      nulled: both warnings fired and nothing threw, which is what lets the row
+      one skip the `return` its neighbour needs. The volume is the reason to
+      leave them wired — a five-row list rebuilt twice logged twelve lines for
+      what is two authoring faults. What a normal run *does* prove is their
+      absence: the log check at the end of this document fails on any warning it
+      does not name, and neither of these is on that list.
 
 ### Mouse
 
