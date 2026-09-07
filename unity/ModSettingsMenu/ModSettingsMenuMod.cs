@@ -133,11 +133,15 @@ namespace ModSettingsMenu
                     new ConfigDescription("Prose with a comma, to check it is not mistaken for a list."),
                     clientScope
                 );
-                // Word jumps need spaces, and none can be typed into a row (trim: 1 drops a lone
-                // space, matching vanilla). A value loaded from a config may well contain them,
-                // which is the case Ctrl/Alt+Arrow actually serves — so exercise it from here.
-                // Two words per token deliberately: HeuristicSaysList refuses anything longer,
-                // and a three-word token would arrive as a read-only Info row instead.
+                // Two words per token deliberately: HeuristicSaysList allows one internal whitespace
+                // and refuses anything longer, so a three-word token would arrive as a read-only
+                // Info row instead of a list. That cap is why this fixture exists at all — a token
+                // wide enough for a word jump is exactly at the edge of what discovery accepts.
+                //
+                // Spaces CAN be typed into a row now; the prefab ships trim: 0 and MenuPatch's
+                // AppendString prefix says why. This fixture is not the only way to get one, but it
+                // is the way to get one discovery has classified as a list, which is what the word
+                // jump serves.
                 testFile.Bind(
                     "Settings",
                     "WithSpaces",
