@@ -405,24 +405,42 @@ namespace ModSettingsMenu
         // arrow verdict at all — the chain short-circuits after Backspace and never asks about the
         // arrows.
         //
-        // That holds for the game's own calls, not for every call there could be, and the
-        // difference is not theoretical: BetterTextInput ships an accessor assembly and calls
-        // MenuManager.IsKeyDown for both arrows from its OWN HandleTypingInput prefix, ahead of the
-        // chain that would have short-circuited. A postfix cannot tell whose call it is answering,
-        // so with that mod loaded an arrow verdict can exist in a frame vanilla never asks about
-        // arrows. What comes back is much less than what this removes, and the reason is the second
-        // parameter: every one of those probes passes checkOnlyOnPressedDown: true, which drops the
-        // GetKey-and-timer half of the condition (Pug.Other:269696) — the same opt-out Return and
-        // KeypadEnter use at :269636. So the probes answer true on a press edge only, one frame per
-        // press, where the surplus removed here was a HELD arrow's 20 Hz repeat stream. A stray
-        // verdict per fresh press, not the stream back. The clearing prefix below no longer decides
-        // that by accident: it takes Priority.First for an unrelated reason (see there), which also
-        // pins it AHEAD of those probes — so a stray verdict is never erased and always reaches the
-        // postfix. Two guards there make that harmless, and it takes both. On a frame that mod let
-        // through, it has also moved a word, so the caret-distance gate declines the jump. On a
-        // frame it CANCELLED after probing — Escape, Home, End, Ctrl+A, a selection path — the
-        // distance can be zero, since selecting text moves no caret; the postfix returns on
-        // __runOriginal before ever reading the verdict. Neither guard covers the other's frame.
+        // That holds for the game's own calls, not for every call there could be. THIS IS THE ONE
+        // PLACE that describes the mod which makes the difference; the guards in the postfix carry a
+        // line each and point back here. Keeping the model in three places is what let three
+        // descriptions of it drift apart and contradict each other.
+        //
+        // BetterTextInput ships an accessor assembly and calls MenuManager.IsKeyDown from its OWN
+        // HandleTypingInput prefix, ahead of the chain that would have short-circuited. A postfix
+        // cannot tell whose call it answers. Three properties of those calls decide what that costs:
+        //
+        //   1. The arrow probes are UNGATED — a || chain at the top of its HandleSpecialKeys with no
+        //      modifier test at all. Its own word jump is gated on LeftControl much further down, so
+        //      a probe fires in frames where that mod then does nothing.
+        //   2. They pass checkOnlyOnPressedDown: true, dropping the GetKey-and-timer half of the
+        //      condition (Pug.Other:269696) — the same opt-out Return and KeypadEnter use at
+        //      :269636. So they answer on a press edge only: one stray verdict per fresh press, not
+        //      the 20 Hz stream a held key produces.
+        //   3. It probes BEFORE deciding whether to cancel, so a cancelled frame can still carry a
+        //      formed verdict. It cancels for Home, End, Ctrl+A and the selection paths. Escape is
+        //      the exception — probed first, returning before the arrows are reached.
+        //
+        // The clearing prefix below takes Priority.First, which also pins it ahead of those probes,
+        // so a stray verdict is never erased and always reaches the postfix. Two guards there bound
+        // what it can do, and they cover different frames: on a LeftControl frame that mod let
+        // through it has also moved a word, so the caret-distance gate declines; on a frame it
+        // cancelled, the distance can be zero — selecting text moves no caret — and the postfix
+        // returns on __runOriginal before reading the verdict at all.
+        //
+        // ONE FRAME CLASS ESCAPES BOTH, and cannot be caught with what is available here: an arrow
+        // press edge in a frame vanilla's chain gives to Backspace or Delete. The body ran, so
+        // __runOriginal is true; Backspace's RemoveCharBehindMarker decrements the index by exactly
+        // one (Pug.Other:343485), so the distance reads 1 and is indistinguishable from vanilla's
+        // own arrow step. The jump then fires on a frame the user was deleting in. That is the
+        // over-set MSM-31 removed, returning while this mod is loaded and only in that coincidence,
+        // and harmless in the same way it was then: the jump is computed from where the caret IS, so
+        // it lands on a real word boundary. Telling it apart would mean knowing which branch of
+        // vanilla's chain claimed the frame, which neither the verdict nor the caret reports.
         [HarmonyPatch(typeof(MenuManager), "IsKeyDown"), HarmonyPostfix]
         public static void MenuManager_IsKeyDown(KeyCode keyCode, bool __result)
         {
@@ -450,17 +468,23 @@ namespace ModSettingsMenu
         // It also records where the caret stood before anything moved it, which is what lets the
         // postfix tell "vanilla shifted ±1" from "somebody jumped". See the caretBefore use there.
         //
-        // Priority.First is load-bearing for that reading and for nothing else. Another mod's prefix
-        // on this same method can move the caret itself — BetterTextInput does, a whole word, before
-        // vanilla's body runs — and Harmony orders equal-priority prefixes by load order, which is
-        // not ours to pin. Reading second would capture a caret that had already jumped and report a
-        // move of one, exactly inverting the test. That mod declares no priority, so First settles
-        // it; a third patch that also took First would fall back to registration order, and only
-        // [HarmonyBefore] would truly pin that — not worth it against a case that does not exist.
-        // auto-rail-bridges is the corpus precedent for the attribute but not for the reason: there
-        // First is needed to RUN AT ALL, because PlacementPlus's prefix returns false and cancels
-        // what follows. Here nothing is cancelled and the need is narrower — sample state before
-        // another patch changes it.
+        // Priority.First is load-bearing for two readings, not one, and both are the same kind of
+        // need: sample or clear state before another patch acts. Here it is the caret — another
+        // mod's prefix on this same method can move it before vanilla's body runs (BetterTextInput
+        // does, a whole word), and reading second would capture an already-jumped caret and report a
+        // move of one, exactly inverting the test. It also pins this clear ahead of that mod's own
+        // IsKeyDown probes, which the IsKeyDown postfix above relies on; lowering the priority would
+        // silently falsify that paragraph too.
+        //
+        // Harmony orders equal-priority prefixes by load order, which is not ours to pin. That mod
+        // declares no priority, so First settles it; a third patch also taking First would fall back
+        // to registration order, and only [HarmonyBefore] would truly pin that — not worth it
+        // against a case that does not exist. auto-rail-bridges is the corpus precedent, and for the
+        // same reason as here rather than a different one: it needs its context captured before
+        // PlacementPlus's prefix does its own placement work. (Its comment explains the attribute
+        // with "Harmony skips remaining prefixes" — that is stock-Harmony folklore and false under
+        // the HarmonyX this game ships, as the postfix below documents with the citation. The
+        // attribute is right there; the reason given for it is not.)
         //
         // No gating on the input device. There is a row check, but only because the caret read needs
         // a row to ask; the flags are cleared for every frame regardless, which is what the postfix's
@@ -485,11 +509,10 @@ namespace ModSettingsMenu
         // field; that one retired with the reflection read, so this is the only typing-path warning
         // left and the reason for keeping them apart is gone with it.
         //
-        // No mod in the corpus does this to us today. BetterTextInput is the only one with a prefix
-        // on this method, and while an arrow is held it returns TRUE — its own IsKeyDown probe sets
-        // typingActionWasClicked through GetKey (Pug.Other:269695), so it falls through to the
-        // pass-through return. It cancels for Escape, Home/End, Ctrl+A and the selection and IME
-        // paths. So this is hardening against the class, not against that mod.
+        // BetterTextInput reaches this: it cancels for Home, End, Ctrl+A and the selection and IME
+        // paths (see the IsKeyDown postfix above for the full model). Its own Ctrl+Arrow word jump
+        // is NOT one of those frames, so this fires from a coincidence rather than from a mod that
+        // has taken the feature over — which is what the message has to convey.
         private static bool _warnedForeignTypingPrefix;
 
         private static void WarnForeignTypingPrefixOnce()
@@ -497,14 +520,17 @@ namespace ModSettingsMenu
             if (_warnedForeignTypingPrefix)
                 return;
             _warnedForeignTypingPrefix = true;
-            // Names what takes over, not only what is lost. With the body skipped vanilla moves no
-            // caret either, so the row does not half-work: the key does nothing at all rather than
-            // jumping once and then crawling, which is what the previous shape degraded to.
+            // Reports the frame, not a verdict on the session. The condition moved when the guard
+            // did: it used to require that no arrow verdict existed, and now fires whenever the body
+            // was skipped with an arrow down — including frames where a verdict existed and was
+            // deliberately discarded. So the wording says what happened once, not what is broken
+            // from now on, and names no key combination: with the mod that reaches this, Alt+Arrow
+            // and its own Ctrl+Arrow both keep working.
             Debug.LogWarning(
-                "[ModSettingsMenu] Another mod's patch is skipping MenuManager.HandleTypingInput, so the game's own typing body does "
-                    + "not run and word jumps have nothing to key off — Ctrl+Arrow (or Alt+Arrow) does nothing in a settings list "
-                    + "while that patch is active. The game's own caret movement is skipped by the same patch, so nothing is "
-                    + "half-applied and no text is lost. Logged once per session."
+                "[ModSettingsMenu] Another mod's patch skipped MenuManager.HandleTypingInput while an arrow key was down, so a word "
+                    + "jump in a settings list was not applied for that frame — the game's own caret movement was skipped by the same "
+                    + "patch, so nothing is half-applied and no text is lost. This is a per-frame coincidence, not a feature being "
+                    + "taken over: word jumps keep working otherwise. Logged once per session."
             );
         }
 
@@ -575,13 +601,21 @@ namespace ModSettingsMenu
             // a no-op rather than a missing feature. Vanilla never reads these keycodes at all, so
             // there is no verdict of its own to observe here even if one were wanted.
             //
-            // They also sit AHEAD of the __runOriginal guard below, deliberately. That guard exists
-            // because a word jump extends vanilla's own ±1 and has nothing to extend when the body
-            // was cancelled; Home and End extend nothing — they are this mod's own feature, on
-            // keycodes the game never touches. So a cancelled body is no reason to withhold them.
-            // The one visible consequence is that a mod which handles Home itself AND cancels
-            // (BetterTextInput does) makes both move the caret, which is invisible because both
-            // clamp to the same end. Idempotent, so left alone rather than guarded on a guess.
+            // They also sit AHEAD of the __runOriginal guard below, deliberately, and both of that
+            // guard's reasons miss them. It exists because a word jump extends vanilla's own ±1 and
+            // has nothing to extend when the body was cancelled — Home and End extend nothing, being
+            // this mod's own feature on keycodes the game never reads — and because a stale arrow
+            // verdict might be acted on, which they never consult, reading GetKeyDown directly.
+            //
+            // What that costs is one known interaction, read off BetterTextInput's source rather
+            // than measured: it handles Home and End itself and cancels, so both move the caret. The
+            // endpoints agree (its MoveToStart/MoveToEnd write 0 and the text length; ours goes
+            // through MoveCharMarker, clamped to the same bounds), so the caret lands identically.
+            // Its Ctrl+A path is the one that does not compose: it selects and cancels, and a Home
+            // in the same frame would drive the caret to 0 while the selection it drew stays on
+            // screen. Rarer than the frame the guard fixes, and not invisible. Left as is rather
+            // than guarded, because guarding it would need the same signal the guard below has and
+            // these branches deliberately do not consult.
             int length = row.pugText.GetTextLength();
             if (Input.GetKeyDown(KeyCode.Home))
             {
@@ -634,25 +668,15 @@ namespace ModSettingsMenu
             // Nothing to fall back to any more, and nothing that can fail to be read: with no
             // verdict the direction is 0 and the frame passes. What used to degrade here was the
             // reflection read; it is gone.
-            // No body, no jump. A word jump extends vanilla's own ±1, so when a foreign prefix has
-            // cancelled the body there is nothing to extend — and worse, a verdict may still be
-            // sitting in the flags without the game having produced it. BetterTextInput probes both
-            // arrows at the top of its prefix and only then decides whether to cancel, so a frame
-            // where it takes over for Escape, Home, End, Ctrl+A or a selection path can carry a
-            // fully-formed arrow verdict while vanilla's chain never ran. Acting on it would move
-            // the caret a word in the middle of somebody else's shortcut, and the caret-distance
-            // gate below would not catch it: a mod that selects text without moving the caret leaves
-            // a distance of zero, which reads as "nobody jumped".
-            //
-            // Keying on __runOriginal rather than on the verdict is the point. The verdict says a
-            // key was down; it does not say whose question that answered. This is the one signal
-            // that distinguishes "the game handled typing this frame" from "somebody else did", and
-            // it is HarmonyX's own (0Harmony:10168) rather than anything inferred.
-            //
-            // Costs nothing where no such mod is loaded, because then the body always runs. What it
-            // does cost, with one loaded, is the jump the timer-reading shape would still have fired
-            // off GetKeyDown in a cancelled frame — which was never right either, for the same
-            // reason it is not right now.
+            // No body, no jump. A word jump extends vanilla's own ±1, and a cancelled body leaves
+            // nothing to extend — while possibly still leaving an arrow verdict behind, since a
+            // foreign prefix can probe the arrows before deciding to cancel. Acting on that would
+            // move the caret a word in the middle of somebody else's shortcut, and the distance gate
+            // below would not decline it: a mod that selects text moves no caret, so the distance
+            // reads zero. Keyed on __runOriginal rather than on the verdict because the verdict says
+            // a key was down, not whose question that answered; this is HarmonyX's own record of
+            // whether the game handled typing at all. Costs nothing where no such mod is loaded,
+            // because then the body always runs. Full model: the IsKeyDown postfix above.
             if (!__runOriginal)
             {
                 if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow))
@@ -694,38 +718,22 @@ namespace ModSettingsMenu
             if (!row.Viewport.TryCaretIndex(out int current))
                 return;
 
-            // Somebody already jumped this frame, so this one would be the second. Vanilla's own
-            // arrow branch moves the caret by exactly ±1 (Pug.Other:269661, :269665), and the prefix
-            // read the counter before any of that ran, so a distance greater than one says a
-            // different hand moved it — and the only hands in that frame are vanilla's and another
-            // patch's.
+            // Somebody already jumped this frame, so this one would be the second. Vanilla moves the
+            // caret by exactly ±1 (Pug.Other:269661, :269665) and the prefix read the counter before
+            // any of that ran, so a greater distance means a different hand moved it. Named no mod
+            // on purpose: any patch doing the same is covered, and a name would go stale. Against
+            // the one that exists this is an equivalence rather than a heuristic — its MoveToWord
+            // targets one short of the boundary so vanilla's step lands on it, which makes distance
+            // 1 mean "it found nothing to move to". That holds on frames vanilla's arrow branch
+            // claims; the frame it does not hold on is the last paragraph of the IsKeyDown postfix
+            // above.
             //
-            // This is what the double-jump turned out to need, and it is not "detect BetterTextInput". That
-            // mod is the case that exists (its Awake prefix attaches a controller to every text row,
-            // ours included, and on a Ctrl+Left press frame it runs MoveToWord(-1) before vanilla's
-            // shift), but naming it would be both narrower and wider than the truth: narrower
-            // because any future patch doing the same would slip past, wider because standing down
-            // whenever it is merely LOADED would be wrong. It only jumps on the press edge — its
-            // probes pass checkOnlyOnPressedDown: true — so on every repeat tick it does nothing and
-            // this jump is the only thing between a held key and vanilla's character-by-character
-            // crawl. It also reads LeftControl alone, so an Alt or RightControl word jump is ours
-            // even on a press frame. The question is per frame, and so is the answer.
-            //
-            // Against that mod the test is not an approximation but an equivalence, and the reason
-            // is its own arithmetic: MoveToWord targets one SHORT of the boundary (match.Index + 1
-            // going left) precisely so vanilla's following -1 lands on it. Backwards the net
-            // distance is therefore `current - matchIndex`, and since matchIndex < current is that
-            // search's own condition, a distance of 1 means the target WAS the current index — it
-            // found nothing to move to. Forwards the same holds mirrored. So "greater than one" and
-            // "that mod moved the caret" pick out the same frames.
-            //
-            // A caret that did not move at all (distance 0) still jumps, and the case that produces
-            // it is the clamp: MoveCharMarker bounds to [0, length] (Pug.Other:343458), so Ctrl+Left
-            // at index 0 yields a verdict and no movement. Standing still is not evidence that
-            // someone else acted. Unknown means the prefix could not read a counter, which is the
-            // same fault TryCaretIndex reports above, and it falls through to jumping rather than
-            // going quiet — the behaviour before this gate, which is right for the install where nothing
-            // else is patching this row at all.
+            // Distance 0 still jumps. In a vanilla install the case that produces it is the clamp —
+            // MoveCharMarker bounds to [0, length] (Pug.Other:343458), so Ctrl+Left at index 0 gives
+            // a verdict and no movement — and standing still is not evidence that someone else
+            // acted. Unknown means the prefix could not read a counter, the same fault TryCaretIndex
+            // reports above, and falls through to jumping: the behaviour before this gate, which is
+            // right for the install where nothing else patches this row.
             if (caretBefore != CaretUnknown && Mathf.Abs(current - caretBefore) > 1)
                 return;
 

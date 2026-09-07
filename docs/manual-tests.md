@@ -247,32 +247,35 @@ line in two jumps and ends up there whether it jumped or crawled.
 - [ ] Repeat the first check with **End**. This one is a control, not a proof:
       appending at the end is exactly what the fallback does, so its verdict
       comes from the log check below rather than from the screen.
-- [ ] In `WithSpaces`, **tap** Ctrl+Left / Alt+Left from the end of an entry — it
-      lands on the word boundary; Ctrl+Right walks forward the same way. **Tap, not
-      hold:** these tokens are two words each, so a press held past 0.3 s now takes
-      a second jump and lands on 0, which the paragraph above says is where an
-      off-by-one is invisible. Landing at the front here means the press was long,
-      not that the jump was wrong. What this does **not** establish: the ordinary
-      word jump behaves identically with and without the compensation term ADR-009
-      removed — that term was correct in every case it could see. Only a
-      **Backspace** auto-repeating in the same frame differed, and that is not
-      cleanly provokable by hand. So this guards the jump against regression; it
-      does not verify the removal.
-      **These criteria assume no other mod is moving the caret.** With Better
-      Text Input loaded this mod's own jump stands aside on the press edge and
-      that mod's landing wins, whose forward target is the *current* word's end
-      rather than the next word's start — so Ctrl+Right lands one word earlier
-      than written here. Its word jump also reads LeftControl alone, so
-      **Alt**+Arrow and RightControl+Arrow stay on this mod's own path and match
-      the criteria above even with it loaded. Distinguishing the two is the whole
-      point of the check further down that holds the key.
+- [ ] In `WithSpaces`, **tap** Ctrl+Left / Alt+Left from the end of an entry —
+  it lands on the word boundary; Ctrl+Right walks forward the same way. **Tap,
+  not hold:** these tokens are two words each, so a press held past 0.3 s now
+  takes a second jump and lands on 0, which the paragraph above says is where an
+  off-by-one is invisible. Landing at the front here means the press was long,
+  not that the jump was wrong. What this does **not** establish: the ordinary
+  word jump behaves identically with and without the compensation term ADR-009
+  removed — that term was correct in every case it could see. Only a
+  **Backspace** auto-repeating in the same frame differed, and that is not
+  cleanly provokable by hand. So this guards the jump against regression; it
+  does not verify the removal. **These criteria assume no other mod is moving
+  the caret.** With Better Text Input loaded this mod's own jump stands aside on
+  the press edge and that mod's landing wins, whose forward target is the
+  *current* word's end rather than the next word's start — so Ctrl+Right lands
+  on the end of the word instead of just past the following space, one character
+  short of what is written here, and further along than it when the caret starts
+  on a space. Its word jump also reads LeftControl alone, so **Alt**+Arrow and
+  RightControl+Arrow stay on this mod's own path and match the criteria above
+  even with it loaded. Distinguishing the two is the whole point of the check
+  further down that holds the key.
 - [ ] **Type a space** into an entry — it appears. Trivial to perform and easy to
-      lose: the row prefab's `trim` flag makes vanilla's `AppendString` empty a
-      lone space, so with it on no entry can be given one at all, and every
-      word-jump check above silently degrades into testing tokens the fixture
-      supplied rather than anything typed. The flag is off in the prefab and the
-      `AppendString` prefix says why; an Editor pass that turns it back on breaks
-      this and nothing else visibly.
+      lose: with the row prefab's `trim` flag on, the `AppendString` prefix's own
+      replicated `s.Trim()` empties a lone space, so no entry can be given one at
+      all, and every word-jump check above silently degrades into testing tokens
+      the fixture supplied rather than anything typed. (Vanilla's `AppendString`
+      never runs for these rows — the prefix returns false on every path.) The
+      flag is off in the prefab and that prefix says why; an Editor pass turning
+      it back on breaks this, and also quietly strips the outer spaces of a
+      paste.
 - [ ] In `testListWordJump`'s **first** entry, put the caret at the end, **hold**
       Ctrl+Left (or Alt+Left) for about half a second, and let go. **The caret has
       passed `nine` — somewhere around `seven` or `eight`.** Where exactly depends

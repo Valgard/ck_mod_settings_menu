@@ -82,11 +82,13 @@ entry is the version published to mod.io; its body is the modfile changelog.
   could only ever be one — or had to arrive that way from the mod's own config
   file. Spaces now type normally. What is stored is unchanged: an entry is still
   saved without leading or trailing spaces.
-- **Fixed: a word jump moved two words with Better Text Input installed.** That
-  mod moves the caret by a word of its own on the same keypress, so one press
-  travelled twice as far as asked. The jump now steps aside when something else
-  has already moved the caret that frame, and still does its own work on every
-  repeat while a key is held, which that mod leaves alone.
+- **Fixed: a word jump to the left moved two words with Better Text Input
+  installed.** That mod moves the caret by a word of its own on the same
+  keypress, so one press travelled twice as far as asked. Only leftwards —
+  rightwards the two happened to agree. A press now moves one word again, and
+  holding the key still repeats as before. With that mod installed a rightward
+  jump lands on the end of the word rather than just past the following space,
+  because its own move is the one that wins.
 - **A setting you cannot change still looks like itself.** A read-only value
   used to collapse into a plain text row; it now keeps its native widget — a
   locked toggle still reads as on/off, a locked slider still shows its
