@@ -117,10 +117,10 @@ namespace ModSettingsMenu.UI
             _fieldOriginX = originX;
         }
 
-        /// <summary>The field rectangle as the prefab AUTHORED it: <paramref name="width"/>,
-        /// <paramref name="height"/>, and <paramref name="centerX"/> — the centre, not the edge — in the
-        /// row's local x. False while unbound, silently, for the same reason TryCaretIndex is: the only
-        /// way to get here unbound is an unwired fieldMask, and Bind()'s caller logs that by name.</summary>
+        /// <summary>The field rectangle as the prefab AUTHORED it. False while unbound, silently, for
+        /// the same reason TryCaretIndex is: the only way to get here unbound is an unwired fieldMask,
+        /// and Bind()'s caller logs that by name. The rectangle is a <see cref="FieldRect"/> rather
+        /// than three out floats so the caller cannot transpose them; that type carries why.</summary>
         // Exists so that a caller wanting this rectangle does not read it off the mask's live transform,
         // which Bind's comment above explains is no longer a witness to it once Tick has run.
         //
@@ -144,19 +144,16 @@ namespace ModSettingsMenu.UI
         // was already there. There the objection is the DEPENDENCY alone — 2.5 units of slack at the
         // left edge is all that separates a silent equality from a silent error, and nothing in the
         // code holds the viewport wider than the field.
-        public bool TryFieldRect(out float width, out float height, out float centerX)
+        public bool TryFieldRect(out FieldRect rect)
         {
-            width = 0f;
-            height = 0f;
-            centerX = 0f;
+            rect = default;
             if (_fieldMask == null)
                 return false;
-            width = _fieldWidth;
-            height = _fieldHeight;
-            // The exact inverse of Bind's own subtraction, so it hands back the localPosition.x Bind
-            // read. That this doubles as the field's CENTRE — and is therefore usable as a collider
-            // centre — is what the mask's centred pivot buys; the round trip itself is only algebra.
-            centerX = _fieldOriginX + _fieldWidth / 2f;
+            // The centre is the exact inverse of Bind's own subtraction, so it hands back the
+            // localPosition.x Bind read. That this doubles as the field's CENTRE — and is therefore
+            // usable as a collider centre — is what the mask's centred pivot buys; the round trip
+            // itself is only algebra.
+            rect = new FieldRect(_fieldWidth, _fieldHeight, _fieldOriginX + _fieldWidth / 2f);
             return true;
         }
 
