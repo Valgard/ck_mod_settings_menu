@@ -1034,27 +1034,6 @@ reachable for admins.
   an error, only as "the button does nothing" — the same combination that
   already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
   not in code.
-- **MSM-32 — A stray `IsKeyDown` verdict from a foreign probe.** BetterTextInput
-  ships an accessor assembly and calls `MenuManager.IsKeyDown` for both arrows
-  from its own `HandleTypingInput` **prefix**, ahead of the else-if chain that
-  would otherwise have short-circuited. A postfix cannot tell whose call it
-  answers, so with that mod loaded an arrow verdict can exist in a frame vanilla
-  never asks about arrows. Much less comes back than the postfix removes: every
-  one of those probes passes `checkOnlyOnPressedDown: true`, which drops the
-  held-key half of the condition, so they answer true on a press edge only — one
-  stray verdict per fresh press against the 20 Hz repeat stream the vanilla shape
-  is rid of. Since the word-jump fix took `Priority.First`, the clearing prefix
-  runs **ahead** of those probes rather than possibly after them, so such a
-  verdict is never erased and always reaches the postfix; the caret-distance gate
-  then declines the jump, because a press-edge probe is a frame that mod has also
-  moved a word in. So the surplus is bounded and covered, and what remains open is
-  narrow: the frames that mod *cancels* the body in, having probed the arrows
-  first, which need an arrow press edge and one of its cancelling keys (Escape,
-  Home, End, Ctrl+A, a selection path) inside a single frame. Not reproducible by
-  hand; a temporary log line where `direction != 0 && !__runOriginal` would settle
-  it. This half genuinely arrived with the `IsKeyDown` postfix — the timer-reading
-  shape read a shared field no foreign probe could reach. Found by the
-  `ckdocs-source-verifier` lane on 2026-09-06.
 - **MSM-33 — Three same-typed floats cross a boundary whose neighbour needs no
   scalars at all.** `TextFieldViewport.TryFieldRect` hands out `width`, `height`
   and `centerX` as three `out float`s, and its one consumer lands them in
