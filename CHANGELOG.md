@@ -77,6 +77,16 @@ entry is the version published to mod.io; its body is the modfile changelog.
   (or Alt) together with an arrow key jumped one word and then moved a single
   character at a time for as long as the key stayed down. It now keeps jumping
   word by word, at the same repeat rate the game uses for every other held key.
+- **Fixed: a list entry would not accept a typed space.** Pressing the space bar
+  while editing an entry did nothing at all, so a value that needed two words
+  could only ever be one — or had to arrive that way from the mod's own config
+  file. Spaces now type normally. What is stored is unchanged: an entry is still
+  saved without leading or trailing spaces.
+- **Fixed: a word jump moved two words with Better Text Input installed.** That
+  mod moves the caret by a word of its own on the same keypress, so one press
+  travelled twice as far as asked. The jump now steps aside when something else
+  has already moved the caret that frame, and still does its own work on every
+  repeat while a key is held, which that mod leaves alone.
 - **A setting you cannot change still looks like itself.** A read-only value
   used to collapse into a plain text row; it now keeps its native widget — a
   locked toggle still reads as on/off, a locked slider still shows its

@@ -226,14 +226,17 @@ namespace ModSettingsMenu
             // future row template could break silently.
             //
             // The row prefab ships trim: 0, and that is deliberate — do NOT turn it back on in the
-            // Editor. AppendString receives ONE typed character at a time, so `s.Trim()` on a typed
-            // space is `""` and the space is swallowed: with trim on, a list entry cannot be given a
-            // space at all, and the word navigation has nothing to navigate except in tokens a
-            // foreign config already contained. What trim was wanted for — no leading or trailing
-            // space on a stored token — happens at commit instead, in ListTokenizer.Sanitize, which
-            // is also where the separator is stripped. One rule, applied once, at the moment the
-            // token is written rather than on every keystroke. The branch stays because a future row
-            // template may legitimately want it and because this prefix mirrors the base class.
+            // Editor. A lone typed space arrives as the WHOLE of s, so `s.Trim()` empties it and the
+            // keystroke vanishes; with trim on, a list entry cannot be given a space at all, and the
+            // word navigation has nothing to navigate except in tokens a foreign config already
+            // contained. (s is not always one character — Input.inputString batches a frame's worth
+            // and the paste branch hands over the clipboard entire, which is what the 255-char cap
+            // below is for. Trim would eat the outer spaces of a paste too.) What trim was wanted
+            // for — no leading or trailing space on a stored token — happens at commit instead, in
+            // ListTokenizer.Sanitize, which is also where the separator is stripped. One rule,
+            // applied once, at the moment the token is written rather than on every keystroke. The
+            // branch stays because a future row template may legitimately want it and because this
+            // prefix mirrors the base class.
             if (__instance.trim)
                 s = s.Trim();
             for (int i = s.Length - 1; i >= 0; i--)
@@ -412,10 +415,12 @@ namespace ModSettingsMenu
         // GetKey-and-timer half of the condition (Pug.Other:269696) — the same opt-out Return and
         // KeypadEnter use at :269636. So the probes answer true on a press edge only, one frame per
         // press, where the surplus removed here was a HELD arrow's 20 Hz repeat stream. A stray
-        // verdict per fresh press, not the stream back. Whether the clearing prefix below happens to
-        // run after that probe and erase it is Harmony's load order, which is not a guarantee. Not
-        // measured, because the mod is not loaded on this machine; docs/roadmap.md MSM-32 owns that
-        // pairing and now records this alongside it.
+        // verdict per fresh press, not the stream back. The clearing prefix below no longer decides
+        // that by accident: it takes Priority.First for an unrelated reason (see there), which also
+        // pins it AHEAD of those probes — so a stray verdict is never erased and always reaches the
+        // postfix. Harmless, and checked in game with that mod loaded: it can only set one on a
+        // press edge, which is a frame it has also moved a word in, so the caret-distance gate at
+        // the end of the postfix declines the jump anyway.
         [HarmonyPatch(typeof(MenuManager), "IsKeyDown"), HarmonyPostfix]
         public static void MenuManager_IsKeyDown(KeyCode keyCode, bool __result)
         {
@@ -447,9 +452,13 @@ namespace ModSettingsMenu
         // on this same method can move the caret itself — BetterTextInput does, a whole word, before
         // vanilla's body runs — and Harmony orders equal-priority prefixes by load order, which is
         // not ours to pin. Reading second would capture a caret that had already jumped and report a
-        // move of one, exactly inverting the test. Neither that mod nor this one declared a priority
-        // before; ours does now, and the corpus precedent is auto-rail-bridges, which took
-        // Priority.First against PlacementPlus for the same reason.
+        // move of one, exactly inverting the test. That mod declares no priority, so First settles
+        // it; a third patch that also took First would fall back to registration order, and only
+        // [HarmonyBefore] would truly pin that — not worth it against a case that does not exist.
+        // auto-rail-bridges is the corpus precedent for the attribute but not for the reason: there
+        // First is needed to RUN AT ALL, because PlacementPlus's prefix returns false and cancels
+        // what follows. Here nothing is cancelled and the need is narrower — sample state before
+        // another patch changes it.
         //
         // No gating on the input device. There is a row check, but only because the caret read needs
         // a row to ask; the flags are cleared for every frame regardless, which is what the postfix's
@@ -671,7 +680,7 @@ namespace ModSettingsMenu
             // different hand moved it — and the only hands in that frame are vanilla's and another
             // patch's.
             //
-            // This is what MSM-32 turned out to need, and it is not "detect BetterTextInput". That
+            // This is what the double-jump turned out to need, and it is not "detect BetterTextInput". That
             // mod is the case that exists (its Awake prefix attaches a controller to every text row,
             // ours included, and on a Ctrl+Left press frame it runs MoveToWord(-1) before vanilla's
             // shift), but naming it would be both narrower and wider than the truth: narrower
@@ -679,13 +688,23 @@ namespace ModSettingsMenu
             // whenever it is merely LOADED would be wrong. It only jumps on the press edge — its
             // probes pass checkOnlyOnPressedDown: true — so on every repeat tick it does nothing and
             // this jump is the only thing between a held key and vanilla's character-by-character
-            // crawl. The question is per frame, and so is the answer.
+            // crawl. It also reads LeftControl alone, so an Alt or RightControl word jump is ours
+            // even on a press frame. The question is per frame, and so is the answer.
             //
-            // A caret that did not move at all (distance 0) still jumps: vanilla's shift is absent in
-            // frames its chain gave to Backspace or Delete, and doing nothing there is not evidence
-            // that anyone else acted. Unknown means the prefix could not read a counter, which is the
+            // Against that mod the test is not an approximation but an equivalence, and the reason
+            // is its own arithmetic: MoveToWord targets one SHORT of the boundary (match.Index + 1
+            // going left) precisely so vanilla's following -1 lands on it. Backwards the net
+            // distance is therefore `current - matchIndex`, and since matchIndex < current is that
+            // search's own condition, a distance of 1 means the target WAS the current index — it
+            // found nothing to move to. Forwards the same holds mirrored. So "greater than one" and
+            // "that mod moved the caret" pick out the same frames.
+            //
+            // A caret that did not move at all (distance 0) still jumps, and the case that produces
+            // it is the clamp: MoveCharMarker bounds to [0, length] (Pug.Other:343458), so Ctrl+Left
+            // at index 0 yields a verdict and no movement. Standing still is not evidence that
+            // someone else acted. Unknown means the prefix could not read a counter, which is the
             // same fault TryCaretIndex reports above, and it falls through to jumping rather than
-            // going quiet — the pre-MSM-32 behaviour, which is right for the install where nothing
+            // going quiet — the behaviour before this gate, which is right for the install where nothing
             // else is patching this row at all.
             if (caretBefore != CaretUnknown && Mathf.Abs(current - caretBefore) > 1)
                 return;
