@@ -1034,12 +1034,3 @@ reachable for admins.
   an error, only as "the button does nothing" — the same combination that
   already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
   not in code.
-- **MSM-35 — The blank-row click that `manual-tests.md` names but never makes.**
-  The `### Mouse` preamble states the historical failure in as many words: a row
-  with an empty text field once had a zero-height collider and nobody noticed,
-  because keyboard and controller reach such a row regardless. No check below it
-  clicks a blank row's field — the only blank-row step presses ✕. Unlike most of
-  what a check here could cover, this one guards a live path: the frame branch of
-  `UpdateClickCollider`, which runs on every row of the shipped prefab. So the
-  document explains why the check exists and then does not contain it. Found by
-  the `pr-review-toolkit` lanes on 2026-09-06.
