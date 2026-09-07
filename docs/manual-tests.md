@@ -258,6 +258,21 @@ line in two jumps and ends up there whether it jumped or crawled.
       **Backspace** auto-repeating in the same frame differed, and that is not
       cleanly provokable by hand. So this guards the jump against regression; it
       does not verify the removal.
+      **These criteria assume no other mod is moving the caret.** With Better
+      Text Input loaded this mod's own jump stands aside on the press edge and
+      that mod's landing wins, whose forward target is the *current* word's end
+      rather than the next word's start — so Ctrl+Right lands one word earlier
+      than written here. Its word jump also reads LeftControl alone, so
+      **Alt**+Arrow and RightControl+Arrow stay on this mod's own path and match
+      the criteria above even with it loaded. Distinguishing the two is the whole
+      point of the check further down that holds the key.
+- [ ] **Type a space** into an entry — it appears. Trivial to perform and easy to
+      lose: the row prefab's `trim` flag makes vanilla's `AppendString` empty a
+      lone space, so with it on no entry can be given one at all, and every
+      word-jump check above silently degrades into testing tokens the fixture
+      supplied rather than anything typed. The flag is off in the prefab and the
+      `AppendString` prefix says why; an Editor pass that turns it back on breaks
+      this and nothing else visibly.
 - [ ] In `testListWordJump`'s **first** entry, put the caret at the end, **hold**
       Ctrl+Left (or Alt+Left) for about half a second, and let go. **The caret has
       passed `nine` — somewhere around `seven` or `eight`.** Where exactly depends
