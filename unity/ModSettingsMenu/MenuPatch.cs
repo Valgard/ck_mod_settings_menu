@@ -418,9 +418,11 @@ namespace ModSettingsMenu
         // verdict per fresh press, not the stream back. The clearing prefix below no longer decides
         // that by accident: it takes Priority.First for an unrelated reason (see there), which also
         // pins it AHEAD of those probes — so a stray verdict is never erased and always reaches the
-        // postfix. Harmless, and checked in game with that mod loaded: it can only set one on a
-        // press edge, which is a frame it has also moved a word in, so the caret-distance gate at
-        // the end of the postfix declines the jump anyway.
+        // postfix. Two guards there make that harmless, and it takes both. On a frame that mod let
+        // through, it has also moved a word, so the caret-distance gate declines the jump. On a
+        // frame it CANCELLED after probing — Escape, Home, End, Ctrl+A, a selection path — the
+        // distance can be zero, since selecting text moves no caret; the postfix returns on
+        // __runOriginal before ever reading the verdict. Neither guard covers the other's frame.
         [HarmonyPatch(typeof(MenuManager), "IsKeyDown"), HarmonyPostfix]
         public static void MenuManager_IsKeyDown(KeyCode keyCode, bool __result)
         {
@@ -572,6 +574,14 @@ namespace ModSettingsMenu
             // is not an oversight: a second Home does nothing the first did not, so repeating one is
             // a no-op rather than a missing feature. Vanilla never reads these keycodes at all, so
             // there is no verdict of its own to observe here even if one were wanted.
+            //
+            // They also sit AHEAD of the __runOriginal guard below, deliberately. That guard exists
+            // because a word jump extends vanilla's own ±1 and has nothing to extend when the body
+            // was cancelled; Home and End extend nothing — they are this mod's own feature, on
+            // keycodes the game never touches. So a cancelled body is no reason to withhold them.
+            // The one visible consequence is that a mod which handles Home itself AND cancels
+            // (BetterTextInput does) makes both move the caret, which is invisible because both
+            // clamp to the same end. Idempotent, so left alone rather than guarded on a guess.
             int length = row.pugText.GetTextLength();
             if (Input.GetKeyDown(KeyCode.Home))
             {
@@ -624,28 +634,38 @@ namespace ModSettingsMenu
             // Nothing to fall back to any more, and nothing that can fail to be read: with no
             // verdict the direction is 0 and the frame passes. What used to degrade here was the
             // reflection read; it is gone.
+            // No body, no jump. A word jump extends vanilla's own ±1, so when a foreign prefix has
+            // cancelled the body there is nothing to extend — and worse, a verdict may still be
+            // sitting in the flags without the game having produced it. BetterTextInput probes both
+            // arrows at the top of its prefix and only then decides whether to cancel, so a frame
+            // where it takes over for Escape, Home, End, Ctrl+A or a selection path can carry a
+            // fully-formed arrow verdict while vanilla's chain never ran. Acting on it would move
+            // the caret a word in the middle of somebody else's shortcut, and the caret-distance
+            // gate below would not catch it: a mod that selects text without moving the caret leaves
+            // a distance of zero, which reads as "nobody jumped".
+            //
+            // Keying on __runOriginal rather than on the verdict is the point. The verdict says a
+            // key was down; it does not say whose question that answered. This is the one signal
+            // that distinguishes "the game handled typing this frame" from "somebody else did", and
+            // it is HarmonyX's own (0Harmony:10168) rather than anything inferred.
+            //
+            // Costs nothing where no such mod is loaded, because then the body always runs. What it
+            // does cost, with one loaded, is the jump the timer-reading shape would still have fired
+            // off GetKeyDown in a cancelled frame — which was never right either, for the same
+            // reason it is not right now.
+            if (!__runOriginal)
+            {
+                if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow))
+                    WarnForeignTypingPrefixOnce();
+                return;
+            }
+
             int direction =
                 leftFired ? -1
                 : rightFired ? 1
                 : 0;
             if (direction == 0)
-            {
-                // Diagnosis only, and deliberately kept after the modifier check so it speaks for
-                // frames where a word jump was actually asked for. It reports the state it can
-                // observe — no verdict, and vanilla's body skipped — rather than a cause, and the
-                // wording is chosen for that reason: a cancelled body USUALLY means IsKeyDown never
-                // ran, but not always, since a mod can probe the arrows before deciding to cancel,
-                // which BetterTextInput does (see the IsKeyDown postfix above). In that frame a
-                // verdict exists, direction is non-zero, and this branch is never entered — which is
-                // correct, and is why the guard keys on the absent verdict rather than on
-                // __runOriginal alone. What is lost when nothing was published is the jump the
-                // timer-reading shape would still have fired off GetKeyDown; that is the price of
-                // taking the verdict from the one place vanilla makes it, and saying so out loud is
-                // not.
-                if (!__runOriginal && (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow)))
-                    WarnForeignTypingPrefixOnce();
                 return;
-            }
             // Reading the caret's own counter rather than its on-screen position is what leaves this
             // a plain subtraction, and the reason is weaker than "vanilla always shifted by ±1" — it
             // does not always. Its arrow handling sits in an else-if chain that Backspace, Delete,
