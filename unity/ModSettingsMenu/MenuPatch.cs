@@ -440,15 +440,35 @@ namespace ModSettingsMenu
         // exception there takes the body and the postfixes with it, so neither half runs that frame.
         // Two mechanisms, one frame each, and neither is the other's fallback.
         //
-        // No gating on the active field or the input device. This is two assignments, the guards
-        // would cost more than they save, and every one of them would be a second place to keep in
-        // step with the postfix's own.
-        [HarmonyPatch(typeof(MenuManager), "HandleTypingInput"), HarmonyPrefix]
+        // It also records where the caret stood before anything moved it, which is what lets the
+        // postfix tell "vanilla shifted ±1" from "somebody jumped". See the caretBefore use there.
+        //
+        // Priority.First is load-bearing for that reading and for nothing else. Another mod's prefix
+        // on this same method can move the caret itself — BetterTextInput does, a whole word, before
+        // vanilla's body runs — and Harmony orders equal-priority prefixes by load order, which is
+        // not ours to pin. Reading second would capture a caret that had already jumped and report a
+        // move of one, exactly inverting the test. Neither that mod nor this one declared a priority
+        // before; ours does now, and the corpus precedent is auto-rail-bridges, which took
+        // Priority.First against PlacementPlus for the same reason.
+        //
+        // No gating on the input device. There is a row check, but only because the caret read needs
+        // a row to ask; the flags are cleared for every frame regardless, which is what the postfix's
+        // own consume relies on.
+        [HarmonyPatch(typeof(MenuManager), "HandleTypingInput"), HarmonyPrefix, HarmonyPriority(Priority.First)]
         public static void MenuManager_PreHandleTypingInput()
         {
             _leftArrowFired = false;
             _rightArrowFired = false;
+            _caretBeforeBody = CaretUnknown;
+            if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row && row.Viewport.TryCaretIndex(out int caret))
+                _caretBeforeBody = caret;
         }
+
+        // Where the caret stood when this frame's HandleTypingInput was entered, or CaretUnknown if
+        // no drill-in row held the field or its counter could not be read. Consumed by the postfix
+        // alongside the arrow verdicts, for the same reason they are.
+        private const int CaretUnknown = -1;
+        private static int _caretBeforeBody = CaretUnknown;
 
         // Latched for the session. It used to sit beside a second latch for an unreadable cooldown
         // field; that one retired with the reflection read, so this is the only typing-path warning
@@ -524,8 +544,10 @@ namespace ModSettingsMenu
             // prefix's own comment.
             bool leftFired = _leftArrowFired;
             bool rightFired = _rightArrowFired;
+            int caretBefore = _caretBeforeBody;
             _leftArrowFired = false;
             _rightArrowFired = false;
+            _caretBeforeBody = CaretUnknown;
 
             if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem row)
                 return;
@@ -642,6 +664,32 @@ namespace ModSettingsMenu
             // step, so the caret would land somewhere with no relation to any word.
             if (!row.Viewport.TryCaretIndex(out int current))
                 return;
+
+            // Somebody already jumped this frame, so this one would be the second. Vanilla's own
+            // arrow branch moves the caret by exactly ±1 (Pug.Other:269661, :269665), and the prefix
+            // read the counter before any of that ran, so a distance greater than one says a
+            // different hand moved it — and the only hands in that frame are vanilla's and another
+            // patch's.
+            //
+            // This is what MSM-32 turned out to need, and it is not "detect BetterTextInput". That
+            // mod is the case that exists (its Awake prefix attaches a controller to every text row,
+            // ours included, and on a Ctrl+Left press frame it runs MoveToWord(-1) before vanilla's
+            // shift), but naming it would be both narrower and wider than the truth: narrower
+            // because any future patch doing the same would slip past, wider because standing down
+            // whenever it is merely LOADED would be wrong. It only jumps on the press edge — its
+            // probes pass checkOnlyOnPressedDown: true — so on every repeat tick it does nothing and
+            // this jump is the only thing between a held key and vanilla's character-by-character
+            // crawl. The question is per frame, and so is the answer.
+            //
+            // A caret that did not move at all (distance 0) still jumps: vanilla's shift is absent in
+            // frames its chain gave to Backspace or Delete, and doing nothing there is not evidence
+            // that anyone else acted. Unknown means the prefix could not read a counter, which is the
+            // same fault TryCaretIndex reports above, and it falls through to jumping rather than
+            // going quiet — the pre-MSM-32 behaviour, which is right for the install where nothing
+            // else is patching this row at all.
+            if (caretBefore != CaretUnknown && Mathf.Abs(current - caretBefore) > 1)
+                return;
+
             row.MoveCharMarker(row.Viewport.WordBoundary(current, direction) - current);
         }
     }
