@@ -947,6 +947,19 @@ toggle it — and `Admin` entries are not subject to the `adminOnly` branch at a
 which tests `accessLevel == Server`. Even with the switch set, the switch stays
 reachable for admins.
 
+**Unresolved — an operator can only tighten what an author already offered.**
+MSM-18 settles the default access level as `Client`, so a setting whose author
+said nothing never syncs and never locks, and `AdminOnly` does not reach it: the
+switch governs *who* may change a server-scoped value, not *which* values are
+server-scoped. Nothing in this design lets an operator claim one an author left
+alone. That is the honest reading of "the mod author decides what their setting
+means", and it is also a server on which a house rule cannot be enforced because
+one mod did not opt in — an operator who installs a mod on their own machine may
+reasonably expect a say in it. Decide it before the transport is built rather
+than after: an operator-side override would change what travels and who wins, not
+merely who is permitted to ask, and retrofitting it onto a finished send path
+would mean reopening the very ordering this point calls its shape.
+
 - **Effort:** small once the transport stands, and "small" here is not an
   estimate: one `Bind(..., ConfigAccessLevel.Admin)` in MSM's own section plus one
   `&& !adminOnly` in the server's accept check.
