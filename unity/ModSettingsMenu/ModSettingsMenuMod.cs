@@ -597,6 +597,9 @@ namespace ModSettingsMenu
             var info = ((IMod)this).GetModInfo();
             try
             {
+                // Explicit, because this bind does not go through SectionBuilder and would
+                // otherwise inherit the shared ConfigScope.Empty — i.e. Server, a level nobody
+                // chose, on a switch that is a developer diagnostic and nobody else's business.
                 var entry = ConfigStore
                     .ForMod(this, info.Metadata.name)
                     .Bind(
@@ -609,7 +612,8 @@ namespace ModSettingsMenu
                                 + "term schema, how many under General Mod Config Menu's, and how many fell back to the raw key, "
                                 + "plus the exact terms tried for that section's first row. Off by default, because it doubles "
                                 + "every label lookup on a path already tuned to open without a stall."
-                        )
+                        ),
+                        new ConfigScope(ConfigAccessLevel.Client)
                     );
                 return new SettingHandle<bool>(entry);
             }

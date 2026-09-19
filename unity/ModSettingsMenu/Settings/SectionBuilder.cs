@@ -26,6 +26,15 @@ namespace ModSettingsMenu.Settings
         private string _currentSection = DefaultSection;
         private string _movedFrom;
 
+        // The section-level defaults, and the group-level overrides that Group() sets and clears.
+        // Deliberately chosen rather than inherited: CoreLib's own ConfigScope() constructor defaults
+        // to Server, and a framework whose consumer said nothing must not claim server authority on
+        // their behalf. See the spec's §1.1 for what the four levels actually do.
+        private ConfigAccessLevel _sectionAccess = ConfigAccessLevel.Client;
+        private bool _sectionRequiresRestart;
+        private ConfigAccessLevel? _groupAccess;
+        private bool? _groupRequiresRestart;
+
         // True when the widget declared LAST failed to bind and therefore added no SettingDef.
         //
         // RequiresRestart() addresses "the most recently declared setting" positionally, as
@@ -58,12 +67,18 @@ namespace ModSettingsMenu.Settings
         // A failed bind yields null, and the caller then registers NO row and hands back a detached
         // handle carrying the declared default. The setting is absent rather than broken: the
         // consumer keeps running on its own default, and the log says which one and why.
-        private ConfigEntry<T> BindGuarded<T>(string key, T def, ConfigDescription description)
+        private ConfigEntry<T> BindGuarded<T>(string key, T def, ConfigDescription description, ConfigAccessLevel? access, bool? requiresRestart)
         {
             try
             {
                 AdoptStrandedValue(key);
-                return _file.Bind(_currentSection, key, def, description);
+                // A FRESH instance per entry, always. Passing null would alias CoreLib's static readonly
+                // ConfigScope.Empty, which every scope-less entry in the process shares — and its fields
+                // are public and mutable, so RequiresRestart() writing through one entry's Scope would
+                // reach every other mod's. Sharing one instance across a group would have the same effect
+                // in miniature: a modifier on one row would move its neighbours.
+                var scope = new ConfigScope(access ?? _groupAccess ?? _sectionAccess, requiresRestart ?? _groupRequiresRestart ?? _sectionRequiresRestart);
+                return _file.Bind(_currentSection, key, def, description, scope);
             }
             catch (Exception ex)
             {
@@ -137,7 +152,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            var entry = BindGuarded(key, def, new ConfigDescription(key));
+            var entry = BindGuarded(key, def, new ConfigDescription(key), null, null);
             if (entry == null)
             {
                 handle = new SettingHandle<bool>(def);
@@ -180,7 +195,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)));
+            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)), null, null);
             if (entry == null)
             {
                 handle = new SettingHandle<float>(def);
@@ -237,7 +252,7 @@ namespace ModSettingsMenu.Settings
             for (int i = 0; i < values.Length; i++)
                 tokens[i] = ChoiceToken.Of(values[i], typeof(T));
             // Store a string token (arbitrary T needs no CoreLib converter); validate it stays valid.
-            var entry = BindGuarded(key, ChoiceToken.Of(def, typeof(T)), new ConfigDescription(key, new AcceptableValueList<string>(tokens)));
+            var entry = BindGuarded(key, ChoiceToken.Of(def, typeof(T)), new ConfigDescription(key, new AcceptableValueList<string>(tokens)), null, null);
             if (entry == null)
             {
                 handle = new SettingHandle<T>(def);
@@ -280,7 +295,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)));
+            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)), null, null);
             if (entry == null)
             {
                 handle = new SettingHandle<int>(def);
@@ -332,7 +347,7 @@ namespace ModSettingsMenu.Settings
                 return this;
             }
             WarnAboutDefaultsThatWillNotSurvive(key, defaults, editing);
-            var entry = BindGuarded(key, declared, new ConfigDescription(key));
+            var entry = BindGuarded(key, declared, new ConfigDescription(key), null, null);
             if (entry == null)
             {
                 handle = new SettingHandle<string[]>(ListTokenizer.Tokenize(declared).ToArray());
