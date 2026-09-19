@@ -200,6 +200,20 @@ namespace ModSettingsMenu.UI
         /// for.</summary>
         public string CommittedText => _edited ? GetInputText() : _seededText;
 
+        /// <summary>Restores the token this row was seeded with and forgets that anything was typed, so the
+        /// commit which follows the active-field transition finds an unchanged value and writes nothing.</summary>
+        //
+        // Deliberately routed through SeedText rather than SetInputText: SeedText also resets _seededText
+        // and clears _edited, which is what makes CommittedText above hand back the stored token afterwards.
+        // SetInputText alone would restore the text on screen while leaving _edited true, and the commit
+        // would then write the restored value back over itself — the same result by luck rather than by
+        // construction, and wrong the moment _seededText and the live text differ for any other reason.
+        //
+        // No generation check, unlike OnRowTextCommitted: this touches nothing but the row's own text, so a
+        // row that has outlived its session writes nowhere and cancelling a stale one is harmless. The guard
+        // there exists because a commit reaches a possibly third-party ConfigEntry; this does not.
+        internal void CancelEdit() => SeedText(_seededText);
+
         // Sets this row's identity and behaviour in one call, right after Instantiate
         // (ListDetailScreen.AddItem) — the same commit-point every other field poke used to happen
         // at individually.
