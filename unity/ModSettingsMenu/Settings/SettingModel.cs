@@ -169,7 +169,17 @@ namespace ModSettingsMenu.Settings
         public SliderDisplay Display; // Slider only
         public string[] Tokens; // Choice only: ordered ChoiceToken.Of list (cycle order), from either path; MSM's own, never a foreign constraint's live array
         public ConfigEntryBase Entry; // live handle; widget reads/writes via BoxedValue. NULL for a Label — see the class summary
-        public bool RequiresRestart; // true → changing this in the menu raises CK's restart prompt on leave
+
+        /// <summary>True → changing this in the menu raises CK's restart prompt on leave.
+        ///
+        /// Reads CoreLib's own field rather than shadowing it. The two said the same thing before
+        /// and were filled from different places — the modifier on the declared path, a copy of
+        /// e.Scope.requireReload on the discovered one — so an outside reader of the entry (General
+        /// Mod Config Menu renders a marker from exactly this field) saw nothing for a setting a
+        /// consumer had explicitly marked. One storage location, two readers.
+        ///
+        /// The ?? false carries a Label, whose Entry is null: a heading cannot change.</summary>
+        public bool RequiresRestart => Entry?.Scope?.requireReload ?? false;
 
         // true → this def came from discovery rather than from a consumer's SectionBuilder call. A
         // statement of provenance and nothing more: no rendering reads it any more. It used to decide
