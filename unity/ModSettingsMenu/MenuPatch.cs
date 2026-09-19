@@ -108,18 +108,34 @@ namespace ModSettingsMenu
         // Populate now runs in ModSettingsScreen.Activate() (before ActivateTopMenu),
         // so no PushMenu postfix is needed here.
 
-        // Suppress CK's own hover-driven reselection while a list-detail row is being actively
-        // edited. UIMouse re-derives menu selection from a hover raycast every frame and calls this
-        // method regardless of text-input state; letting it through moves RadicalMenu.selectedIndex
-        // to whatever the mouse passes over, which (a) plays the menu-select SFX and (b) drives
-        // PugTextEffectMenuOption.PugTextEffectLateUpdate — a per-frame, selectedIndex-only check
-        // that tints the hovered row's text blue and the row being edited back to grey, entirely
-        // independent of RadicalMenuOption's OnSelected/OnDeselected (which ListDetailItem already
-        // suppresses during an edit — insufficient here, since this effect never goes through them).
-        // Skipping SelectOptionIndex here leaves it exactly where it was before the hover, so the
-        // edited row keeps looking selected and nothing else reacts to a change that didn't happen.
-        // Does NOT stop a click on a different row from switching (that's UIMouse_TrySelectNewElement
-        // below, a separate mechanism this patch alone cannot reach) — see that patch's note.
+        // Suppress a reselection that would land on another option while a list-detail row is being
+        // actively edited. NOT the mouse path, despite appearances: on hover the same element
+        // travels TrySelectNewElement -> Select() -> OnUIElementSelected -> SelectOption unchanged,
+        // and the prefix below tests the identical predicate on it first, so by the time this one
+        // runs there is nothing left for it to block. (It still runs — Harmony calls it either way.) What it does catch is a path that never touches TrySelectNewElement at all —
+        // UIScrollWindow.UpdateScroll calls Select() directly on the adjacent element when the
+        // selected one scrolls out of view (Pug.Other:357556), behind an early return that makes
+        // the whole block controller-only (:357529). (:357562 calls it again on what :357557 just
+        // reassigned, so Select()'s own guard makes that one a no-op.)
+        // Scroll a drill-in with a gamepad mid-edit and this is the only guard there. Note what it
+        // does NOT do: Select() still runs through OnUIElementSelected, which assigns
+        // currentSelectedUIElement unconditionally, so the selection does move off the edited row.
+        // Only selectedIndex is held, and the edit survives for a different reason — CK's own
+        // Deactivate hangs on interactDownThisFrame, not on the selection.
+        //
+        // Letting it through would move RadicalMenu.selectedIndex
+        // to whatever was selected instead, which (a) plays the menu-select SFX and (b) recolours
+        // both rows. The recolour runs through the selection callbacks, NOT through a per-frame
+        // check: RadicalMenuOption.OnSelected walks menuOptionEffects into
+        // PugTextEffectMenuOption.OnSelected (Pug.Other:343240-343244 -> :349591), which stops the
+        // two cooloff timers and sets the selected colour on the text and on the effect's
+        // spriteRenderers (:349593-349599), while the row losing selection goes through
+        // OnDeselected/EndEffectImmediate (:343262-343269). PugTextEffectLateUpdate is not that
+        // path — for a selected option it does the optional dance and returns (:349638).
+        // Skipping SelectOptionIndex leaves the index where it was, so the edited row keeps
+        // looking selected and nothing reacts to a change that did not happen.
+        // Mouse hover and a click on another row are both the prefix below's business — see its
+        // note; the two patches divide by PATH, not by input device.
         [HarmonyPatch(typeof(MenuManager), nameof(MenuManager.SelectOption)), HarmonyPrefix]
         public static bool MenuManager_SelectOption(UIelement option)
         {
@@ -130,8 +146,12 @@ namespace ModSettingsMenu
 
         // The actual "click on a different row while editing switches focus there" bug lives here,
         // NOT in RadicalMenuOption's OnLeftClicked/OnActivated chain (ListDetailItem's own guards on
-        // those are insufficient — see below). UIMouse.TrySelectNewElement, called every frame from
-        // the hover raycast for BOTH plain hover and the click itself, contains its own hardcoded
+        // those are insufficient — see below). UIMouse.TrySelectNewElement is reached on every
+        // opening of CK's hover gate, which covers BOTH plain hover and the click itself —
+        // movement and the interact press are two of its six conditions, and the other four
+        // (nothing selected, the selection no longer visible, no visible UIelement under the ray,
+        // a controller-preferring system) reach it just as well while a row is being edited. It
+        // contains its own hardcoded
         // deactivation:
         //
         //   if ((UIelement)Manager.input.activeInputField != selectedUIElement

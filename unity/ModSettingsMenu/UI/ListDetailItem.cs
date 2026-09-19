@@ -365,10 +365,12 @@ namespace ModSettingsMenu.UI
 
         // NOT called from here anymore — see Update() below. RadicalMenu.SelectOptionIndex calls
         // OnDeselected() on every navigation-away, INCLUDING mere mouse hover onto a different row
-        // (CK's own UIMouse re-derives menu selection from a hover raycast every frame; hovering a
-        // different RadicalMenuOption drives SelectOptionIndex exactly like arrow-key navigation
-        // does). Committing here would end an active edit the instant the mouse passes over any
-        // other row, even without a click.
+        // (CK's own UIMouse re-derives menu selection from a hover raycast whenever its gate
+        // opens — pointer movement is one of six conditions, and losing or hiding the selection
+        // are two more; hovering onto a different RadicalMenuOption drives SelectOptionIndex the
+        // same way arrow-key navigation does, through a different caller). Committing here
+        // would end an active edit the instant the mouse passes over any other row, even
+        // without a click.
         public override void OnDeselected(bool playEffect = true)
         {
             // Also suppress the visual deselect (base.OnDeselected hides selectedMarker) while

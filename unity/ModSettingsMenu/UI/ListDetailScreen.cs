@@ -1033,10 +1033,18 @@ namespace ModSettingsMenu.UI
             // without being able to add would break that, which is exactly why it needs saying.
             if (menuOptions.Count == 0)
                 return;
-            // A pointer carries its own target every frame instead (UIMouse re-derives selection
-            // from hover), and restoring anything here fights it: the mouse has not moved, so
+            // A pointer carries its own target instead. UIMouse re-derives the selection when the
+            // pointer moves — and, which is what THIS path rests on, as soon as the old selection
+            // stops being visible. RebuildRows above disables every row's options before destroying
+            // them, and `enabled = false` fails isVisibleOnScreen in the same frame, so the
+            // re-derive happens without any movement at all. (The Destroy would get there too, a
+            // frame later, since it is deferred to the end of this one; and a pool that
+            // deactivates a retired row lands in the same disjunct.) Restoring anything here
+            // fights that: the mouse has not moved, so
             // forcing the selection onto whatever this rebuild wants moves it away from whatever
-            // the pointer is now actually over, until the next hover recalculates it. Skip the
+            // the pointer is now actually over — for about one frame, since the re-derive
+            // above happens immediately. The cost is a flicker and a selection sound for a change
+            // nobody asked for. Skip the
             // restore on mouse and let the pointer decide — the redraw above still happens either
             // way, only this explicit selection step is device-dependent (the same test
             // OnSelectedOptionChanged already uses to gate its own scroll-follow).
