@@ -39,13 +39,22 @@ leaves that row holding the value it was seeded with. Enter still commits.
 Today an edit cannot be abandoned once a keystroke has landed: the back key
 ends the edit exactly as Enter does.
 
-**This is a keyboard feature, and deliberately so.** On a controller, text entry
-runs through the on-screen keyboard — `HandleTypingInput` takes that branch and
-returns before the back-key branch is ever reached (`Pug.Other:269610-269624`),
-so vanilla's `Deactivate(!IsMenuBackButtonDown())` at `:269652` is unreachable
-there. Cancelling the on-screen keyboard already keeps the seeded value, so the
-controller half of this feature needs nothing and gets nothing. §4.3 places the
-new branch accordingly.
+**It is device-agnostic, and an earlier draft of this spec was wrong about
+that.** That draft called vanilla's back-key branch unreachable on a controller,
+because `HandleTypingInput` takes the on-screen-keyboard branch first. The
+on-screen-keyboard block returns only when the keyboard actually **opens**:
+`GetControllerTextInput` answers `false` on the fallback platform always
+(`Pug.Other:288045`) and on Steam whenever the overlay cannot show it
+(`Pug.Other:286913`), and execution then falls out of that block at
+`Pug.Other:269625` into the keyboard chain — reaching `:269652` while
+`SystemPrefersKeyboardAndMouse()` is false. A device test in the new branch
+would therefore decline exactly the players vanilla is cancelling for, which is
+why §4.3 has none.
+
+Where the keyboard does open, the cancel needs no exclusion of its own: that
+path answers through `TrySetInputText`, where the back key is not down, so no
+row is recorded and the branch cannot fire. Cancelling the on-screen keyboard
+already keeps the seeded value and is untouched.
 
 The defect is pre-existing and was found on 2026-08-23 by the
 `pr-review-toolkit:silent-failure-hunter` gate while it reviewed the drill-in
@@ -171,28 +180,36 @@ when `TryCaretIndex` also succeeds — which it does not for a row whose
 an unrelated precondition and lose it silently. **Split the condition**: resolve
 the row first, remember it, then ask for the caret.
 
-**No priority argument is needed for the back-key read**, and the earlier draft's
-claim that `Priority.First` "puts it ahead of any foreign prefix" was wrong on
-its own terms — this file already records that equal-priority prefixes fall back
-to load order and that only `[HarmonyBefore]` pins it (`MenuPatch.cs:507-509`).
-The attribute stays for the reasons already documented there (the caret sample
-and the `IsKeyDown` clear); the back-key read simply does not depend on it,
-because an input edge is frame-stable and reads the same wherever in the frame
-it is sampled.
+**`Priority.First` is load-bearing for this capture**, and two earlier drafts of
+this paragraph got that wrong in opposite directions. The first claimed the
+attribute "puts it ahead of any foreign prefix", which overstates what Harmony
+guarantees — equal priorities fall back to load order, and only
+`[HarmonyBefore]` truly pins one. The second concluded from that correction that
+the priority was irrelevant here, which is worse: it is what keeps this prefix
+ahead of BetterTextInput, whose Escape branch calls `Deactivate(false)` itself.
+Run after it and `activeInputField` is already null, so the `if` never opens and
+no row is recorded — the cancel silently stops working, with that mod installed
+and for Escape only.
+
+The *key* alone would not need the priority (an input edge is frame-stable, and
+vanilla polls it more than once per frame). The *row* does, and since the row is
+recorded only when the key is down, the capture as a whole does.
 
 ### 4.3 · The postfix applies
 
-`MenuPatch.MenuManager_HandleTypingInput` (`MenuPatch.cs:602`) gains a branch:
-if the remembered row no longer holds `activeInputField` and the back key was
-down, call `CancelEdit()` on it.
+`MenuPatch.MenuManager_HandleTypingInput` gains a branch: if a row was recorded
+and no longer holds `activeInputField`, call `CancelEdit()` on it. Because the
+prefix records a row only while the back key is down, a recorded row already
+means "abandon this edit" and the branch tests one thing, not two.
 
-Its placement is not "before all the guards" — it differs per guard:
+It sits ahead of **every** existing guard in that method, for three different
+reasons — two about what it needs, one about what it must not inherit:
 
-| Existing guard | New branch sits | Why |
-|---|---|---|
-| the `__runOriginal` early return | **before** it | with BetterTextInput installed `__runOriginal` is false on exactly the frame this feature must act (§7) |
-| `activeInputField is not ListDetailItem` (`MenuPatch.cs:632`) | **before** it | `Deactivate` has already nulled the field, so the row is reachable only through the remembered reference |
-| `!SystemPrefersKeyboardAndMouse()` (`MenuPatch.cs:636`) | **behind** it, or carrying the same test itself | §1: the branch has nothing to do on a controller, and acting there could only overwrite a confirmed on-screen-keyboard result |
+| Existing guard | Why the branch is ahead of it |
+|---|---|
+| the `__runOriginal` early return | with BetterTextInput installed `__runOriginal` is false on exactly the frame this feature must act (§7) |
+| `activeInputField is not ListDetailItem` | `Deactivate` has already nulled the field, so the row is reachable only through the recorded reference |
+| `!SystemPrefersKeyboardAndMouse()` | it must **not** adopt this test: vanilla's back-key branch is reachable on a controller whenever the on-screen keyboard fails to open (§1), and a device test would decline exactly those players |
 
 Everything downstream then runs unchanged: `Update` sees the transition,
 `CommittedText` hands back the restored token, and `WriteValueFromRows` takes
@@ -232,9 +249,13 @@ survive an unknown number of frames.
 5. Cancelling one row does not alter any other row's text or order.
 6. The back key still closes the drill-in screen on the press after the edit
    ends — one press ends the edit, the next leaves the screen.
-7. On a controller, **both** halves are unchanged from today: cancelling the
-   on-screen keyboard keeps the seeded token, **and** confirming it still writes
-   the entered value.
+7. On a controller **where the on-screen keyboard opens**, both halves are
+   unchanged from today: cancelling it keeps the seeded token, and confirming it
+   still writes the entered value. Where it does **not** open — the fallback
+   platform, or Steam with the overlay unavailable — the back key cancels there
+   too, exactly as it does on a keyboard; that path is the reason the branch
+   carries no device test (§1). It is the hardest criterion to exercise here,
+   since it needs a build or a session in which `GetControllerTextInput` fails.
 8. With BetterTextInput installed, criteria 1–3 hold unchanged.
 9. No vanilla text field changes behaviour: the character-name field, the world
    seed and the server connection fields end an edit on the back key exactly as

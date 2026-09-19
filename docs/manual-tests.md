@@ -297,18 +297,24 @@ committed, so every check here is new behaviour rather than a regression guard.
       `.cfg` gains no entry. This is the one case where the restored value is
       the empty string rather than a stored token, so it is the check that the
       restore does not confuse "nothing to go back to" with "leave it alone".
-- [ ] Cancel a row you focused but never typed in. Nothing changes, and the
-      file's modification time does not move. (Note that the file's mtime alone
-      proves little either way: CoreLib rewrites the whole file on `Bind`, so a
-      game restart moves it without anyone editing anything. Read the values.)
-- [ ] **A long token comes back showing its start.** Edit the middle entry of
-      `Overlong` — the one deliberately far wider than the row — drive the caret
-      to its end so the view scrolls, then cancel: the row must read from the
-      beginning of the token again, not from wherever the caret was. The
-      viewport only rests at the start once the row has lost the field, so this
-      is the check that the restore and the unfocus happened in that order.
-      **Not `Long`:** its entries are twelve characters and never scroll, so the
-      check would pass without testing anything.
+- [ ] Open an **existing** row without typing, then cancel: nothing changes.
+- [ ] Add a row with `+`, open it, cancel **without typing**: it stays as an
+      empty row, exactly as leaving it with Enter does today. This is the
+      companion to the check above it — that one abandons typed text, this one
+      abandons nothing — and they differ in whether the row existed before.
+      (The `.cfg` modification time proves little either way here: CoreLib
+      rewrites the whole file on `Bind`, so a game restart moves it without
+      anyone editing anything. Read the values.)
+- [ ] **A long token comes back whole, and from its start.** Open the middle
+      entry of `Overlong` — the one deliberately far wider than the row — drive
+      the caret to its end so the view scrolls, **type a few characters there**,
+      then cancel. Two things must hold: the entry reads exactly as it did
+      before (check the `.cfg`, not just the row), and the row shows it from the
+      beginning rather than from where the caret was. **Typing is what makes
+      this falsifiable** — without a keystroke `_edited` stays false, the row
+      would show its token whatever the code did, and the check would pass
+      having tested nothing. **Not `Long`:** its entries are six characters
+      (`Item01`…`Item20`) and never scroll at all.
 - [ ] Cancel one row, then read the others: no text and no order changed.
 - [ ] **The second back press leaves the screen.** One press ends the edit, the
       next closes the drill-in. A single press doing both would mean the menu
@@ -323,15 +329,18 @@ committed, so every check here is new behaviour rather than a regression guard.
       and the world seed field, type, press the back key: both end the edit
       exactly as they did before. This mod patches only its own rows, and this
       is the check that would catch it widening.
-- [ ] **With BetterTextInput installed**, repeat the three checks above that
-      cancel an edit — the stored row, the added row, and the Enter
-      counter-check. Naming them rather than numbering them is deliberate: an
-      inserted check would silently repoint a positional reference at the wrong
-      rows. That mod handles Escape in its own prefix, calls `Deactivate` itself
-      and cancels the body, so this frame is what two decisions in `MenuPatch`
-      exist for — the branch sitting ahead of the `__runOriginal` guard, and the
-      prefix keeping `Priority.First` so the row is captured before that mod
-      clears the field. Both fail silently and only here.
+- [ ] **With BetterTextInput installed, and using the Escape key specifically**,
+      repeat the checks above that cancel an edit — the stored row, the added
+      row, and the Enter counter-check. **Escape is not interchangeable with the
+      controller's back button here**: that mod tests `KeyCode.Escape` literally,
+      while this feature reads Rewired action 6, so any other key leaves its
+      Escape branch unfired and the check silently degrades into a repeat of the
+      plain ones. Naming the checks rather than numbering them is deliberate for
+      the same reason an inserted check must not repoint a reference. This frame
+      is what two decisions in `MenuPatch` exist for — the branch sitting ahead
+      of the `__runOriginal` guard, and the prefix keeping `Priority.First` so
+      the row is captured before that mod clears the field. Both fail silently,
+      and only here.
 
 Two cases are deliberately not walked. An IME composition plus the back key
 reaches no `Deactivate` at all in vanilla, so there is nothing this change could
