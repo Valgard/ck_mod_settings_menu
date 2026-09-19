@@ -276,11 +276,13 @@ and controller reach such a row regardless.
 The back key ends an edit without keeping it; Enter keeps it. Before MSM-12 both
 committed, so every check here is new behaviour rather than a regression guard.
 
-- [ ] **The diagnostic line appears at all.** Focus a row, press the back key,
-      and look for `MSM-12 diagnostic` in the log. If it never appears the key
-      is not Rewired action 6 and nothing below can pass — `GetButtonDown`
-      reports a wrong action id by staying silent, never by failing, which is
-      why this check comes first. (Removed again once it has answered.)
+- [ ] **The key is seen at all.** Focus a row, type one character, press the
+      back key: something must change on screen. If nothing at all happens — the
+      typed character simply stays — stop and suspect the binding rather than
+      this feature: the whole mechanism hangs on `IsMenuBackButtonDown()`, and
+      `GetButtonDown` reports a wrong action id by returning false in silence,
+      never by failing. It was measured as action 6 on 2026-09-19 against game
+      1.2.1.5, so a failure here means that changed, not that it was guessed.
 - [ ] Type into the middle row of `Short` and press the back key: the row reads
       `Beta` again, and `TestListFixtures/config.cfg` still reads
       `Alpha, Beta, Gamma`. Open the file — the row going back on screen is only
@@ -290,8 +292,15 @@ committed, so every check here is new behaviour rather than a regression guard.
 - [ ] Cancel on the **first** and on the **last** row of `Short`. The commit
       writes `_rows` by the row's own index, so an off-by-one can only show at
       the ends.
+- [ ] **A freshly added row, typed into, then cancelled.** Press the add button,
+      type something into the new row, cancel: the row stays, empty, and the
+      `.cfg` gains no entry. This is the one case where the restored value is
+      the empty string rather than a stored token, so it is the check that the
+      restore does not confuse "nothing to go back to" with "leave it alone".
 - [ ] Cancel a row you focused but never typed in. Nothing changes, and the
-      file's modification time does not move.
+      file's modification time does not move. (Note that the file's mtime alone
+      proves little either way: CoreLib rewrites the whole file on `Bind`, so a
+      game restart moves it without anyone editing anything. Read the values.)
 - [ ] **A long token comes back showing its start.** Edit the middle entry of
       `Overlong` — the one deliberately far wider than the row — drive the caret
       to its end so the view scrolls, then cancel: the row must read from the
@@ -314,11 +323,15 @@ committed, so every check here is new behaviour rather than a regression guard.
       and the world seed field, type, press the back key: both end the edit
       exactly as they did before. This mod patches only its own rows, and this
       is the check that would catch it widening.
-- [ ] **With BetterTextInput installed**, the second, third and fourth checks
-      above still pass. That mod handles Escape in its own prefix and cancels
-      the body, so this is the frame the branch's placement ahead of the
-      `__runOriginal` guard exists for — and the one where a wrong placement
-      fails silently while everything else looks healthy.
+- [ ] **With BetterTextInput installed**, repeat the three checks above that
+      cancel an edit — the stored row, the added row, and the Enter
+      counter-check. Naming them rather than numbering them is deliberate: an
+      inserted check would silently repoint a positional reference at the wrong
+      rows. That mod handles Escape in its own prefix, calls `Deactivate` itself
+      and cancels the body, so this frame is what two decisions in `MenuPatch`
+      exist for — the branch sitting ahead of the `__runOriginal` guard, and the
+      prefix keeping `Priority.First` so the row is captured before that mod
+      clears the field. Both fail silently and only here.
 
 Two cases are deliberately not walked. An IME composition plus the back key
 reaches no `Deactivate` at all in vanilla, so there is nothing this change could
