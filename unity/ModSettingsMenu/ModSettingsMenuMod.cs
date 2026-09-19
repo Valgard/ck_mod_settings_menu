@@ -747,6 +747,23 @@ namespace ModSettingsMenu
             // which a fixture cannot stage on its own — a rename is a change to the code.
             section.Group("testGroupMoved", movedFrom: "testGroupFormer");
             section.Toggle(out _, "testMovedToggle", true);
+
+            // MSM-18. A group that states a level, and a row inside it that overrides it — the
+            // cascade's middle level is the one that cannot be checked any other way.
+            section.Group("testAccessGroup", access: ConfigAccessLevel.ViewOnly, requiresRestart: true);
+            section.Toggle(out _, "testGroupInheritsViewOnly", true);
+            section.Toggle(out _, "testRowOverridesToClient", true, access: ConfigAccessLevel.Client, requiresRestart: false);
+            // Back to the section default: a Group with no arguments must clear the previous
+            // group's level rather than carry it.
+            section.Group("testAccessGroupCleared");
+            section.Toggle(out _, "testAfterGroupIsClient", true);
+            // A list that declares BOTH an editing level and a locking access level. The two are
+            // independent: the reset restores a ListEditing.ReadOnly list, and skips a locked one.
+            section.List(out _, "testListReadOnlyAndLocked", new[] { "Alpha", "Beta" }, ListEditing.ReadOnly, access: ConfigAccessLevel.ViewOnly);
+            section.List(out _, "testListReadOnlyUnlocked", new[] { "Gamma", "Delta" }, ListEditing.ReadOnly);
+            // Review Focus 3: a level on a declaration whose bind fails must not attach to the row
+            // before it. Same hazard the RequiresRestart guards exist for, reached by a new route.
+            section.Toggle(out _, "testDupKeyAccess", true).Toggle(out _, "testDupKeyAccess", false, access: ConfigAccessLevel.ViewOnly);
         }
 
         public void ModObjectLoaded(Object obj)
