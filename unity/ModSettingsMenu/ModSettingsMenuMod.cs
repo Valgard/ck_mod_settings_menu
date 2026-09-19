@@ -752,6 +752,11 @@ namespace ModSettingsMenu
             // cascade's middle level is the one that cannot be checked any other way.
             section.Group("testAccessGroup", access: ConfigAccessLevel.ViewOnly, requiresRestart: true);
             section.Toggle(out _, "testGroupInheritsViewOnly", true);
+            // Overrides the group's access but NOT its requiresRestart: editable, and still
+            // restart-required. Without this row the inherited restart flag is unobservable outside
+            // GMCM, because the only other inheriting row is ViewOnly-locked and can never be
+            // changed — which would make criterion 7 depend on a second mod being installed.
+            section.Toggle(out _, "testGroupRestartInherited", true, access: ConfigAccessLevel.Client);
             section.Toggle(out _, "testRowOverridesToClient", true, access: ConfigAccessLevel.Client, requiresRestart: false);
             // Back to the section default: a Group with no arguments must clear the previous
             // group's level rather than carry it.

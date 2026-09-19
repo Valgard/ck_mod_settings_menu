@@ -1265,14 +1265,14 @@ which `.Label()` alone cannot have and nothing on screen shows.
       value — except `testGroupInheritsViewOnly`, which it leaves untouched
       because that row is locked (see "Access level cascade" below).
 - [ ] **The file, which the screen cannot show:** `ModSettingsMenu.cfg` holds
-      `[testGroup]` with `testGroupedToggle` and `testGroupedStepper`,
-      `[testGroupTwo]` with `testSecondGroupToggle` and `testAfterBadGroup`,
-      `[testGroupMoved]` with `testMovedToggle`, `[testAccessGroup]` with
-      `testGroupInheritsViewOnly` and `testRowOverridesToClient`,
-      `[testAccessGroupCleared]` with `testAfterGroupIsClient`,
-      `testListReadOnlyAndLocked`, `testListReadOnlyUnlocked` and
-      `testDupKeyAccess`, `[Settings]` with everything else, and **no**
-      `[bad[name]]` section.
+  `[testGroup]` with `testGroupedToggle` and `testGroupedStepper`,
+  `[testGroupTwo]` with `testSecondGroupToggle` and `testAfterBadGroup`,
+  `[testGroupMoved]` with `testMovedToggle`, `[testAccessGroup]` with
+  `testGroupInheritsViewOnly`, `testGroupRestartInherited` and
+  `testRowOverridesToClient`, `[testAccessGroupCleared]` with
+  `testAfterGroupIsClient`, `testListReadOnlyAndLocked`,
+  `testListReadOnlyUnlocked` and `testDupKeyAccess`, `[Settings]` with
+  everything else, and **no** `[bad[name]]` section.
 
 ### Access level cascade
 
@@ -1284,31 +1284,35 @@ box.
 - [ ] `testGroupInheritsViewOnly` renders **locked**, in every session type
       including the title screen — it states no level of its own, so it
       inherits `.Group("testAccessGroup", access: ConfigAccessLevel.ViewOnly)`.
-- [ ] `testRowOverridesToClient`, one row below it, is **editable** — its own
-      `access: ConfigAccessLevel.Client` wins over the enclosing group's
-      `ViewOnly`. Together the two rows are the only place the cascade's
-      **middle** level, a group's own, can be observed at all: every other row
-      here either states its own level or states none. (Criterion 1)
+- [ ] `testRowOverridesToClient`, further down in the same group, is
+  **editable** — its own `access: ConfigAccessLevel.Client` wins over the
+  enclosing group's `ViewOnly`. Together the two rows are the only place the
+  cascade's **middle** level, a group's own, can be observed at all; every other
+  row here either states its own level or states none. (Criterion 1)
 - [ ] `testAfterGroupIsClient` is editable. `.Group("testAccessGroupCleared")`
       is declared with no arguments, and that must mean "back to the section's
       `Client` default" — carrying `testAccessGroup`'s `ViewOnly` forward
       instead would be a silent leak nothing on screen would explain.
       (Criterion 1)
 - [ ] **The restart flag cascades the same way.** `testAccessGroup` also
-      declares `requiresRestart: true`, and `testRowOverridesToClient` overrides
-      it to `false` in the same call that overrides its access level. With
-      **General Mod Config Menu** installed: `testGroupInheritsViewOnly` carries
-      GMCM's **reload marker** — inherited, and shown alongside its locked
-      permission icon, since the two are independent facts about the same entry
-      and GMCM renders both regardless of whether the row is editable anywhere
-      — while `testRowOverridesToClient` carries **none**. Without GMCM, only
-      the override half has a route: edit `testRowOverridesToClient` and leave
-      the settings screen — no restart prompt. The inheriting half has **no**
-      GMCM-free route with this fixture set: the only row that inherits the
-      group's `requiresRestart: true` without overriding it is
-      `testGroupInheritsViewOnly`, and that same row is locked by the group's
-      `ViewOnly` — there is nothing in it a player could ever change to raise
-      the prompt, in any session type. (Criterion 7)
+      declares `requiresRestart: true`. `testGroupRestartInherited` overrides
+      only the group's access level, so it stays editable while still
+      inheriting the restart flag; `testRowOverridesToClient` overrides both.
+      With **General Mod Config Menu** installed: `testGroupInheritsViewOnly`
+      and `testGroupRestartInherited` both carry GMCM's **reload marker**
+      (inherited) — the former alongside its locked permission icon, since the
+      two are independent facts about the same entry and GMCM renders both
+      regardless of whether the row is editable anywhere — while
+      `testRowOverridesToClient` carries **none**. Without GMCM, both halves
+      now have a route: change `testGroupRestartInherited` and leave the
+      settings screen — the restart prompt appears, because nothing overrode
+      the flag it inherited; do the same to `testRowOverridesToClient` — no
+      prompt, because that row overrode it to `false`.
+      `testGroupInheritsViewOnly` itself is still not directly testable this
+      way — it is locked by the group's `ViewOnly`, so there is nothing in it a
+      player could ever change — which is exactly why
+      `testGroupRestartInherited` exists: without it, the inheriting half of
+      this criterion would depend on GMCM being installed. (Criterion 7)
 
 ### Migration
 
