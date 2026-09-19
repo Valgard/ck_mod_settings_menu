@@ -527,8 +527,7 @@ namespace ModSettingsMenu
             _rightArrowFired = false;
             _editBranchClaimed = false;
             _caretBeforeBody = CaretUnknown;
-            _fieldRowOnEntry = null;
-            _backKeyOnEntry = false;
+            _cancelRowOnEntry = null;
             // The row is recorded BEFORE the caret is asked for, not inside the same condition. The caret
             // read is allowed to fail — TryCaretIndex returns false for a row whose fieldMask is unwired,
             // a state this mod reports rather than assumes — and folding the record into that condition
@@ -536,16 +535,19 @@ namespace ModSettingsMenu
             // exactly the rows that are already degraded.
             if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row)
             {
-                _fieldRowOnEntry = row;
-                // The KEY could be read in the postfix just as well — an input edge is frame-stable. The
-                // ROW could not, and since the key is only meaningful together with a row, both are taken
-                // here. That makes this capture ordering-dependent, unlike the caret read beside it:
-                // BetterTextInput's own prefix calls Deactivate(false) for Escape, and once it has,
-                // activeInputField is null and this `if` never opens — no row, no key, no cancel. The
-                // Priority.First on the attribute is what keeps us ahead of it (First 800 against its
-                // unstated Normal 400). Lower the priority and MSM-12 stops working whenever that mod is
-                // installed, in silence and only for Escape; see the attribute's own comment.
-                _backKeyOnEntry = Manager.input.IsMenuBackButtonDown();
+                // Recorded only when the back key is actually down, so the reference itself carries both
+                // facts and the postfix has one thing to test instead of two that could disagree.
+                //
+                // The KEY could be read in the postfix just as well — an input edge is frame-stable, and
+                // vanilla itself polls it more than once per frame. The ROW could not, which is what makes
+                // this capture ordering-dependent, unlike the caret read beside it: BetterTextInput's own
+                // prefix calls Deactivate(false) for Escape, and once it has, activeInputField is null and
+                // this `if` never opens — no row, no cancel. The Priority.First on the attribute is what
+                // keeps us ahead of it (First 800 against its unstated Normal 400). Lower the priority and
+                // MSM-12 stops working whenever that mod is installed, in silence and only for Escape; see
+                // the attribute's own comment.
+                if (Manager.input.IsMenuBackButtonDown())
+                    _cancelRowOnEntry = row;
                 if (row.Viewport.TryCaretIndex(out int caret))
                     _caretBeforeBody = caret;
             }
@@ -558,13 +560,12 @@ namespace ModSettingsMenu
         private static int _caretBeforeBody = CaretUnknown;
 
         // MSM-12. The drill-in row that held activeInputField when this frame's HandleTypingInput was
-        // entered, and whether the back key was down at that moment. The postfix can ask for neither
-        // itself: by then Deactivate has set activeInputField to null, so the row is unreachable, and the
-        // key belongs to a branch that has already been taken. Consumed there alongside the arrow
-        // verdicts, for the same reason they are — a value raised while some other field held focus must
-        // not reach a drill-in row in a later frame.
-        private static ModSettingsMenu.UI.ListDetailItem _fieldRowOnEntry;
-        private static bool _backKeyOnEntry;
+        // entered, AND the back key was down — set only when both hold, so a non-null value already means
+        // "this row's edit was asked to be abandoned". The postfix cannot recover the row itself: by then
+        // Deactivate has set activeInputField to null. Consumed there alongside the arrow verdicts, for
+        // the same reason they are — a row recorded while some other field held focus must not reach a
+        // cancel in a later frame.
+        private static ModSettingsMenu.UI.ListDetailItem _cancelRowOnEntry;
 
         // Latched for the session. It used to sit beside a second latch for an unreadable cooldown
         // field; that one retired with the reflection read, so this is the only typing-path warning
@@ -655,17 +656,15 @@ namespace ModSettingsMenu
             bool rightFired = _rightArrowFired;
             bool editClaimed = _editBranchClaimed;
             int caretBefore = _caretBeforeBody;
-            var rowOnEntry = _fieldRowOnEntry;
-            bool backKeyOnEntry = _backKeyOnEntry;
+            var cancelRow = _cancelRowOnEntry;
             _leftArrowFired = false;
             _rightArrowFired = false;
             _editBranchClaimed = false;
             _caretBeforeBody = CaretUnknown;
-            _fieldRowOnEntry = null;
-            _backKeyOnEntry = false;
+            _cancelRowOnEntry = null;
 
-            // MSM-12 — the back key abandons an edit instead of committing it. Three placements, three
-            // different reasons, and each one fails silently if moved:
+            // MSM-12 — the back key abandons an edit instead of committing it. Two placements, two
+            // different reasons, and each fails silently if moved:
             //
             //   AHEAD of the __runOriginal guard below, because BetterTextInput handles Escape in its own
             //   prefix and returns false, so __runOriginal is false on exactly the frame this must act.
@@ -674,18 +673,22 @@ namespace ModSettingsMenu
             //   AHEAD of the `activeInputField is not ListDetailItem` guard, because Deactivate has
             //   already nulled the field — the row is reachable only through what the prefix kept.
             //
-            //   BEHIND the keyboard/mouse question, which it therefore asks itself rather than inheriting
-            //   from the guard below. Vanilla's back-key branch (Pug.Other:269652) is unreachable on a
-            //   controller: HandleTypingInput leaves through the on-screen-keyboard branch first
-            //   (Pug.Other:269610-269624). There is nothing to cancel there, and acting anyway would put
-            //   this between a confirmed keyboard result and the commit that has to carry it.
+            // It deliberately does NOT ask which input device is in use, and must stay ahead of the
+            // guard below that does. Vanilla's back-key branch (Pug.Other:269652) is NOT controller-proof:
+            // the on-screen-keyboard block returns only when the keyboard actually opens, and
+            // GetControllerTextInput answers false on the fallback platform always (Pug.Other:288045) and
+            // on Steam whenever the overlay cannot show it (Pug.Other:286913). Execution then falls out
+            // of that block at Pug.Other:269625 into this very branch while SystemPrefersKeyboardAndMouse
+            // is false — so a device test here would decline exactly the players vanilla is cancelling
+            // for. The on-screen-keyboard path needs no exclusion of its own: it answers through
+            // TrySetInputText, where the back key is not down and this row is therefore never recorded.
             //
-            // The field having moved away from the row is what says the edit ended; the key says why.
-            // Together they reconstruct the intent Deactivate(bool commit) throws away
-            // (Pug.Other:343542). Restoring the seed is the whole action — the commit that follows the
-            // transition then finds an unchanged value and writes nothing.
-            if (backKeyOnEntry && rowOnEntry != null && Manager.input.SystemPrefersKeyboardAndMouse() && Manager.input.activeInputField != (object)rowOnEntry)
-                rowOnEntry.CancelEdit();
+            // The field having moved away from the row is what says the edit ended; the recorded row says
+            // it was asked to be abandoned. Together they reconstruct the intent Deactivate(bool commit)
+            // throws away (Pug.Other:343542). Restoring the seed is the whole action — the commit that
+            // follows the transition then finds an unchanged value and writes nothing.
+            if (cancelRow != null && Manager.input.activeInputField != (object)cancelRow)
+                cancelRow.CancelEdit();
 
             if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem row)
                 return;
