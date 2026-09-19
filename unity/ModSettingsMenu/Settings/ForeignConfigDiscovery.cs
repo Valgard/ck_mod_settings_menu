@@ -332,7 +332,6 @@ namespace ModSettingsMenu.Settings
                 GmcmValueTermPrefix = GmcmTerms.ValueBase(configFilePath, definition.Section, key),
                 Entry = e,
                 Foreign = true,
-                RequiresRestart = e.Scope != null && e.Scope.requireReload,
             };
 
             var t = e.SettingType;

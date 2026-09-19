@@ -709,7 +709,15 @@ namespace ModSettingsMenu.Settings
                 return this;
             }
             if (n > 0)
-                _section.Settings[n - 1].RequiresRestart = true;
+            {
+                // Into the scope, which is now the only home for this. The entry is bound by the time
+                // this modifier runs, and ConfigEntryBase.Scope is get-only — but ConfigScope is a
+                // class with public mutable fields, and per BindGuarded this instance belongs to this
+                // entry alone, so writing through it reaches nothing else.
+                var def = _section.Settings[n - 1];
+                if (def.Entry != null)
+                    def.Entry.Scope.requireReload = true;
+            }
             return this;
         }
 
