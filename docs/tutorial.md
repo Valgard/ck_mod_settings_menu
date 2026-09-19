@@ -31,7 +31,7 @@ Current framework version at time of writing: **1.1.0** (modId `6211950`).
 5. [Reading values (live) — and the adapter pattern](#5-reading-values-live--and-the-adapter-pattern)
 6. [Persistence: where values live](#6-persistence-where-values-live)
 7. [Localization](#7-localization-optional-but-nice)
-8. [RequiresRestart & the EarlyInit/Init bake-time trap](#8-requiresrestart--the-earlyinitinit-bake-time-trap)
+8. [Access levels, RequiresRestart & the EarlyInit/Init bake-time trap](#8-access-levels-requiresrestart--the-earlyinitinit-bake-time-trap)
 9. [Ordering options and sections](#9-ordering-options-and-sections)
 10. [Pitfall checklist](#10-pitfall-checklist)
 
@@ -518,7 +518,68 @@ switching off again once you're done with it.
 
 ---
 
-## 8. RequiresRestart & the EarlyInit/Init bake-time trap
+## 8. Access levels, RequiresRestart & the EarlyInit/Init bake-time trap
+
+### Who may change a setting — access levels
+
+Every widget, plus `Section` and `Group`, take two optional parameters:
+`access: ConfigAccessLevel?` and `requiresRestart: bool?`. This part covers
+`access`; `requiresRestart` follows below, since the two cascade the same way.
+
+```csharp
+public enum ConfigAccessLevel { ViewOnly = -1, Client = 0, Server = 1, Admin = 2 }
+```
+
+`Section()` sets the section-wide default — `ConfigAccessLevel.Client` unless
+you say otherwise — `Group()` may override it for its own rows, and a widget's
+own `access:` argument overrides both. The innermost non-null statement always
+wins. Say nothing anywhere and you get `Client`, which is also how every
+setting has always behaved before this existed.
+
+| Level | Locked for | Travels to other players |
+|---|---|---|
+| `ViewOnly` | everyone, host included, in every session type | no |
+| `Client` *(default)* | nobody | no |
+| `Server` | a non-admin, but only in a **guest-mode** world | yes |
+| `Admin` | every non-admin, guest mode or not | yes |
+
+**The one this section exists to warn you about: `Server` is a sync marker,
+not a lock.** It is tempting to reach for `Server` to mean "the host decides,
+a joining player only looks" — that is not what it does. `Server` asks
+whether the *world* has guest mode switched on; guest mode is off by default,
+so on an ordinary world a player who just joined changes a `Server`-scoped
+setting exactly as freely as the host does. If what you actually want is "not
+by you", declare `Admin` instead — it locks every non-admin regardless of the
+world's guest-mode flag. Save `ViewOnly` for a value your mod computes rather
+than one a player is ever meant to type in; it locks the host too.
+
+At the title screen there is no player to ask, so a `Server`- or
+`Admin`-scoped row shows locked there — it opens up the moment a world exists
+in the same session, no relaunch needed.
+
+Say Glow Mod's light cap should not be something a random player on your
+server can crank up, since more lights cost the server more to simulate:
+
+```csharp
+ModSettings.Section(this)                                           // access: Client (the default)
+    .Toggle(out Enabled, "enabled", true)
+    .Stepper(out MaxLights, "maxLights", 1, 20, 6,
+             access: ConfigAccessLevel.Admin)                       // only an admin may raise it
+    .Build();
+```
+
+`enabled` stays `Client` — every player toggles their own lighting freely —
+while `maxLights` locks for anyone who is not an admin, on any world, guest
+mode or not. (`Group()` can set the same default for a whole group of rows at
+once — see **Grouping settings with headings** below.)
+
+**What `Server`/`Admin` do today, and what they do not.** MSM enforces the
+lock itself, in this menu, in every session type — that part works right now.
+What it does not do yet is send a changed value anywhere: MSM has no network
+transport of its own yet (`docs/roadmap.md`'s MSM-19). What declaring
+`Server`/`Admin` buys you today, beyond the lock, is that a companion mod like
+General Mod Config Menu recognises the level and folds your setting into
+*its* own sync — GMCM reads the same CoreLib entry your `Bind` produces.
 
 Most settings apply **live** — you read `handle.Value` every frame/tick, so a
 menu change takes effect at once. But some values are only ever read **once, at
@@ -527,6 +588,13 @@ a setting mid-session does nothing until the next launch, and the player should
 be told.
 
 ### Marking a setting restart-required
+
+`requiresRestart` cascades through the same three levels as `access` above —
+`Section`, `Group`, or a widget's own argument — and `.RequiresRestart()` is a
+shorthand that writes `requiresRestart: true` onto the **last-declared**
+setting. Both routes write into the same place, so mixing them in one section
+is safe; a group-level `requiresRestart: true` applies to every row under it,
+and a row may still override it back to `false`.
 
 Chain `.RequiresRestart()` **right after** the widget it applies to:
 
@@ -537,6 +605,13 @@ ModSettings.Section(this)
             Reduction.Quarter)
     .RequiresRestart()          // marks the setting just declared
     .Build();
+```
+
+The equivalent one-liner, useful when the widget call already spans several
+lines:
+
+```csharp
+.Choice(out reduction, "reductionFactor", …, requiresRestart: true)
 ```
 
 When a player *actually changes* a marked setting and then leaves the Mod
@@ -641,6 +716,21 @@ colour = Neutral
 enabled = true
 maxLights = 6
 ```
+
+`Group` also takes `access` and `requiresRestart`, same as every widget (§8)
+— set them once for the whole group instead of repeating them on every row:
+
+```csharp
+ModSettings.Section(this)
+    .Group("limits", access: ConfigAccessLevel.Admin)   // both rows below need an admin
+    .Toggle(out Enabled, "enabled", true)
+    .Stepper(out MaxLights, "maxLights", 1, 20, 6)
+    .Build();
+```
+
+Both reset on every `Group()` call, including one that names neither — a
+group that says nothing goes back to the section's own default, not to the
+previous group's.
 
 Reach for `Group` once the `.cfg` itself is worth reading as sections; reach
 for `Label` when you only want the on-screen box to read that way. **Nothing
@@ -1122,27 +1212,37 @@ render path, keep these in mind:
 using ModSettingsMenu.Settings;
 
 // Begin — in IMod.Init (or EarlyInit for bake-time settings):
-SectionBuilder b = ModSettings.Section(this);
+SectionBuilder b = ModSettings.Section(this,
+    ConfigAccessLevel access = ConfigAccessLevel.Client,   // section-wide default; ViewOnly|Client|Server|Admin
+    bool requiresRestart = false);
 
 // Section-level:
 b.Hint(string text);                    // optional subtitle (localizable via <ModId>-Config/_hint)
 b.SortOptions(OptionSort mode);         // AsDeclared (default) | ByKey | ByLabel
 
-// Widgets (each: out handle, stable key, per-kind params) — chainable:
-b.Toggle (out SettingHandle<bool>  h, string key, bool def);
+// Widgets (each: out handle, stable key, per-kind params, then access/requiresRestart) — chainable.
+// `access`/`requiresRestart` are ConfigAccessLevel?/bool?, default null (inherit Group, then Section):
+b.Toggle (out SettingHandle<bool>  h, string key, bool def,
+          ConfigAccessLevel? access = null, bool? requiresRestart = null);
 b.Slider (out SettingHandle<float> h, string key, float min, float max, float def, float step,
-          SliderDisplay display = SliderDisplay.Steps);   // Steps | Number | Percent(=position-in-range)
-b.Stepper(out SettingHandle<int>   h, string key, int min, int max, int def);
-b.Choice (out SettingHandle<T>     h, string key, T[] values, T def);   // token = value.ToString()
+          SliderDisplay display = SliderDisplay.Steps,
+          ConfigAccessLevel? access = null, bool? requiresRestart = null);  // Steps | Number | Percent
+b.Stepper(out SettingHandle<int>   h, string key, int min, int max, int def,
+          ConfigAccessLevel? access = null, bool? requiresRestart = null);
+b.Choice (out SettingHandle<T>     h, string key, T[] values, T def,
+          ConfigAccessLevel? access = null, bool? requiresRestart = null);  // token = value.ToString()
 b.List   (out SettingHandle<string[]> h, string key, string[] defaults,
-          ListEditing editing = ListEditing.FreeText);  // FreeText | OrderOnly | ReadOnly
+          ListEditing editing = ListEditing.FreeText,
+          ConfigAccessLevel? access = null, bool? requiresRestart = null); // FreeText | OrderOnly | ReadOnly
 
 // Headings (no handle, nothing bound):
-b.Label  (string key);                              // full-width heading; sort boundary
-b.Group  (string key, string movedFrom = null);      // same as Label, ALSO rebinds later
-                                                      // declarations into CoreLib section `key`
+b.Label  (string key);                              // full-width heading; sort boundary; no access/restart — holds no value
+b.Group  (string key, string movedFrom = null,
+          ConfigAccessLevel? access = null, bool? requiresRestart = null); // same as Label, ALSO rebinds later
+                                                      // declarations into CoreLib section `key`, and sets
+                                                      // their access/restart default (reset every call)
 
-b.RequiresRestart();                    // marks the LAST-declared setting restart-required
+b.RequiresRestart();                    // shorthand for requiresRestart: true on the LAST-declared setting
 b.Build();                              // registers the section
 
 // Handle:
@@ -1173,6 +1273,8 @@ Throughout, `<ModId>` = your `metadata.name`.
 | **`SettingHandle<T>`** | Typed value façade the consumer holds (`.Value`, `.OnChanged`). |
 | **`ConfigEntry` / `ConfigFile`** | CoreLib's persisted-value / config-file types. |
 | **Token** | A `Choice` value's `ToString()` — the persisted + loc-leaf string. |
+| **`ConfigAccessLevel`** | `ViewOnly`/`Client`/`Server`/`Admin` — who may change a setting, and whether it syncs. |
+| **`Locked`** | Whether a row may be changed right now — the permission answer `ConfigAccessLevel` produces. |
 | **PreWarm** | Paying the one-time first-enable cost at load instead of first open. |
 | **RadicalMenu / RadicalMenuOption** | CK's base classes for a menu screen / a menu row. |
 | **`MenuType`** | CK's enum id for a menu; MSM casts a free int (`29314`) for its own. |

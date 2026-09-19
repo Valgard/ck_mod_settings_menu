@@ -110,6 +110,11 @@ entry is the version published to mod.io; its body is the modfile changelog.
   config file, and stepping through a choice no longer overwrites a value this
   menu does not recognise. Section headings and hints also space correctly
   again.
+- **Mods can say who may change a setting.** A mod can now mark any of its
+  settings as client-side, server-synced, admin-only or display-only, for the
+  whole mod, for one group of settings or for a single row. Settings that say
+  nothing stay client-side, so nothing a mod did not ask for travels to other
+  players or gets locked.
 
 ## [1.1.0]
 

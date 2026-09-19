@@ -737,12 +737,19 @@ settings" toggle included. It is harmless only because nothing reads the level o
 the declared path today; the moment something does, a server would be entitled to
 decide whether a player's menu lists detected mods.
 
-Two consequences. The API needs a **deliberately chosen** default — `Client` is
-the honest one for a framework whose consumers are HUD and UI mods — and MSM's
-own toggle should state it rather than inherit it. The overload that takes a
-`ConfigAccessLevel` directly already defaults to `Client`, so switching to it may
-be the whole fix; the two entry points into the same structure disagree, which is
-worth knowing before writing either.
+Two consequences. The API needs a **deliberately chosen** default — and MSM's
+own toggle should state it rather than inherit it. `Client` is that default,
+and not because the consumers are HUD and UI mods: across the consumers in
+this workspace, roughly half of the declared settings change game rules
+rather than presentation — the XP multipliers, the recipe scaling, and the
+`enabled` toggles of the gameplay mods. The reason to choose `Client` is that
+it is the only level under which a consumer's silence stays silence — it
+neither syncs (`ShouldSync` is `(int)accessLevel > 0`) nor locks in any
+session type. The overload that takes a `ConfigAccessLevel` directly is not
+the fix it looks like: it takes a `string description` and builds a
+`ConfigDescription` from it internally, discarding any `AcceptableValueBase`
+— a Slider's or Stepper's range, a Choice's token list. The `ConfigScope`
+overload is the one that carries both the access level and the constraint.
 
 **`Admin` belongs in the declaration too, and it pays off before any sync.**
 `IsReadOnly` already delegates to `Changeable()`, which for `Admin` asks
