@@ -195,6 +195,16 @@ namespace ModSettingsMenu.Settings
         /// A row can be both, and only now can a caller tell which.</summary>
         public bool Locked => Entry != null && AccessLock.IsLocked(Entry.Scope);
 
+        /// <summary>Whether this row can be operated at all — the question every widget and the
+        /// section reset actually ask, as opposed to WHY it cannot be.
+        ///
+        /// Both reasons stay separately readable on purpose: MSM-10 needs the permission alone
+        /// (<see cref="Locked"/>) to decide what to render as withheld, because a structurally
+        /// inert row is not being withheld from anyone. What a caller must not do is re-derive
+        /// the conjunction — this used to live at four call sites, and two of them were wrong
+        /// within one commit of the split.</summary>
+        internal bool IsEditable => Entry != null && !Locked && Kind != SettingKind.Info;
+
         /// <summary>List only: the level the CONSUMER asked for, before any permission lock.
         /// Read <see cref="EffectiveEditing"/> instead — this one is only half the answer.
         ///

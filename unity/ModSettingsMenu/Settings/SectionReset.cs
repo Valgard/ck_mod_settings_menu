@@ -6,11 +6,11 @@ namespace ModSettingsMenu.Settings
     /// a reset is one file, one owner, and one confirmable sentence. Discovered (foreign)
     /// sections are included on purpose — a reset only ever writes back the value that mod
     /// itself declared, so unlike the list-editing path it can never invent or lose a value.
-    /// Two kinds of row are always skipped, and — unlike before — as two separate tests rather
-    /// than one flag that happened to carry both: a genuine permission lock (SettingDef.Locked —
-    /// view-only / server-locked and not this session's host) and a Kind == Info fallback where
-    /// no editable widget exists for the value's shape at all — the latter is writable, but this
-    /// menu never showed it as such.
+    /// A non-editable row is always skipped — ask SettingDef.IsEditable, the single conjunction of
+    /// the two reasons a row can be inert: a genuine permission lock (SettingDef.Locked — view-only
+    /// / server-locked and not this session's host) and a Kind == Info fallback where no editable
+    /// widget exists for the value's shape at all — the latter is writable, but this menu never
+    /// showed it as such.
     ///
     /// A list declared ListEditing.ReadOnly is a THIRD kind of row the menu shows as unchangeable,
     /// and it is deliberately NOT skipped: SettingDef.Locked stays false for it, because the lock
@@ -60,11 +60,12 @@ namespace ModSettingsMenu.Settings
             return restartRelevantChange;
         }
 
-        // Both exclusions, named. Until this point one flag carried them and the structural half
-        // was covered by accident; with Locked meaning only the permission, a discovered Info row
-        // would newly fall into the reset. It is writable — but this menu has never shown it as
-        // changeable, so writing it on a reset would be a value changing where the player was told
-        // nothing can.
-        private static bool IsInScope(SettingDef def) => def != null && !def.Locked && def.Kind != SettingKind.Info && def.Entry != null;
+        // Ask IsEditable, not Locked or Kind separately: that property is the one place the
+        // conjunction of the two exclusions lives now. Spelling it out here by hand is exactly how
+        // the structural half (Kind == Info) went uncovered for one commit after the ReadOnly split
+        // — a discovered Info row briefly fell back into the reset. It is writable — but this menu
+        // has never shown it as changeable, so writing it on a reset would be a value changing
+        // where the player was told nothing can.
+        private static bool IsInScope(SettingDef def) => def != null && def.IsEditable;
     }
 }
