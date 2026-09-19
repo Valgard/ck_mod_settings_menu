@@ -972,6 +972,40 @@ would mean reopening the very ordering this point calls its shape.
   `TomlTypeConverter`. Both are in use in GMCM and in MSM but were not opened in
   the decompile or in CoreLib's source.
 
+## MSM-36 — With GMCM installed, nothing MSM writes reaches the disk
+
+**Derived from code, not yet observed in game.** Found while reviewing MSM-18's
+spec against General Mod Config Menu's source (mod.io modfile `7840263`). Four
+facts, each verified; the conclusion follows from them and has not been watched
+happening.
+
+- **MSM never calls `Save()`.** Not once in the whole mod — three comments
+  mention `SaveOnConfigSet`, and all three rely on it being on.
+- **CoreLib only writes when it is on.** `ConfigFile.OnSettingChanged` ends in
+  `if (SaveOnConfigSet) Save()`, and that is the path a value change takes.
+- **GMCM turns it off in three places**, on every config file whose path does
+  not start with `CoreLib`: `ConfigSyncSystem.cs:46` when its ECS system is
+  created, and `ModConfigMenu.cs:64` and `:151` while its own menu is built. It
+  then calls `Save()` explicitly for its own writes, so it is unaffected.
+- **MSM's files are in scope.** `ConfigStore` binds `"{modId}/config.cfg"`,
+  which is not a `CoreLib` path.
+
+So once GMCM has run, every consumer setting a player changes through MSM takes
+effect in memory and is gone at the next launch. The section reset is the
+loudest case — it writes many values at once — but a single toggle is affected
+the same way.
+
+- **Open — which side gives way.** MSM calling `Save()` after each write is the
+  obvious answer and the one that does not fight another mod for a shared
+  switch; the cost is a serialize per change on a path CoreLib deliberately
+  batches. Setting `SaveOnConfigSet` back would fight GMCM, which re-clears it
+  on every menu build.
+- **To check first:** whether the loss is real in a session with both mods, and
+  whether GMCM's own `Save()` happens to cover MSM's files by accident. Neither
+  was tested; the whole point rests on reading.
+- **Not part of MSM-18**, which only discovered it. The spec records it under
+  its out-of-scope list.
+
 ## Small fixes
 
 - **MSM-20 — Format-override toggle / misclassification confirmation for
