@@ -62,7 +62,7 @@ namespace ModSettingsMenu
             if (DevFlags.Is("TestFixtures"))
             {
                 // Client scope (not CoreLib's Server default) so these stay editable at the title
-                // screen too, where Manager.main.player is null — ForeignConfigDiscovery.IsReadOnly
+                // screen too, where Manager.main.player is null — AccessLock.IsLocked
                 // conservatively treats a non-Client scope as read-only there (real foreign mods, incl.
                 // PlacementPlus's own ExcludeItems, are typically Server-scoped and share that limit).
                 var clientScope = new ConfigScope(ConfigAccessLevel.Client);
@@ -73,9 +73,9 @@ namespace ModSettingsMenu
                     + "Item11, Item12, Item13, Item14, Item15, Item16, Item17, Item18, Item19, Item20";
                 testFile.Bind("Settings", "Long", longValue, new ConfigDescription("A long test list (scroll-follow check)."), clientScope);
                 // ViewOnly (not Server) is read-only unconditionally, regardless of Manager.main.player —
-                // ForeignConfigDiscovery.IsReadOnly only treats Server/Admin as read-only AT THE TITLE
+                // AccessLock.IsLocked only treats Server/Admin as read-only AT THE TITLE
                 // SCREEN specifically (no player yet); a real world session would make a Server-scoped
-                // entry editable again. ViewOnly is the one access level IsReadOnly returns true for
+                // entry editable again. ViewOnly is the one access level AccessLock.IsLocked returns true for
                 // unconditionally, so this stays a genuine read-only List regression check in any session.
                 testFile.Bind(
                     "Settings",
@@ -224,7 +224,7 @@ namespace ModSettingsMenu
                 // row takes a different path through the widget (MakeValueReadOnly, the early return in
                 // Adjust) while still having to DISPLAY the right token — and the display line is one of
                 // the two this change rewrote. It is also the shape a real foreign Choice usually has
-                // here: ConfigScope defaults to Server, which IsReadOnly treats as locked at the title
+                // here: ConfigScope defaults to Server, which AccessLock.IsLocked treats as locked at the title
                 // screen, and the title screen is where this walk is easiest to run.
                 choiceFile.Bind(
                     "Settings",

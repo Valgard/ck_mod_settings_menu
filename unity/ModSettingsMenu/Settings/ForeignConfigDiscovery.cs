@@ -331,7 +331,7 @@ namespace ModSettingsMenu.Settings
                 Entry = e,
                 Foreign = true,
                 RequiresRestart = e.Scope != null && e.Scope.requireReload,
-                ReadOnly = IsReadOnly(e.Scope),
+                ReadOnly = AccessLock.IsLocked(e.Scope),
             };
 
             var t = e.SettingType;
@@ -447,21 +447,6 @@ namespace ModSettingsMenu.Settings
             d.Kind = SettingKind.Info;
             d.ReadOnly = true;
             return d;
-        }
-
-        private static bool IsReadOnly(ConfigScope scope)
-        {
-            if (scope == null)
-                return false;
-            if (scope.accessLevel == ConfigAccessLevel.ViewOnly)
-                return true;
-            if (scope.accessLevel == ConfigAccessLevel.Client)
-                return false;
-            // Server/Admin: Changeable() reads Manager.main.player; at the title screen there is no
-            // player, so be conservative (read-only) rather than risk an NRE.
-            if (Manager.main == null || Manager.main.player == null)
-                return true;
-            return !scope.Changeable();
         }
 
         /// <summary>The closed set of values a constrained entry accepts, as the tokens a Choice row
