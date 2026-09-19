@@ -7,8 +7,9 @@ namespace ModSettingsMenu.UI
     /// <summary>
     /// The list drill-in detail screen: a pushed RadicalMenu showing one comma-list in full — a
     /// title plus one navigable row per entry, scrollable, each row a live text-input field
-    /// (edit or clear an entry, committed on Enter/Escape/click-away — see ListDetailItem); adding
-    /// goes through the trailing button (ListAddRow), not by typing into a row.
+    /// (edit or clear an entry, committed on Enter or click-away, cancelled by the back key — see
+    /// ListDetailItem); adding goes through the trailing button (ListAddRow), not by typing into a
+    /// row.
     /// What a player may do here is one of three levels (SettingDef.EffectiveEditing, which has
     /// already folded any permission lock into the consumer's declaration): type/add/delete/reorder
     /// freely, reorder only, or nothing at all. The two narrower ones still show every row navigable
