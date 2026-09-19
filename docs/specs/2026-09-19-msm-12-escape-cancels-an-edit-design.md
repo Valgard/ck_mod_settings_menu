@@ -1,8 +1,11 @@
 # Design — Escape cancels a drill-in row edit (MSM-12)
 
 - **Date:** 2026-09-19
-- **Status:** Design approved; revised after a three-lane spec review; implementation pending
-- **Roadmap point:** MSM-12 (`docs/roadmap.md`)
+- **Status:** Shipped 2026-09-19. Design approved, revised after a three-lane
+  spec review, then again after a branch review and the PR review gate.
+- **Roadmap point:** MSM-12, removed from `docs/roadmap.md` on delivery — a
+  point that ships takes its id with it, so the id stays citable and the open
+  list does not.
 - **Builds on:** ADR-003 (list widget editing — the commit-on-transition model),
   ADR-005 (drill-in row model), ADR-007 (horizontal text scrolling — the
   `HandleTypingInput` patch pair this reuses)
