@@ -294,10 +294,10 @@ namespace ModSettingsMenu.Settings
             };
 
         // Widget-kind inference cascade (first match wins). See ADR-001 (the discovery base). Every
-        // kind gets its own native widget regardless of read-only-ness — SettingDef.ReadOnly (view-
-        // only, or a server/admin setting this player can't change, incl. at the title where there
-        // is no player) rides alongside Kind rather than collapsing it to Info; SettingWidget /
-        // ListDetailItem check ReadOnly to decide whether the row responds to input, not Kind.
+        // kind gets its own native widget regardless of locked-ness — SettingDef.Locked (view-only,
+        // or a server/admin setting this player can't change, incl. at the title where there is no
+        // player) rides alongside Kind rather than collapsing it to Info; SettingWidget /
+        // ListDetailItem check Locked to decide whether the row responds to input, not Kind.
         private static SettingDef BuildDef(string configFilePath, ConfigDefinition definition, ConfigEntryBase e)
         {
             string key = definition.Key;
@@ -331,7 +331,6 @@ namespace ModSettingsMenu.Settings
                 Entry = e,
                 Foreign = true,
                 RequiresRestart = e.Scope != null && e.Scope.requireReload,
-                ReadOnly = AccessLock.IsLocked(e.Scope),
             };
 
             var t = e.SettingType;
@@ -397,10 +396,11 @@ namespace ModSettingsMenu.Settings
             //    tokens did not survive TryTokens. The first two are the designed route and silent; the
             //    third is a degradation and says so in the log. Either way there is no editable widget
             //    for this shape at all, not just "not allowed to touch it right now".
+            // No ReadOnly flag to set any more: "no editable widget for this shape" IS
+            // Kind == Info, and a caller that means the permission lock asks SettingDef.Locked.
             if (av != null)
             {
                 d.Kind = SettingKind.Info;
-                d.ReadOnly = true;
                 return d;
             }
 
@@ -438,14 +438,11 @@ namespace ModSettingsMenu.Settings
                 if (isList)
                     ListKindStore.MarkAsList(id);
                 d.Kind = isList ? SettingKind.List : SettingKind.Info;
-                if (!isList)
-                    d.ReadOnly = true;
                 return d;
             }
 
             // 7. everything else (unhandled type) -> read-only Info regardless of scope.
             d.Kind = SettingKind.Info;
-            d.ReadOnly = true;
             return d;
         }
 

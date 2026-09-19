@@ -52,7 +52,7 @@ namespace ModSettingsMenu.Settings
     /// be honest about it.
     ///
     /// This is the CONSUMER's declaration, not the effective state — a permission lock
-    /// (SettingDef.ReadOnly) demotes any of these to ReadOnly at render time. Ask
+    /// (SettingDef.Locked) demotes any of these to ReadOnly at render time. Ask
     /// SettingDef.EffectiveEditing, never SettingDef.DeclaredEditing directly.
     ///
     /// NEVER persist or [SerializeField] a value of this enum. Nothing does today, and the planned
@@ -182,13 +182,18 @@ namespace ModSettingsMenu.Settings
         public bool Foreign;
         public bool Unbounded; // Stepper only: skip the Min/Max clamp (a foreign numeric with no range)
 
-        // true → this row's own Kind still renders natively, but the widget (or, for List, the
-        // drill-in) must not respond to input: either a genuine permission lock (view-only/
-        // server-locked and not this session's host) or, hard-coded true regardless of scope, a
-        // Kind == Info fallback where no editable widget exists for the value's shape at all.
-        // (Leading, not trailing: CSharpier reflows a multi-line trailing comment into the gap
-        // before the next member, which made its tail read as documentation for Editing.)
-        public bool ReadOnly;
+        /// <summary>True when this row's value may not be changed in this session, right now —
+        /// a permission answer and nothing else. Computed rather than stored, because a DECLARED
+        /// SettingDef is built once in EarlyInit/Init and lives until the game exits: a value
+        /// folded in at construction would be the title screen's answer (no player, so Server and
+        /// Admin read as locked) and would never be revisited inside a world. A discovered def is
+        /// rebuilt per Discover() and would have hidden the problem.
+        ///
+        /// It no longer carries the second meaning the old ReadOnly field did — "no editable
+        /// widget exists for this value's shape". That is Kind == SettingKind.Info and needs no
+        /// field of its own; the two were only ever conflated because discovery set both at once.
+        /// A row can be both, and only now can a caller tell which.</summary>
+        public bool Locked => Entry != null && AccessLock.IsLocked(Entry.Scope);
 
         /// <summary>List only: the level the CONSUMER asked for, before any permission lock.
         /// Read <see cref="EffectiveEditing"/> instead — this one is only half the answer.
@@ -200,16 +205,16 @@ namespace ModSettingsMenu.Settings
         public ListEditing DeclaredEditing { get; internal set; }
 
         /// <summary>What the drill-in may actually offer, once a permission lock is taken into
-        /// account. ReadOnly demotes every declaration to ReadOnly; nothing ever promotes.
+        /// account. Locked demotes every declaration to ReadOnly; nothing ever promotes.
         ///
         /// It returns the same enum the consumer declares rather than a second, parallel one,
         /// because there is no state here the declaration cannot already express — a second type
         /// would only create the question of which of the two a given call site meant.
         ///
         /// Computed, not folded once at construction: ForeignConfigDiscovery.Discover() re-runs on
-        /// every screen build, so ReadOnly is recomputed per open (a Server-scoped setting is locked
+        /// every screen build, so Locked is recomputed per open (a Server-scoped setting is locked
         /// at the title screen and editable in a session) and a snapshot would go stale.</summary>
-        public ListEditing EffectiveEditing => ReadOnly ? ListEditing.ReadOnly : DeclaredEditing;
+        public ListEditing EffectiveEditing => Locked ? ListEditing.ReadOnly : DeclaredEditing;
 
         /// <summary>List only: the drill-in would have no rows AND no way to gain one, so opening it
         /// can only produce an empty screen. Empty is not merely useless there — with no menu options

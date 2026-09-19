@@ -31,7 +31,7 @@ namespace ModSettingsMenu.UI
 
         // this open session's own copy of _activeDef.EffectiveEditing — set in Populate from _pending
         // (which Activate() nulls right after). Effective, not declared: a permission lock has
-        // already been folded in, so nothing on this screen consults SettingDef.ReadOnly separately.
+        // already been folded in, so nothing on this screen consults SettingDef.Locked separately.
         // Defaults to the most restrictive level, so a session that never reaches Populate shows an
         // inert list rather than an editable one.
         private ListEditing _editing = ListEditing.ReadOnly;
@@ -100,7 +100,7 @@ namespace ModSettingsMenu.UI
             // consumer declaring an unaddable list with no defaults (warned about there), and a
             // DISCOVERED list edited down to nothing — ListKindStore keeps the List classification
             // after the value drops below the heuristic's threshold, and a Server-scoped entry then
-            // reads ReadOnly at the title screen, where there is no player.
+            // reads Locked at the title screen, where there is no player.
             // ListWidget.CanBeActivated asks the same question, so an unusable row does not offer
             // itself in the first place. This stays the authority rather than belt-and-braces:
             // Open() is public, and nothing stops another caller reaching it.
