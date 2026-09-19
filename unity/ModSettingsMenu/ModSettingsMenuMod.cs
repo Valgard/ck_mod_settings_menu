@@ -761,8 +761,13 @@ namespace ModSettingsMenu
             // independent: the reset restores a ListEditing.ReadOnly list, and skips a locked one.
             section.List(out _, "testListReadOnlyAndLocked", new[] { "Alpha", "Beta" }, ListEditing.ReadOnly, access: ConfigAccessLevel.ViewOnly);
             section.List(out _, "testListReadOnlyUnlocked", new[] { "Gamma", "Delta" }, ListEditing.ReadOnly);
-            // Review Focus 3: a level on a declaration whose bind fails must not attach to the row
-            // before it. Same hazard the RequiresRestart guards exist for, reached by a new route.
+            // A duplicate key of the SAME type: CoreLib's Bind returns the cached entry for a
+            // repeated ConfigDefinition and discards the second call's scope argument, so both rows
+            // render against one entry and BOTH show the FIRST declaration's level — the ViewOnly
+            // asked for here never takes effect. Not the failed-bind path: that needs mismatched
+            // types, which testDupKey above already covers. A level cannot be misattached the way
+            // RequiresRestart can, because it is a parameter of the declaration rather than a
+            // modifier after it, so a failed bind leaves nothing behind to attach.
             section.Toggle(out _, "testDupKeyAccess", true).Toggle(out _, "testDupKeyAccess", false, access: ConfigAccessLevel.ViewOnly);
         }
 
