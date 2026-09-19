@@ -274,21 +274,26 @@ Escape is bound to that action, which is §8's question; so the question carries
 criterion 8 just as much as criterion 1, and is not narrowed by that mod being
 absent.
 
-## 8 · Open question
+## 8 · Settled in verification
 
-**That Escape is bound to Rewired action 6 is inferred, not read.**
-`IsMenuBackButtonDown()` returns `system.GetButtonDown(6)`
-(`Pug.Other:267169`), and vanilla's typing branch offers no other route out of
-a text field by keyboard except Return/KeypadEnter (`:269636`) — yet Escape
-demonstrably ends an edit in the shipped game. By elimination the binding exists.
-The Rewired binding table is asset data and is not in the decompile, so this is
-an argument from the code's shape rather than a reading of the binding.
+**Escape is bound to Rewired action 6 — measured, no longer inferred**
+(2026-09-19, game 1.2.1.5 under CrossOver). While a drill-in row held the input
+field, one Escape press produced exactly one `IsMenuBackButtonDown()` hit, and
+the row's text returned to its stored token. The mod under test was the fake-id
+dev build (`Loading mod with ID 9999991`), not a subscription, so the reading is
+of this code.
 
-It is stated as open because the elimination rests on §2.1 being a complete list
-of the ways a field can be deactivated, which is a property of the decompile as
-read, not a guarantee. **It carries criteria 1, 3, 5 and 8** — everything the
-back-key trigger touches. One in-game keypress settles it, and it is the first
-check of the verification walk rather than a separate exercise.
+It was worth measuring rather than reasoning through. `IsMenuBackButtonDown()`
+returns `system.GetButtonDown(6)` (`Pug.Other:267169`), and the Rewired binding
+table is asset data absent from the decompile — so the code could only support
+an argument by elimination: vanilla's typing branch offers no other keyboard
+route out of a field except Return/KeypadEnter (`:269636`), yet Escape
+demonstrably ends an edit. That argument rests on §2.1 being a *complete* list
+of deactivation routes, which is a property of the decompile as read rather than
+a guarantee — and `GetButtonDown` reports a wrong action id by returning `false`
+in silence, so a mistaken premise would have surfaced as "the key does nothing"
+and been indistinguishable from a broken implementation. The premise carried
+criteria 1, 3, 5 and 8; one keypress settled all four.
 
 ## 9 · Verification
 

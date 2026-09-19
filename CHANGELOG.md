@@ -73,6 +73,11 @@ entry is the version published to mod.io; its body is the modfile changelog.
   stays intact however long it is, the view follows the cursor as you move
   through it, and you can jump to the start or end of the line, move a word at
   a time, or click straight to the spot you want to edit.
+- **Fixed: backing out of a list entry saved it anyway.** Pressing Escape while
+  editing an entry kept whatever had been typed, exactly as confirming it does,
+  so a change could not be taken back once the first key had landed — the only
+  way out was to retype the old value from memory. Escape now restores the entry
+  to the value it had; Enter still keeps the change.
 - **Fixed: holding a word-jump key crawled instead of repeating.** Holding Ctrl
   (or Alt) together with an arrow key jumped one word and then moved a single
   character at a time for as long as the key stayed down. It now keeps jumping

@@ -539,11 +539,6 @@ namespace ModSettingsMenu
                 // edge is frame-stable. NOT read here on Priority.First grounds — equal priorities fall
                 // back to load order (see the attribute's comment above), so no ordering claim would hold.
                 _backKeyOnEntry = Manager.input.IsMenuBackButtonDown();
-                // TEMPORARY — remove once spec §8 is settled (Task 2 Step 5 of the MSM-12 plan).
-                // GetButtonDown answers false SILENTLY for an action in no active map, so without this a
-                // wrong binding assumption and a broken cancel look identical from the outside.
-                if (_backKeyOnEntry)
-                    Debug.Log("[ModSettingsMenu] MSM-12 diagnostic: back key seen while a drill-in row held the field.");
                 if (row.Viewport.TryCaretIndex(out int caret))
                     _caretBeforeBody = caret;
             }
