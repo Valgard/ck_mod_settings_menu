@@ -7,6 +7,14 @@
   ADR-005 (drill-in row model), ADR-007 (horizontal text scrolling — the
   `HandleTypingInput` patch pair this reuses)
 
+> **Line citations into this repository's own files describe the state before
+> the implementation.** They were written against `31b8563`, and the branch that
+> implements this design moved most of them — a comment added above a member
+> shifts every citation below it. The citations into `Pug.Other` are unaffected
+> (that file is not edited here) and remain valid for game build 1.2.1.5-8be0.
+> To find a construct as it stands now, search for its name rather than its
+> line; `git show 31b8563:<path>` gives the file the numbers were taken from.
+
 ## 0 · Two words that mean two things
 
 **"Commit"** is used here for two distinct things, and the spec review found

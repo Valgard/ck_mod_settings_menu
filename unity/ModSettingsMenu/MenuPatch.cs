@@ -496,13 +496,15 @@ namespace ModSettingsMenu
         // It also records where the caret stood before anything moved it, which is what lets the
         // postfix tell "vanilla shifted ±1" from "somebody jumped". See the caretBefore use there.
         //
-        // Priority.First is load-bearing for two readings, not one, and both are the same kind of
+        // Priority.First is load-bearing for three readings, not one, and all are the same kind of
         // need: sample or clear state before another patch acts. Here it is the caret — another
         // mod's prefix on this same method can move it before vanilla's body runs (BetterTextInput
         // does, a whole word), and reading second would capture an already-jumped caret and report a
         // move of one, exactly inverting the test. It also pins this clear ahead of that mod's own
         // IsKeyDown probes, which the IsKeyDown postfix above relies on; lowering the priority would
-        // silently falsify that paragraph too.
+        // silently falsify that paragraph too. The third is MSM-12's row-and-key capture below, and
+        // it is the one that fails hardest: that mod's Escape branch calls Deactivate(false) itself,
+        // so running after it leaves activeInputField null and nothing is captured at all.
         //
         // Harmony orders equal-priority prefixes by load order, which is not ours to pin. That mod
         // declares no priority, so First settles it; a third patch also taking First would fall back
@@ -535,9 +537,14 @@ namespace ModSettingsMenu
             if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row)
             {
                 _fieldRowOnEntry = row;
-                // Read here rather than in the postfix only because it reads the same either way: an input
-                // edge is frame-stable. NOT read here on Priority.First grounds — equal priorities fall
-                // back to load order (see the attribute's comment above), so no ordering claim would hold.
+                // The KEY could be read in the postfix just as well — an input edge is frame-stable. The
+                // ROW could not, and since the key is only meaningful together with a row, both are taken
+                // here. That makes this capture ordering-dependent, unlike the caret read beside it:
+                // BetterTextInput's own prefix calls Deactivate(false) for Escape, and once it has,
+                // activeInputField is null and this `if` never opens — no row, no key, no cancel. The
+                // Priority.First on the attribute is what keeps us ahead of it (First 800 against its
+                // unstated Normal 400). Lower the priority and MSM-12 stops working whenever that mod is
+                // installed, in silence and only for Escape; see the attribute's own comment.
                 _backKeyOnEntry = Manager.input.IsMenuBackButtonDown();
                 if (row.Viewport.TryCaretIndex(out int caret))
                     _caretBeforeBody = caret;
