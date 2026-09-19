@@ -1294,6 +1294,21 @@ box.
       `Client` default" — carrying `testAccessGroup`'s `ViewOnly` forward
       instead would be a silent leak nothing on screen would explain.
       (Criterion 1)
+- [ ] **The restart flag cascades the same way.** `testAccessGroup` also
+      declares `requiresRestart: true`, and `testRowOverridesToClient` overrides
+      it to `false` in the same call that overrides its access level. With
+      **General Mod Config Menu** installed: `testGroupInheritsViewOnly` carries
+      GMCM's **reload marker** — inherited, and shown alongside its locked
+      permission icon, since the two are independent facts about the same entry
+      and GMCM renders both regardless of whether the row is editable anywhere
+      — while `testRowOverridesToClient` carries **none**. Without GMCM, only
+      the override half has a route: edit `testRowOverridesToClient` and leave
+      the settings screen — no restart prompt. The inheriting half has **no**
+      GMCM-free route with this fixture set: the only row that inherits the
+      group's `requiresRestart: true` without overriding it is
+      `testGroupInheritsViewOnly`, and that same row is locked by the group's
+      `ViewOnly` — there is nothing in it a player could ever change to raise
+      the prompt, in any session type. (Criterion 7)
 
 ### Migration
 
