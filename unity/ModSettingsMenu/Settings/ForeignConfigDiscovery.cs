@@ -297,8 +297,8 @@ namespace ModSettingsMenu.Settings
         // kind gets its own native widget regardless of locked-ness — SettingDef.Locked (view-only,
         // or a server/admin setting this player can't change, incl. at the title where there is no
         // player) rides alongside Kind rather than collapsing it to Info; SettingWidget checks
-        // SettingDef.IsEditable (Locked AND Kind != Info together) to decide whether a row responds
-        // to input, while ListDetailItem/ListDetailScreen ask Locked alone through EffectiveEditing
+        // SettingDef.IsEditable (NOT Locked, AND Kind != Info, together) to decide whether a row
+        // responds to input, while ListDetailItem/ListDetailScreen ask Locked alone through EffectiveEditing
         // — Info is never a List's own Kind, so that narrower question is still the right one there.
         private static SettingDef BuildDef(string configFilePath, ConfigDefinition definition, ConfigEntryBase e)
         {
@@ -422,7 +422,8 @@ namespace ModSettingsMenu.Settings
             }
 
             // 6. string -> a genuine comma-list routes to the dedicated list widget (drill-in), read-only
-            //    or not (ListDetailItem/ListDetailScreen render every row inert when ReadOnly is set); any
+            //    or not (ListDetailItem/ListDetailScreen render every row inert when SettingDef.Locked
+            //    demotes EffectiveEditing to ReadOnly); any
             //    other string (prose, single value, empty) falls back to a read-only Info row regardless
             //    of scope — there's no editable widget for free-text prose in this slice (the
             //    format-override toggle that would add one is still out of scope, spec §5). The

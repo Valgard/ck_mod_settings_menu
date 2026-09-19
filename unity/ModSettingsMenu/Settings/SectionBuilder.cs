@@ -698,9 +698,12 @@ namespace ModSettingsMenu.Settings
             }
             _currentSection = key;
             _movedFrom = movedFrom;
-            // Both are reset on every Group() call, including one that states neither — a group
-            // that says nothing means "back to the section's default", not "keep the previous
-            // group's". Anything else would make a group's meaning depend on the one before it.
+            // Both are reset here, on every ACCEPTED Group() call, including one that states
+            // neither — a group that says nothing means "back to the section's default", not
+            // "keep the previous group's". Anything else would make a group's meaning depend on
+            // the one before it. A refused group name returns above before reaching this line and
+            // changes neither field: a rejected Group() is a complete no-op, and the previous
+            // group's rows keep binding into it (ADR-011's "refused whole").
             _groupAccess = access;
             _groupRequiresRestart = requiresRestart;
             _section.Settings.Add(
@@ -719,7 +722,16 @@ namespace ModSettingsMenu.Settings
         /// When such a setting is changed in the menu, leaving the Mod settings screen raises CK's own
         /// "restart to apply mod changes" prompt (Cancel/Yes → relaunch). Chain it right after the widget:
         /// <c>.Choice(out h, "key", …).RequiresRestart()</c>. Use for bake-time / load-time settings whose
-        /// live value only matters at the next bake/launch (e.g. recipe rewrites).</summary>
+        /// live value only matters at the next bake/launch (e.g. recipe rewrites).
+        ///
+        /// Equivalent to passing <c>requiresRestart: true</c> to that same declaration — EXCEPT for a
+        /// duplicate key of the same type. CoreLib's Bind returns the cached entry for a same-type
+        /// duplicate and discards the whole second call's arguments, scope included, so
+        /// <c>requiresRestart: true</c> on the second declaration is silently dropped. This modifier
+        /// writes into <c>Scope.requireReload</c> directly rather than through Bind, so it still takes
+        /// effect on the shared entry — and therefore marks BOTH rows, since they render against the
+        /// one entry the duplicate key resolved to. See the testDupKeyAccess fixture for the access-level
+        /// half of the same behaviour.</summary>
         public SectionBuilder RequiresRestart()
         {
             int n = _section.Settings.Count;

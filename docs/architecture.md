@@ -108,8 +108,10 @@ requiresRestart`, cascading through three levels — a widget's own argument, th
 enclosing `Group`, then the `Section`. `SectionBuilder` carries two private state pairs for
 this: `_sectionAccess`/`_sectionRequiresRestart` (set once, from the constructor's
 `ModSettings.Section` arguments) and `_groupAccess`/`_groupRequiresRestart` (nullable, set
-**and reset** by every `Group()` call, including one that names neither — a group that says
-nothing means "back to the section's default", not "keep the previous group's").
+**and reset** by every accepted `Group()` call, including one that names neither — a group that
+says nothing means "back to the section's default", not "keep the previous group's". A `Group()`
+call CoreLib refuses (a bad section name) returns before either field is touched, so the
+previous group's level simply continues — "refused whole", per ADR-011.
 `BindGuarded` resolves the three levels into one **fresh** `ConfigScope` per entry before
 calling `ConfigFile.Bind`. Fresh matters: passing `null` would alias CoreLib's `static
 readonly ConfigScope.Empty`, shared by every scope-less entry in the process and whose
@@ -286,6 +288,15 @@ into scope for one commit after the split. A list declared `ListEditing.ReadOnly
 deliberately different case that stays **in** scope: `Locked` reads false for it, because that
 declaration is the mod's own design choice rather than a permission, so the reset still restores
 it — the one way a stale entry in such a list can ever clear.
+
+**A section that is entirely locked loses the reset affordance itself, not just its rows.**
+`CanReset` is what `GetHelpButtonsToShow` and the reset-key poll both gate on, so a section whose
+every declared row is `Server`- or `Admin`-scoped reports no in-scope row at all at the title
+screen — where MSM's own safety rule treats both levels as locked — and `CanReset` returns
+`false`. The footer hint and the `R` key both disappear there, not merely refuse to act, and both
+return the moment a world exists in the same session, exactly as the rows themselves do. Accepted
+as correct rather than special-cased: there is nothing honest to offer resetting when every row
+it would touch cannot be changed.
 
 ### `ConfigStore`
 

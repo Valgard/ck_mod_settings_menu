@@ -321,6 +321,18 @@ states, and those two drift.
 where the demotion happens. An earlier draft listed them, having counted comment
 matches as reads.
 
+**Accepted consequence: a section entirely locked loses the reset affordance
+too, not just its rows.** `SectionReset.CanReset` gates the footer hint and
+the reset key on whether `IsInScope` finds at least one row, and `IsInScope`
+now asks `IsEditable` — so a section whose every declared row is `Server`-
+or `Admin`-scoped reports none at the title screen, where §1.1's own safety
+rule treats both levels as locked. The hint and the key both disappear
+entirely there, not merely refuse to act, and both return the moment a world
+exists in the same session, exactly as the rows they gate on do. Accepted
+rather than special-cased: a wholly-`Info` discovered section already lost
+the reset this same way before this point existed, and there is nothing
+honest to offer resetting when every row it would touch cannot be changed.
+
 ### 5.1 · What consumers actually experience
 
 An earlier draft claimed the consumers "compile and behave unchanged". They
