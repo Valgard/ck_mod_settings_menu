@@ -39,7 +39,15 @@ HealthBars' 19901): `SettingsMenuType = (RadicalMenu.MenuType)29314` for the set
   **path**, not by device, and the division is not the obvious one: on the mouse path
   the same element travels `TrySelectNewElement` → `Select()` → `OnUIElementSelected` →
   `SelectOption`, so the `TrySelectNewElement` prefix tests the predicate first and the
-  `SelectOption` one — which still runs — finds nothing left to block there.
+  `SelectOption` one — which still runs — finds nothing left to block there. That identity
+  is a property of a **menu option**, not of the mouse path: `OnUIElementSelected` forwards
+  to `SelectOption` only when the incoming element reports `isMenuOption`
+  (`Pug.Other:273427`), and a plain `ButtonUIElement` takes its own `OnSelected` instead,
+  which forwards to `SelectOption` on a *different* element whenever
+  `optionToSelectOnHover` is set (`:335006`-`:335009`). Both halves hold on these screens —
+  every row is a `RadicalMenuOption` (`isMenuOption => true`, `:343070`), and the one
+  `ButtonUIElement` in each prefab, the scrollbar handle, leaves `optionToSelectOnHover` at
+  `{fileID: 0}` — so re-check them after a prefab edit rather than assuming the identity.
   `SelectOption` earns its place on a path that skips `TrySelectNewElement` entirely —
   `UIScrollWindow.UpdateScroll` calling `Select()` on a different element when the
   selected one scrolls out of view, a call sitting behind an early return that makes

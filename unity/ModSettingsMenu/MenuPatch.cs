@@ -112,7 +112,16 @@ namespace ModSettingsMenu
         // actively edited. NOT the mouse path, despite appearances: on hover the same element
         // travels TrySelectNewElement -> Select() -> OnUIElementSelected -> SelectOption unchanged,
         // and the prefix below tests the identical predicate on it first, so by the time this one
-        // runs there is nothing left for it to block. (It still runs — Harmony calls it either way.) What it does catch is a path that never touches TrySelectNewElement at all —
+        // runs there is nothing left for it to block. (It still runs — Harmony calls it either way.)
+        // That "unchanged" is a property of a MENU OPTION, not of the mouse path:
+        // OnUIElementSelected forwards to SelectOption only when the incoming element reports
+        // isMenuOption (Pug.Other:273427); a plain ButtonUIElement takes its own OnSelected instead,
+        // which forwards to SelectOption on a DIFFERENT element whenever optionToSelectOnHover is
+        // set (:335006-:335009). Both halves hold on these screens — every row is a
+        // RadicalMenuOption (isMenuOption => true, :343070), and the one ButtonUIElement in each
+        // prefab, the scrollbar handle, leaves optionToSelectOnHover at {fileID: 0} — so re-check
+        // them after a prefab edit rather than assuming the identity.
+        // What it does catch is a path that never touches TrySelectNewElement at all —
         // UIScrollWindow.UpdateScroll calls Select() directly on the adjacent element when the
         // selected one scrolls out of view (Pug.Other:357556), behind an early return that makes
         // the whole block controller-only (:357529). (:357562 calls it again on what :357557 just
@@ -120,8 +129,9 @@ namespace ModSettingsMenu
         // Scroll a drill-in with a gamepad mid-edit and this is the only guard there. Note what it
         // does NOT do: Select() still runs through OnUIElementSelected, which assigns
         // currentSelectedUIElement unconditionally, so the selection does move off the edited row.
-        // Only selectedIndex is held, and the edit survives for a different reason — CK's own
-        // Deactivate hangs on interactDownThisFrame, not on the selection.
+        // Only selectedIndex is held. The edit survives because nothing on this path calls
+        // Deactivate at all: the call that would end it here lives in TrySelectNewElement, which
+        // this path never enters — and which gates it on interactDownThisFrame besides (:356112).
         //
         // Letting it through would move RadicalMenu.selectedIndex
         // to whatever was selected instead, which (a) plays the menu-select SFX and (b) recolours
