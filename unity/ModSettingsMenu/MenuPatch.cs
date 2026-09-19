@@ -525,8 +525,28 @@ namespace ModSettingsMenu
             _rightArrowFired = false;
             _editBranchClaimed = false;
             _caretBeforeBody = CaretUnknown;
-            if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row && row.Viewport.TryCaretIndex(out int caret))
-                _caretBeforeBody = caret;
+            _fieldRowOnEntry = null;
+            _backKeyOnEntry = false;
+            // The row is recorded BEFORE the caret is asked for, not inside the same condition. The caret
+            // read is allowed to fail — TryCaretIndex returns false for a row whose fieldMask is unwired,
+            // a state this mod reports rather than assumes — and folding the record into that condition
+            // would tie MSM-12's cancel to a precondition it does not have, losing it without a symptom on
+            // exactly the rows that are already degraded.
+            if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row)
+            {
+                _fieldRowOnEntry = row;
+                // Read here rather than in the postfix only because it reads the same either way: an input
+                // edge is frame-stable. NOT read here on Priority.First grounds — equal priorities fall
+                // back to load order (see the attribute's comment above), so no ordering claim would hold.
+                _backKeyOnEntry = Manager.input.IsMenuBackButtonDown();
+                // TEMPORARY — remove once spec §8 is settled (Task 2 Step 5 of the MSM-12 plan).
+                // GetButtonDown answers false SILENTLY for an action in no active map, so without this a
+                // wrong binding assumption and a broken cancel look identical from the outside.
+                if (_backKeyOnEntry)
+                    Debug.Log("[ModSettingsMenu] MSM-12 diagnostic: back key seen while a drill-in row held the field.");
+                if (row.Viewport.TryCaretIndex(out int caret))
+                    _caretBeforeBody = caret;
+            }
         }
 
         // Where the caret stood when this frame's HandleTypingInput was entered, or CaretUnknown if
@@ -534,6 +554,15 @@ namespace ModSettingsMenu
         // alongside the arrow verdicts, for the same reason they are.
         private const int CaretUnknown = -1;
         private static int _caretBeforeBody = CaretUnknown;
+
+        // MSM-12. The drill-in row that held activeInputField when this frame's HandleTypingInput was
+        // entered, and whether the back key was down at that moment. The postfix can ask for neither
+        // itself: by then Deactivate has set activeInputField to null, so the row is unreachable, and the
+        // key belongs to a branch that has already been taken. Consumed there alongside the arrow
+        // verdicts, for the same reason they are — a value raised while some other field held focus must
+        // not reach a drill-in row in a later frame.
+        private static ModSettingsMenu.UI.ListDetailItem _fieldRowOnEntry;
+        private static bool _backKeyOnEntry;
 
         // Latched for the session. It used to sit beside a second latch for an unreadable cooldown
         // field; that one retired with the reflection read, so this is the only typing-path warning
@@ -624,10 +653,37 @@ namespace ModSettingsMenu
             bool rightFired = _rightArrowFired;
             bool editClaimed = _editBranchClaimed;
             int caretBefore = _caretBeforeBody;
+            var rowOnEntry = _fieldRowOnEntry;
+            bool backKeyOnEntry = _backKeyOnEntry;
             _leftArrowFired = false;
             _rightArrowFired = false;
             _editBranchClaimed = false;
             _caretBeforeBody = CaretUnknown;
+            _fieldRowOnEntry = null;
+            _backKeyOnEntry = false;
+
+            // MSM-12 — the back key abandons an edit instead of committing it. Three placements, three
+            // different reasons, and each one fails silently if moved:
+            //
+            //   AHEAD of the __runOriginal guard below, because BetterTextInput handles Escape in its own
+            //   prefix and returns false, so __runOriginal is false on exactly the frame this must act.
+            //   Behind that guard this works alone and silently does nothing with that mod installed.
+            //
+            //   AHEAD of the `activeInputField is not ListDetailItem` guard, because Deactivate has
+            //   already nulled the field — the row is reachable only through what the prefix kept.
+            //
+            //   BEHIND the keyboard/mouse question, which it therefore asks itself rather than inheriting
+            //   from the guard below. Vanilla's back-key branch (Pug.Other:269652) is unreachable on a
+            //   controller: HandleTypingInput leaves through the on-screen-keyboard branch first
+            //   (Pug.Other:269610-269624). There is nothing to cancel there, and acting anyway would put
+            //   this between a confirmed keyboard result and the commit that has to carry it.
+            //
+            // The field having moved away from the row is what says the edit ended; the key says why.
+            // Together they reconstruct the intent Deactivate(bool commit) throws away
+            // (Pug.Other:343542). Restoring the seed is the whole action — the commit that follows the
+            // transition then finds an unchanged value and writes nothing.
+            if (backKeyOnEntry && rowOnEntry != null && Manager.input.SystemPrefersKeyboardAndMouse() && Manager.input.activeInputField != (object)rowOnEntry)
+                rowOnEntry.CancelEdit();
 
             if (Manager.input.activeInputField is not ModSettingsMenu.UI.ListDetailItem row)
                 return;
