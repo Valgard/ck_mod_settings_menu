@@ -90,7 +90,7 @@ mod so subscribers get them automatically.
 
 Everything lives in the `ModSettingsMenu.Settings` namespace.
 
-### `ModSettings.Section(IMod consumer)` → `SectionBuilder`
+### `ModSettings.Section(IMod consumer, ConfigAccessLevel access = ConfigAccessLevel.Client, bool requiresRestart = false)` → `SectionBuilder`
 
 Begins a section for the calling mod. Call it in `IMod.Init` (or `IMod.EarlyInit` for
 bake-time settings — see **Behaviour & gotchas**) and pass `this`.
@@ -99,6 +99,10 @@ The framework resolves your mod's identity from the `IMod` reference:
 - **Section id / term prefix** ← `metadata.name` (your internal PascalCase name).
 - **Section heading** ← `metadata.displayName` (falls back to `name`). Rendered
   as-is — it is **not** localized (mod names are proper nouns).
+
+`access` and `requiresRestart` set the section-wide default for every setting
+declared under it — `Client` and `false` unless you say otherwise. Both can be
+overridden per `Group` and per widget; see **Access levels** below.
 
 Registering the same `modId` twice is ignored (first `Build()` wins, logs a
 warning), so a section is registered exactly once.
@@ -113,18 +117,59 @@ Each widget method binds a persisted CoreLib entry, hands you a typed
 |---|---|---|---|
 | `Hint(string text)` | subtitle under the heading | — | optional; one line |
 | `SortOptions(OptionSort mode)` | — | — | option order in the box; default `AsDeclared` |
-| `Toggle(out SettingHandle<bool> h, string key, bool def)` | on/off | `bool` | |
-| `Slider(out SettingHandle<float> h, string key, float min, float max, float def, float step, SliderDisplay display = SliderDisplay.Steps)` | slider bar | `float` | `step ≤ 0` → whole range as one step; bar segments = `(max-min)/step` |
-| `Choice<T>(out SettingHandle<T> h, string key, T[] values, T def)` | ←/→ cycle | `T` | any `T`; token = `value.ToString()` |
-| `Stepper(out SettingHandle<int> h, string key, int min, int max, int def)` | ←/→ integer | `int` | clamped to `[min, max]` |
-| `List(out SettingHandle<string[]> h, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)` | preview row → full-screen editor | `string[]` | see below |
-| `Label(string key)` | full-width heading, not selectable | — | groups the settings under it; see **Grouping** |
-| `Group(string key, string movedFrom = null)` | same as `Label` | — | **also** binds later declarations into the CoreLib section `key`; see **Grouping** |
-| `RequiresRestart()` | — | — | marks the **last-declared** setting as restart-required (see below) |
+| `Toggle(out SettingHandle<bool> h, string key, bool def, ConfigAccessLevel? access = null, bool? requiresRestart = null)` | on/off | `bool` | |
+| `Slider(out SettingHandle<float> h, string key, float min, float max, float def, float step, SliderDisplay display = SliderDisplay.Steps, ConfigAccessLevel? access = null, bool? requiresRestart = null)` | slider bar | `float` | `step ≤ 0` → whole range as one step; bar segments = `(max-min)/step` |
+| `Choice<T>(out SettingHandle<T> h, string key, T[] values, T def, ConfigAccessLevel? access = null, bool? requiresRestart = null)` | ←/→ cycle | `T` | any `T`; token = `value.ToString()` |
+| `Stepper(out SettingHandle<int> h, string key, int min, int max, int def, ConfigAccessLevel? access = null, bool? requiresRestart = null)` | ←/→ integer | `int` | clamped to `[min, max]` |
+| `List(out SettingHandle<string[]> h, string key, string[] defaults, ListEditing editing = ListEditing.FreeText, ConfigAccessLevel? access = null, bool? requiresRestart = null)` | preview row → full-screen editor | `string[]` | see below |
+| `Label(string key)` | full-width heading, not selectable | — | groups the settings under it; see **Grouping**. Takes neither `access` nor `requiresRestart` — it holds no value |
+| `Group(string key, string movedFrom = null, ConfigAccessLevel? access = null, bool? requiresRestart = null)` | same as `Label` | — | **also** binds later declarations into the CoreLib section `key`, and sets their access/restart default; see **Grouping** and **Access levels** |
+| `RequiresRestart()` | — | — | marks the **last-declared** setting as restart-required — a shorthand for `requiresRestart: true` on that same declaration; see **Access levels** |
 | `Build()` | — | — | registers the section |
 
 `key` is the persistence key and the loc-term leaf (see **Localization**). Keep
 it stable across releases — changing it orphans the saved value.
+
+### Access levels
+
+`access: ConfigAccessLevel?` cascades through three levels — a widget's own
+argument, then its enclosing `Group`, then the `Section`. `null` at any level
+means "inherit"; the innermost non-null statement wins. Say nothing anywhere
+and the setting is `Client`, the section-level default.
+
+```csharp
+public enum ConfigAccessLevel { ViewOnly = -1, Client = 0, Server = 1, Admin = 2 }
+```
+
+| Level | Locked for | Travels to other players |
+|---|---|---|
+| `ViewOnly` | everyone, including the host, in every session type | no |
+| `Client` *(default)* | nobody | no |
+| `Server` | a non-admin, but **only in a guest-mode world** | yes |
+| `Admin` | every non-admin, with or without guest mode | yes |
+
+⚠️ **`Server` is a sync marker, not a lock.** For `Server`, the underlying
+check answers `!player.guestMode`, and `guestMode` reads a **world** flag —
+off by default — not "is this player the host". So on an ordinary world a
+joined, non-admin player changes a `Server`-scoped setting exactly as freely
+as the host does; the lock only bites once that world has guest mode switched
+on. If you want "not by you", declare `Admin` — it locks every non-admin
+regardless of the guest-mode flag. Reach for `ViewOnly` only for a value your
+mod computes rather than one a player is meant to set; it locks the host too.
+
+With no player at all — the title screen — a `Server`- or `Admin`-scoped
+setting shows locked; it becomes editable again once a world exists in the
+same session, with no relaunch needed.
+
+`requiresRestart: bool?` cascades the same three levels, and `.RequiresRestart()`
+(above) is a shorthand for `requiresRestart: true` on the last-declared row —
+both write into the same place, so mixing the two styles in one section is
+safe. A group-level `requiresRestart: true` applies to every row declared
+under it; a row may still override it back to `false`.
+
+Neither `access` nor `requiresRestart` is written to the `.cfg` file — CoreLib's
+own file format has no room for either, so a player reading their config sees
+only the value, never the permission.
 
 `List(...)` shows a compact preview row (`first, second, +7`) that opens a
 full-screen editor where each entry is its own row, navigable by mouse, keyboard
@@ -187,6 +232,8 @@ the log if a list comes up empty.
 `RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key",
 …).RequiresRestart()`) to mark that setting as needing a game restart to take
 effect (e.g. a bake-time / load-time value that is only read at world load).
+Equivalent to passing `requiresRestart: true` to that same widget call — pick
+whichever reads better at the call site; see **Access levels**.
 When a so-marked setting is actually changed and you leave the Mod settings
 screen, the framework raises Core Keeper's own *restart to apply mod changes*
 popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod
@@ -322,6 +369,12 @@ showCoords = false
 [behaviour]
 delay = 1
 ```
+
+`Group` also takes `access` and `requiresRestart` (see **Access levels**),
+setting the default for every row declared under it until the next `Group()`
+call. Both are **reset**, not carried over, on every `Group()` call — including
+one that states neither: a group that says nothing means "back to the
+section's own default", not "keep the previous group's".
 
 **`Label` orders the screen; `Group` orders the screen *and* the `.cfg`.** Pick
 `Label` for a purely visual heading; pick `Group` when you also want the file

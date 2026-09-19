@@ -79,9 +79,11 @@ because `T(term, otherTerm)` compiles and would put the raw second term on scree
 
 ### `ModSettings`
 
-The public entry point and section registry. `Section(IMod consumer)` resolves the consumer's
-`modId` (`Metadata.name`) + `displayName` from the `IMod` ref, and returns a `SectionBuilder`.
-`Register` de-dups by `modId` (first `Build()` wins, warns).
+The public entry point and section registry. `Section(IMod consumer, ConfigAccessLevel access =
+ConfigAccessLevel.Client, bool requiresRestart = false)` resolves the consumer's `modId`
+(`Metadata.name`) + `displayName` from the `IMod` ref, and constructs a `SectionBuilder` with
+those two as its section-level defaults. `Register` de-dups by `modId` (first `Build()` wins,
+warns).
 
 ### `SectionBuilder`
 
@@ -97,8 +99,25 @@ chain and its `Build()` never ran and its **whole section** vanished. Now a fail
 logs which key and why, registers no `SettingDef`, and returns a *detached*
 `SettingHandle<T>` holding the declared default. The setting is absent from the menu
 rather than broken, and the consumer keeps running on its own value. `Hint`,
-`SortOptions`, `RequiresRestart` (marks the last-declared setting), and `Build` complete
-the chain. Loc term for a key is `<ModId>-Config/<key>`.
+`SortOptions`, `RequiresRestart` (writes `requiresRestart: true` onto the last-declared
+setting's own scope), and `Build` complete the chain. Loc term for a key is
+`<ModId>-Config/<key>`.
+
+Every widget method, plus `Group`, also takes `ConfigAccessLevel? access` and `bool?
+requiresRestart`, cascading through three levels — a widget's own argument, then the
+enclosing `Group`, then the `Section`. `SectionBuilder` carries two private state pairs for
+this: `_sectionAccess`/`_sectionRequiresRestart` (set once, from the constructor's
+`ModSettings.Section` arguments) and `_groupAccess`/`_groupRequiresRestart` (nullable, set
+**and reset** by every `Group()` call, including one that names neither — a group that says
+nothing means "back to the section's default", not "keep the previous group's").
+`BindGuarded` resolves the three levels into one **fresh** `ConfigScope` per entry before
+calling `ConfigFile.Bind`. Fresh matters: passing `null` would alias CoreLib's `static
+readonly ConfigScope.Empty`, shared by every scope-less entry in the process and whose
+`accessLevel`/`requireReload` fields are public and mutable, and sharing one instance across
+a group's rows would let a later `.RequiresRestart()` on one row change its neighbours too.
+`ModSettingsMenuMod.BindNamingDiagnostics` binds outside `SectionBuilder` entirely and gets
+its own explicit scope for the same reason — it is the one bind on the shipped path that
+does not go through `BindGuarded`.
 
 `List` differs in two ways from its neighbours. Its value is one comma-separated string
 rather than a typed scalar — `ListTokenizer` defines that format in both directions, and it is
@@ -123,14 +142,31 @@ fires on any change.
 ### `SettingModel.cs`
 
 The non-generic descriptors the UI reads: `ModSection` (per-consumer box) and `SettingDef` (one
-setting: `Kind`, numeric bounds, its loc terms, `RequiresRestart`, `Foreign`/`Unbounded`
-markers, and the live `ConfigEntryBase Entry`).
+setting: `Kind`, numeric bounds, its loc terms, `Foreign`/`Unbounded` markers, and the live
+`ConfigEntryBase Entry`).
 
-Both resolve their own displayed text rather than handing terms out: `SettingDef.Label()` and
-`ValueLabel(token)`, `ModSection.Heading()` and `Hint()`. Four places render a setting's name — the
-widget, the list row, the drill-in title and the `ByLabel` sort — so a chain assembled at each of
-them is a chain three of them can quietly be missing, and the sort would then order by text nobody
-sees. A section's name has the same problem in miniature: the box, the alphabetical order of the
+Two members are computed properties over that same `Entry` rather than stored fields, because a
+declared `SettingDef` is built once in `EarlyInit`/`Init` and lives until the game exits, while a
+discovered one is rebuilt on every menu open — a value folded in at construction would freeze the
+declared path's answer at whatever it was when `Init` ran, title screen included:
+
+- **`RequiresRestart`** reads `Entry?.Scope?.requireReload ?? false` — one storage location for
+  both the `requiresRestart:` cascade and `.RequiresRestart()`, and the same field General Mod
+  Config Menu's own reload marker reads. The `?? false` carries a `Label`, whose `Entry` is null.
+- **`Locked`** reads `Entry != null && AccessLock.IsLocked(Entry.Scope)` — replaces the old
+  `ReadOnly` field and means less than it did: `ReadOnly` used to conflate a contextual permission
+  lock with a structural "no editable widget exists for this shape at all" (see `AccessLock`
+  below); `Locked` is only the first of those.
+- **`IsEditable`**, new, is `Entry != null && !Locked && Kind != SettingKind.Info` — the single
+  conjunction every caller that asks "can this row be operated at all" now uses (`SectionReset`
+  below is one), rather than re-deriving the same two-part answer at each call site by hand.
+
+Both `ModSection` and `SettingDef` resolve their own displayed text rather than handing
+terms out: `SettingDef.Label()` and `ValueLabel(token)`, `ModSection.Heading()` and
+`Hint()`. Four places render a setting's name — the widget, the list row, the drill-in
+title and the `ByLabel` sort — so a chain assembled at each of them is a chain three of
+them can quietly be missing, and the sort would then order by text nobody sees. A
+section's name has the same problem in miniature: the box, the alphabetical order of the
 boxes, and the reset confirmation, which must name the mod the player is looking at.
 
 The stage-2 fields behind them (`GmcmTerm`, `GmcmValueTermPrefix`, `HeadingTerm`) are `internal`
@@ -142,6 +178,18 @@ The enums: `SettingKind {Toggle,Slider,Stepper,Choice,Info,List}`, `SliderDispla
 {Steps,Number,Percent}`, `OptionSort {AsDeclared,ByKey,ByLabel}`. The last two kinds — `Info`
 (read-only value) and `List` (comma-list with a drill-in) — are produced only by
 `ForeignConfigDiscovery` (see below), never by the explicit consumer API.
+
+### `AccessLock`
+
+`internal static bool IsLocked(ConfigScope scope)` — the one answer to "may this entry
+be changed in this session, right now". Lived in `ForeignConfigDiscovery` as a `private
+static` while only the discovery path had a scope to ask about; both paths have one now,
+and MSM-19's send façade would be a third caller, which is why it moved to a place all
+of them reach. `ViewOnly` and `Client` are answered without consulting a player at all —
+which is why both hold at the title screen and are observable in a single-player session
+— and only `Server`/`Admin` ask `scope.Changeable()`, conservatively locked (`true`)
+when `Manager.main` or `Manager.main.player` is null, i.e. the title screen, rather than
+risk dereferencing either.
 
 ### `MsmTerms`
 
@@ -230,7 +278,14 @@ so the caller can raise the restart flag without `Settings` depending on `UI`.
 
 Discovered (foreign) sections are included on purpose: a reset only ever writes back the value that
 mod itself declared, so unlike the list-editing write path it can never invent or lose a value.
-`ReadOnly` entries are always skipped — view-only/server-locked is not writable at all.
+`IsInScope` gates on `SettingDef.IsEditable`, not on `Locked` alone — a permission-locked row and
+a structural `Info` row (no editable widget exists for that value's shape) are both skipped, for
+two different reasons that used to collapse into one `ReadOnly` flag; spelling out the conjunction
+by hand instead of asking `IsEditable` is exactly how a discovered `Info` row briefly fell back
+into scope for one commit after the split. A list declared `ListEditing.ReadOnly` is a third,
+deliberately different case that stays **in** scope: `Locked` reads false for it, because that
+declaration is the mod's own design choice rather than a permission, so the reset still restores
+it — the one way a stale entry in such a list can ever clear.
 
 ### `ConfigStore`
 
@@ -355,8 +410,9 @@ resting frame and focus marker like CK's own `joinButton`, and takes its caption
 prefab — a `PugText` holding the loc term with `localize` + `renderOnStart` resolves and renders
 itself, so no code sets it.
 
-**Read-only mode.** A genuinely read-only `SettingDef` (`SettingDef.ReadOnly`) still shows every
-row navigable for viewing, just without the trailing add button, without frames, and without ever
+**Read-only mode.** A list at `SettingDef.EffectiveEditing == ListEditing.ReadOnly` — its own
+declaration, or any declaration demoted by a permission `Locked` — still shows every row
+navigable for viewing, just without the trailing add button, without frames, and without ever
 entering edit mode. Same three-step open as `ModSettingsScreen` (Populate → `base.Activate` →
 RenderContent) for the LinearLayout-height reason. `_pending` (the setting to show) is seeded on
 the singleton instance by `Open` before `PushMenu` resolves it, and cleared after consume.
