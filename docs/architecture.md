@@ -33,14 +33,22 @@ HealthBars' 19901): `SettingsMenuType = (RadicalMenu.MenuType)29314` for the set
 - `RadicalMenu.TypeToMenu` **prefix** — resolves `SettingsMenuType` → `MenuInstance` and
   `ListDetailMenuType` → `ListDetailInstance` (each returns `false` to short-circuit vanilla);
   everything else falls through.
-- `MenuManager.SelectOption` **prefix** and `UIMouse.TrySelectNewElement` **prefix** — both block
-  CK's own mouse-hover-driven reselection while a `ListDetailItem` row is actively being edited
-  (`Manager.input.activeInputField` is that row). Two separate mechanisms need two separate patches:
-  `SelectOption` stops the hover recolour/SFX every frame the mouse passes over another row;
-  `TrySelectNewElement` stops CK's own hardcoded `activeInputField.Deactivate(commit: false)` call
-  that would otherwise end the edit the instant the mouse (not even a click) passes over anything
-  else. Blocking only the second would still let selection visually drift; blocking only the first
-  would still lose the edit on stray mouse movement.
+- `MenuManager.SelectOption` **prefix** and `UIMouse.TrySelectNewElement` **prefix** —
+  both block a reselection that would land elsewhere while a `ListDetailItem` row is
+  actively being edited (`Manager.input.activeInputField` is that row). They divide by
+  **path**, not by device, and the division is not the obvious one: on the mouse path
+  the same element travels `TrySelectNewElement` → `Select()` → `OnUIElementSelected` →
+  `SelectOption`, so the `TrySelectNewElement` prefix tests the predicate first and the
+  `SelectOption` one — which still runs — finds nothing left to block there.
+  `SelectOption` earns its place on a path that skips `TrySelectNewElement` entirely —
+  `UIScrollWindow.UpdateScroll` calling `Select()` on a different element when the
+  selected one scrolls out of view, a call sitting behind an early return that makes
+  that whole block controller-only (`Pug.Other:357529`). `TrySelectNewElement` stops
+  CK's own hardcoded `activeInputField.Deactivate(commit: false)` call that would
+  otherwise end the edit the moment you click anything else — that call is gated on
+  `interactDownThisFrame`, so it is a press, never a hover. Blocking only the second
+  leaves the controller scroll-follow path unguarded; blocking only the first would
+  still discard the edit on a click elsewhere.
 - `UIManager.HideAllInventoryAndCraftingUI` **prefix** — commits the row being edited *before* CK
   blanks it. That method ends with `SetInputText("")` + `Deactivate(commit: false)`, and its callers
   are world events (a chest, a cattle pen, a sign, the map, `FadeOutAndLockPlayer`), which in
