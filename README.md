@@ -372,9 +372,11 @@ delay = 1
 
 `Group` also takes `access` and `requiresRestart` (see **Access levels**),
 setting the default for every row declared under it until the next `Group()`
-call. Both are **reset**, not carried over, on every `Group()` call — including
-one that states neither: a group that says nothing means "back to the
-section's own default", not "keep the previous group's".
+call. Both are **reset**, not carried over, on every **accepted** `Group()`
+call — including one that states neither: a group that says nothing means
+"back to the section's own default", not "keep the previous group's". A
+`Group()` call refused for a bad name changes neither and leaves the previous
+group's rows exactly where they were — refused whole, not half-applied.
 
 **`Label` orders the screen; `Group` orders the screen *and* the `.cfg`.** Pick
 `Label` for a purely visual heading; pick `Group` when you also want the file

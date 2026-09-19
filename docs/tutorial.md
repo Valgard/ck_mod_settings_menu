@@ -533,8 +533,12 @@ public enum ConfigAccessLevel { ViewOnly = -1, Client = 0, Server = 1, Admin = 2
 `Section()` sets the section-wide default — `ConfigAccessLevel.Client` unless
 you say otherwise — `Group()` may override it for its own rows, and a widget's
 own `access:` argument overrides both. The innermost non-null statement always
-wins. Say nothing anywhere and you get `Client`, which is also how every
-setting has always behaved before this existed.
+wins. Say nothing anywhere and you get `Client` — which is new, not a
+continuation. Before `access:` existed there was nothing to say at all, and
+every declared setting landed on CoreLib's own default, `Server`. MSM itself
+never read that level on the declared path, so nothing looked different
+inside this menu — but the level was stored, and another reader of the same
+CoreLib entry, such as General Mod Config Menu, acted on it.
 
 | Level | Locked for | Travels to other players |
 |---|---|---|
@@ -728,9 +732,10 @@ ModSettings.Section(this)
     .Build();
 ```
 
-Both reset on every `Group()` call, including one that names neither — a
-group that says nothing goes back to the section's own default, not to the
-previous group's.
+Both reset on every **accepted** `Group()` call, including one that names
+neither — a group that says nothing goes back to the section's own default,
+not to the previous group's. A `Group()` call refused for a bad name changes
+neither and leaves the previous group's rows exactly where they were.
 
 Reach for `Group` once the `.cfg` itself is worth reading as sections; reach
 for `Label` when you only want the on-screen box to read that way. **Nothing

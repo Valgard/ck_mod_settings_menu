@@ -961,7 +961,7 @@ routes behave *differently* here, which nothing on screen shows.
 - [ ] Reorder `testListOrderOnly`, then reset this mod's section from the footer
       hint: the declared order comes back.
 - [ ] The same reset rewrites `testListReadOnly` (declared read-only, so
-      `SettingDef.ReadOnly` is false and it is in scope) but leaves
+      `SettingDef.Locked` is false and it is in scope) but leaves
       `LongReadOnly` untouched (read-only through a `ViewOnly` scope, which the
       reset skips).
 - [ ] **The same distinction, stated as an access level rather than a scope.**

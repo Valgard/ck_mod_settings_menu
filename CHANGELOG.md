@@ -113,8 +113,13 @@ entry is the version published to mod.io; its body is the modfile changelog.
 - **Mods can say who may change a setting.** A mod can now mark any of its
   settings as client-side, server-synced, admin-only or display-only, for the
   whole mod, for one group of settings or for a single row. Settings that say
-  nothing stay client-side, so nothing a mod did not ask for travels to other
-  players or gets locked.
+  nothing default to client-side, so nothing a mod did not ask for travels to
+  other players or gets locked. That is a change, not just a new option, for
+  anyone also running General Mod Config Menu: every setting used to default
+  to server-synced, so GMCM has been syncing all of them — HUD positions
+  included — on a default no mod actually chose. Most settings now stop
+  syncing there unless the mod that declares them asks for server or
+  admin-only access.
 
 ## [1.1.0]
 
