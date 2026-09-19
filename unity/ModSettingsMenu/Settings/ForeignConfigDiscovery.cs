@@ -296,8 +296,10 @@ namespace ModSettingsMenu.Settings
         // Widget-kind inference cascade (first match wins). See ADR-001 (the discovery base). Every
         // kind gets its own native widget regardless of locked-ness — SettingDef.Locked (view-only,
         // or a server/admin setting this player can't change, incl. at the title where there is no
-        // player) rides alongside Kind rather than collapsing it to Info; SettingWidget /
-        // ListDetailItem check Locked to decide whether the row responds to input, not Kind.
+        // player) rides alongside Kind rather than collapsing it to Info; SettingWidget checks
+        // SettingDef.IsEditable (Locked AND Kind != Info together) to decide whether a row responds
+        // to input, while ListDetailItem/ListDetailScreen ask Locked alone through EffectiveEditing
+        // — Info is never a List's own Kind, so that narrower question is still the right one there.
         private static SettingDef BuildDef(string configFilePath, ConfigDefinition definition, ConfigEntryBase e)
         {
             string key = definition.Key;
