@@ -116,13 +116,15 @@ needs no subclass at all. `AcceptableValueList`'s constructor rejects only a
 zero-length array, so `("Alpha", "  ", "Gamma")` binds cleanly and any mod could
 ship it by accident.
 
-The same flag also declares five lists through the **public consumer API**, in
-this mod's own section (`AddDeclaredListFixtures`). They are the other path
-entirely: discovery can only ever declare a `FreeText` list, because a heuristic
-cannot know an entry set is closed. So `OrderOnly` exists nowhere else, while
-`ReadOnly` is reachable both ways — and the two are not interchangeable, since
-only the declared one reconciles its defaults and only the scoped one is skipped
-by a section reset.
+The same flag also declares lists through the **public consumer API**, in this
+mod's own section (`AddDeclaredFixtures`). They are the other path entirely:
+discovery can only ever declare a `FreeText` list, because a heuristic cannot
+know an entry set is closed. So `OrderOnly` exists nowhere else, while
+`ReadOnly` is reachable both ways — and the two are not interchangeable: only
+the declared one reconciles its defaults, and a section reset skips a list only
+where an access level locks it. A bare `ReadOnly` declaration is not one on its
+own, though a declared list can carry both at once
+(`testListReadOnlyAndLocked` below).
 
 | Fixture | `ListEditing` | What it is for |
 |---|---|---|
@@ -137,6 +139,9 @@ by a section reset.
 | `testListOrderOnlyDuplicate` | `OrderOnly` | the same repeat on the player-order branch — the one the dedupe rewrite touched |
 | `testDupKey` | — | one key bound twice with different types: reaches the guarded-bind path with no filesystem fault |
 | `testReversedRange` | — | a Slider declared with `min > max`: the guard that runs before `BindGuarded`, not a bind failure |
+| `testListReadOnlyAndLocked` | `ReadOnly` + `access: ViewOnly` | declares both statements: the section reset must skip it |
+| `testListReadOnlyUnlocked` | `ReadOnly` | declares only the editing level: the section reset must restore it |
+| `testDupKeyAccess` | — | one key bound twice as the same type, the second declaring `access: ViewOnly` — the access-level counterpart of `testDupKey` |
 
 ## Before anything else
 
@@ -780,6 +785,16 @@ with one, and `TestEmptySectionFixtures`, whose first section has no name at all
       line under — then a heading `named` above its row `afterHeader`. Two
       sections is what makes headings appear here at all: the empty one still
       counts toward that threshold even though it renders no caption of its own.
+- [ ] **Untouched by MSM's own binds.** `TestGroupFixtures`'s three rows
+      (`lastAlphabetically`, `firstAlphabetically`, `second`) bind with no
+      `ConfigScope` at all — CoreLib's own default for that case. In GMCM, open
+      this mod's own **Mod settings** box first, so every declared fixture above
+      has bound, then check `TestGroupFixtures` there: all three rows still
+      show the **Server** permission icon and no reload marker, exactly as
+      before this mod's section existed. `ConfigScope.Empty` is never written
+      to, so an unrelated mod's scope-less entry cannot start reporting
+      something else just because this mod's own binds ran in the same
+      session. (Criterion 9, Review Focus 5)
 
 ## The declared list path
 
@@ -860,6 +875,16 @@ the two paths reach the drill-in with different things known about the value.
 - [ ] `Player.log` also carries `RequiresRestart() ignored`. Without that, the
       modifier would attach to the toggle before it, and changing the HUD toggle
       would ask you to restart the game for no reason.
+- [ ] **The same hazard, reached through an access level instead of
+      `RequiresRestart()`.** `testDupKeyAccess` is declared twice, both times as
+      a `Toggle` — same type, so CoreLib's `Bind` returns the first call's entry
+      instead of throwing, and this does **not** fail the way `testDupKey` does.
+      Two rows named `testDupKeyAccess` therefore appear, both bound to the
+      same entry (`Player.log` carries the "declares … key(s) more than once"
+      line for it) — and **both** are editable: the second declaration's
+      `access: ConfigAccessLevel.ViewOnly` is discarded along with the rest of
+      that call's arguments, so it cannot lock the entry the first declaration
+      already bound. (Review Focus 3)
 - [ ] **A differently-cased entry keeps its place.** In `config.cfg`, change one
       middle entry of `testListOrderOnly` to lower case and relaunch: it must
       still sit where it was, spelled as the mod declares it — not dropped and
@@ -939,6 +964,15 @@ routes behave *differently* here, which nothing on screen shows.
       `SettingDef.ReadOnly` is false and it is in scope) but leaves
       `LongReadOnly` untouched (read-only through a `ViewOnly` scope, which the
       reset skips).
+- [ ] **The same distinction, stated as an access level rather than a scope.**
+      Edit `testListReadOnlyUnlocked` and `testListReadOnlyAndLocked` in
+      `config.cfg` to something other than their declared defaults, relaunch,
+      and reset this mod's section: `testListReadOnlyUnlocked` (declared
+      `ListEditing.ReadOnly` with no access level) comes back to its declared
+      defaults, `testListReadOnlyAndLocked` (the same `ListEditing.ReadOnly`,
+      **plus** `access: ConfigAccessLevel.ViewOnly`) does not move. The two
+      statements are independent — only the access level is a permission the
+      reset has to respect. (Criterion 11)
 
 ## A detected mod's names
 
@@ -1183,7 +1217,9 @@ two adjacent on purpose, and the last one the final row of the box.
       that key — and the setting declared *before* it did not silently acquire
       the restart flag.
 - [ ] The section reset (`R`) restores every real setting of the box and leaves
-      every heading untouched.
+      every heading untouched — except `testGroupInheritsViewOnly`, the one
+      declared row in this box that is locked, which the reset leaves alone too
+      (see "Access level cascade" under Groups).
 - [ ] The footer still offers **Auswählen** and **Zurücksetzen** while a normal
       row is selected by keyboard. (They disappear when nothing is selected —
       after scrolling with the mouse wheel, for instance. That is vanilla and
@@ -1224,13 +1260,40 @@ which `.Label()` alone cannot have and nothing on screen shows.
 - [ ] Neither keyboard nor controller can land on any of these headings —
       navigation steps over all of them, exactly as it does for every heading in
       this box.
-- [ ] The section reset (`R`) restores every value across all of this box's
-      groups to its default, with no error about a row that holds no value.
+- [ ] The section reset (`R`) restores every editable value across all of this
+      box's groups to its default, with no error about a row that holds no
+      value — except `testGroupInheritsViewOnly`, which it leaves untouched
+      because that row is locked (see "Access level cascade" below).
 - [ ] **The file, which the screen cannot show:** `ModSettingsMenu.cfg` holds
       `[testGroup]` with `testGroupedToggle` and `testGroupedStepper`,
       `[testGroupTwo]` with `testSecondGroupToggle` and `testAfterBadGroup`,
-      `[testGroupMoved]` with `testMovedToggle`, `[Settings]` with everything
-      else, and **no** `[bad[name]]` section.
+      `[testGroupMoved]` with `testMovedToggle`, `[testAccessGroup]` with
+      `testGroupInheritsViewOnly` and `testRowOverridesToClient`,
+      `[testAccessGroupCleared]` with `testAfterGroupIsClient`,
+      `testListReadOnlyAndLocked`, `testListReadOnlyUnlocked` and
+      `testDupKeyAccess`, `[Settings]` with everything else, and **no**
+      `[bad[name]]` section.
+
+### Access level cascade
+
+`.Group()`'s `access` and `requiresRestart` accept the same cascade a widget's
+own do — the innermost statement wins, and a group declared with neither falls
+back to the section's. Continues straight after `testGroupMoved`, in the same
+box.
+
+- [ ] `testGroupInheritsViewOnly` renders **locked**, in every session type
+      including the title screen — it states no level of its own, so it
+      inherits `.Group("testAccessGroup", access: ConfigAccessLevel.ViewOnly)`.
+- [ ] `testRowOverridesToClient`, one row below it, is **editable** — its own
+      `access: ConfigAccessLevel.Client` wins over the enclosing group's
+      `ViewOnly`. Together the two rows are the only place the cascade's
+      **middle** level, a group's own, can be observed at all: every other row
+      here either states its own level or states none. (Criterion 1)
+- [ ] `testAfterGroupIsClient` is editable. `.Group("testAccessGroupCleared")`
+      is declared with no arguments, and that must mean "back to the section's
+      `Client` default" — carrying `testAccessGroup`'s `ViewOnly` forward
+      instead would be a silent leak nothing on screen would explain.
+      (Criterion 1)
 
 ### Migration
 
@@ -1279,8 +1342,10 @@ Then relaunch and confirm:
 - [ ] `Player.log` holds no exception from this mod, and no warning **other than**
 the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the two
 duplicate fixtures, `testDupKey`, `testReversedRange`, `testLabelRestartGuard`,
-the rejected group name `bad[name]`, one line for each `Refuse*` entry, the error
-from `ThrowingConstraint`, and one `changing '…' failed` per press on
+the rejected group name `bad[name]`, `testDupKeyAccess` (the "declares … key(s)
+more than once" line — the same key twice, unlike `testDupKey`, reached `Build()`
+without a bind ever failing), one line for each `Refuse*` entry, the error from
+`ThrowingConstraint`, and one `changing '…' failed` per press on
 `ChoiceExactNoDescription`). The count no longer depends on the machine's
 culture: `ChoiceFloats` used to add a line here on a comma-decimal host and now
 never does.
