@@ -51,12 +51,13 @@ namespace ModSettingsMenu.UI
             // display only; every other value keeps the prefab's thinMedium.
             if (def.Kind == SettingKind.Slider && def.Display == SliderDisplay.Steps && valueText != null && valueText.style != null)
                 valueText.style.fontFace = TextManager.FontFace.boldLarge;
-            // ReadOnly rows (view-only / non-changeable-here server-admin setting / a shape with no
-            // editable widget at all) never mutate via Adjust. Strip the interactive menu-option
-            // effect from their VALUE so it no longer turns blue / pops in on selection like an
-            // editable value — an editable widget (incl. a server setting a host CAN change) keeps
-            // its effect. The label keeps its own effect, so the row still highlights while navigating.
-            if (def.ReadOnly && valueText != null)
+            // Locked rows (view-only, or a server/admin setting this session's host can't change,
+            // incl. at the title where there is no player) never mutate via Adjust. Strip the
+            // interactive menu-option effect from their VALUE so it no longer turns blue / pops in
+            // on selection like an editable value — an editable widget (incl. a server setting a
+            // host CAN change) keeps its effect. The label keeps its own effect, so the row still
+            // highlights while navigating.
+            if (def.Locked && valueText != null)
                 MakeValueReadOnly();
             Refresh();
         }
@@ -88,7 +89,7 @@ namespace ModSettingsMenu.UI
         // label's effect stays, so the row still highlights for navigation. Idempotent + cheap.
         private void SuppressValueSelectionEffect()
         {
-            if (_def == null || !_def.ReadOnly || menuOptionEffects == null)
+            if (_def == null || !_def.Locked || menuOptionEffects == null)
                 return;
             menuOptionEffects = System.Array.FindAll(menuOptionEffects, fx => fx != null && !fx.isValueText);
         }
@@ -141,7 +142,7 @@ namespace ModSettingsMenu.UI
         {
             if (_def?.Entry == null)
                 return;
-            if (_def.ReadOnly)
+            if (_def.Locked)
                 return; // read-only row: never changes, regardless of its native Kind
             var e = _def.Entry;
             var before = e.BoxedValue; // for the RequiresRestart change-detection below

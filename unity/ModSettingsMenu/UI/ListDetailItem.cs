@@ -225,7 +225,7 @@ namespace ModSettingsMenu.UI
         // RadicalMenuOptionTextInput-typed reference (including CK's own internals, which read this
         // field on the base type) saw a permanently-false copy, independent of what this method set.
         // Writing the inherited field directly means CK's own read path and ours are guaranteed to
-        // agree — true for a genuine read-only list (SettingDef.ReadOnly): view/scroll/navigate like
+        // agree — true for a genuine read-only list (SettingDef.Locked): view/scroll/navigate like
         // any other row, but OnActivated below never enters edit mode.
         //
         // ListAccess.CanType is the named question the inherited readOnly flag answers — an
