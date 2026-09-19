@@ -361,8 +361,10 @@ CK's own hierarchy, and a row that goes unmeasured silently collapses to `render
 isn't itself navigable.
 
 **Edit commits.** A row's edit commits when it stops being `Manager.input.activeInputField`
-(Enter/Escape/click a different row) or when the screen itself closes (`Deactivate`'s own safety
-net) — never on mere mouse hover, which CK's own `OnDeselected` also fires on.
+(Enter, or a click on a different row) or when the screen itself closes (`Deactivate`'s own safety
+net) — never on mere mouse hover, which CK's own `OnDeselected` also fires on. The back key ends the
+edit by the same transition, but MSM-12's `HandleTypingInput` postfix puts the seeded text back
+before the commit reads it, so that commit finds nothing changed.
 
 **Rebuilds must stay full teardown-and-recreate**: destroying a row is the only thing that resets
 `PugTextEffectMenuOption.isValueText`, which `OnActivated` flips to the vivid editing tint and

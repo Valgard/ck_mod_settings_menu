@@ -1,6 +1,10 @@
 # The list drill-in owns its rows; the stored value is derived from them
 
-- Status: accepted
+- Status: accepted; its observation about Escape superseded by MSM-12
+  (2026-09-19) — the back key now cancels an edit, supplied from a patch on
+  `HandleTypingInput` rather than from the base class. What the body says about
+  `Deactivate(bool commit)` ignoring its parameter still holds, and is why that
+  patch was needed; the design note is [MSM-12](../specs/2026-09-19-msm-12-escape-cancels-an-edit-design.md).
 - Date: 2026-08-23
 - Supersedes [ADR-003](003-list-widget-editing.md) **in part** — see § "Relationship to ADR-003"
 

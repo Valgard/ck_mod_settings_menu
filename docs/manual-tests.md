@@ -207,9 +207,10 @@ and controller reach such a row regardless.
   the three buttons — ✕ on a blank row asks nothing.
 - [ ] **A blank row can be edited, including one that lost its text.** Add an
       entry and click it: the caret appears at the field's left edge and the
-      highlight stays. **Leave edit mode after every click**, with Enter or Escape —
-      both release the field without leaving the screen, and neither discards
-      anything: this mod commits on the way out, so Escape is not a cancel here.
+      highlight stays. **Leave edit mode after every click with Enter**, which
+      releases the field without leaving the screen and keeps what is there. Not
+      the back key: since MSM-12 it puts back the text the row was seeded with, so
+      a step taken with it undoes itself.
       Leaving matters because while a row holds the input field this mod pins every
       click to that row, so nothing clicked before you leave proves anything, and
       its ✕ will not answer either. Click the row again, type into it and commit;
