@@ -271,6 +271,62 @@ and controller reach such a row regardless.
       not subtle: you press Enter meaning to delete and end up typing in the
       entry instead.
 
+### The back key
+
+The back key ends an edit without keeping it; Enter keeps it. Before MSM-12 both
+committed, so every check here is new behaviour rather than a regression guard.
+
+- [ ] **The diagnostic line appears at all.** Focus a row, press the back key,
+      and look for `MSM-12 diagnostic` in the log. If it never appears the key
+      is not Rewired action 6 and nothing below can pass — `GetButtonDown`
+      reports a wrong action id by staying silent, never by failing, which is
+      why this check comes first. (Removed again once it has answered.)
+- [ ] Type into the middle row of `Short` and press the back key: the row reads
+      `Beta` again, and `TestListFixtures/config.cfg` still reads
+      `Alpha, Beta, Gamma`. Open the file — the row going back on screen is only
+      half the claim.
+- [ ] The same row, same edit, **Enter**: the typed value is on screen and in
+      the file. The cancel must not have cost the commit.
+- [ ] Cancel on the **first** and on the **last** row of `Short`. The commit
+      writes `_rows` by the row's own index, so an off-by-one can only show at
+      the ends.
+- [ ] Cancel a row you focused but never typed in. Nothing changes, and the
+      file's modification time does not move.
+- [ ] **A long token comes back showing its start.** Edit the middle entry of
+      `Overlong` — the one deliberately far wider than the row — drive the caret
+      to its end so the view scrolls, then cancel: the row must read from the
+      beginning of the token again, not from wherever the caret was. The
+      viewport only rests at the start once the row has lost the field, so this
+      is the check that the restore and the unfocus happened in that order.
+      **Not `Long`:** its entries are twelve characters and never scroll, so the
+      check would pass without testing anything.
+- [ ] Cancel one row, then read the others: no text and no order changed.
+- [ ] **The second back press leaves the screen.** One press ends the edit, the
+      next closes the drill-in. A single press doing both would mean the menu
+      was not deaf during the edit.
+- [ ] On a controller the on-screen keyboard is unaffected in **both**
+      directions: cancelling keeps the stored token, confirming writes the
+      entered value. The cancel branch is behind the keyboard/mouse guard
+      precisely so it never runs here — this check is what proves it stayed out.
+- [ ] A read-only list (`LongReadOnly`) is unaffected: no row can take the
+      field, so there is nothing to cancel.
+- [ ] **Vanilla is untouched.** Open the character-name field on a new character
+      and the world seed field, type, press the back key: both end the edit
+      exactly as they did before. This mod patches only its own rows, and this
+      is the check that would catch it widening.
+- [ ] **With BetterTextInput installed**, the second, third and fourth checks
+      above still pass. That mod handles Escape in its own prefix and cancels
+      the body, so this is the frame the branch's placement ahead of the
+      `__runOriginal` guard exists for — and the one where a wrong placement
+      fails silently while everything else looks healthy.
+
+Two cases are deliberately not walked. An IME composition plus the back key
+reaches no `Deactivate` at all in vanilla, so there is nothing this change could
+alter, and standing up an IME language to watch nothing happen is not worth the
+session. A row whose `fieldMask` is unwired can only be produced by breaking the
+prefab; the split condition in the prefix is what guards it, and reading that
+condition is cheaper than manufacturing the state.
+
 ### The caret
 
 Keyboard and mouse, because they answer the question differently: typing and word
