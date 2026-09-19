@@ -10,6 +10,11 @@ namespace ModSettingsMenu.Settings
     /// binds a CoreLib ConfigEntry (persisted value or default loaded), hands back
     /// a typed SettingHandle via out, and records a SettingDef for the 2b menu.
     /// Build() registers the finished section.
+    ///
+    /// Access level and restart requirement cascade: a widget's own argument wins, then the
+    /// enclosing Group's, then the Section's. The two inner levels are nullable because
+    /// ConfigAccessLevel's zero value IS Client — with a plain enum, "said nothing" and "said
+    /// Client" would be one value and a group could never pass its own choice down.
     /// </summary>
     public sealed class SectionBuilder
     {
@@ -30,7 +35,12 @@ namespace ModSettingsMenu.Settings
         // Deliberately chosen rather than inherited: CoreLib's own ConfigScope() constructor defaults
         // to Server, and a framework whose consumer said nothing must not claim server authority on
         // their behalf. See the spec's §1.1 for what the four levels actually do.
-        private ConfigAccessLevel _sectionAccess = ConfigAccessLevel.Client;
+        //
+        // The section-level pair has no initialiser here — ModSettings.Section's own default
+        // parameters are the one place "said nothing" resolves to Client, and the constructor below
+        // is what carries that choice in. Duplicating a default here would just be a second place
+        // for the two to drift apart.
+        private ConfigAccessLevel _sectionAccess;
         private bool _sectionRequiresRestart;
         private ConfigAccessLevel? _groupAccess;
         private bool? _groupRequiresRestart;
@@ -45,10 +55,12 @@ namespace ModSettingsMenu.Settings
         // the log connecting the two.
         private bool _lastDeclarationFailed;
 
-        internal SectionBuilder(ModSection section, ConfigFile file)
+        internal SectionBuilder(ModSection section, ConfigFile file, ConfigAccessLevel sectionAccess, bool sectionRequiresRestart)
         {
             _section = section;
             _file = file;
+            _sectionAccess = sectionAccess;
+            _sectionRequiresRestart = sectionRequiresRestart;
         }
 
         // Every widget method binds through here, because ConfigFile.Bind is not the harmless
@@ -144,7 +156,7 @@ namespace ModSettingsMenu.Settings
             return this;
         }
 
-        public SectionBuilder Toggle(out SettingHandle<bool> handle, string key, bool def)
+        public SectionBuilder Toggle(out SettingHandle<bool> handle, string key, bool def, ConfigAccessLevel? access = null, bool? requiresRestart = null)
         {
             if (!IsUsableKey(key, nameof(Toggle)))
             {
@@ -152,7 +164,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            var entry = BindGuarded(key, def, new ConfigDescription(key), null, null);
+            var entry = BindGuarded(key, def, new ConfigDescription(key), access, requiresRestart);
             if (entry == null)
             {
                 handle = new SettingHandle<bool>(def);
@@ -180,7 +192,9 @@ namespace ModSettingsMenu.Settings
             float max,
             float def,
             float step,
-            SliderDisplay display = SliderDisplay.Steps
+            SliderDisplay display = SliderDisplay.Steps,
+            ConfigAccessLevel? access = null,
+            bool? requiresRestart = null
         )
         {
             if (!IsUsableKey(key, nameof(Slider)))
@@ -195,7 +209,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)), null, null);
+            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<float>(min, max)), access, requiresRestart);
             if (entry == null)
             {
                 handle = new SettingHandle<float>(def);
@@ -233,7 +247,14 @@ namespace ModSettingsMenu.Settings
         /// own token list when the locale changed. Enums and strings render identically either way, and
         /// a T that CoreLib cannot convert falls back to ToString(), so this narrows nothing.
         /// </summary>
-        public SectionBuilder Choice<T>(out SettingHandle<T> handle, string key, T[] values, T def)
+        public SectionBuilder Choice<T>(
+            out SettingHandle<T> handle,
+            string key,
+            T[] values,
+            T def,
+            ConfigAccessLevel? access = null,
+            bool? requiresRestart = null
+        )
         {
             if (!IsUsableKey(key, nameof(Choice)))
             {
@@ -252,7 +273,13 @@ namespace ModSettingsMenu.Settings
             for (int i = 0; i < values.Length; i++)
                 tokens[i] = ChoiceToken.Of(values[i], typeof(T));
             // Store a string token (arbitrary T needs no CoreLib converter); validate it stays valid.
-            var entry = BindGuarded(key, ChoiceToken.Of(def, typeof(T)), new ConfigDescription(key, new AcceptableValueList<string>(tokens)), null, null);
+            var entry = BindGuarded(
+                key,
+                ChoiceToken.Of(def, typeof(T)),
+                new ConfigDescription(key, new AcceptableValueList<string>(tokens)),
+                access,
+                requiresRestart
+            );
             if (entry == null)
             {
                 handle = new SettingHandle<T>(def);
@@ -281,7 +308,15 @@ namespace ModSettingsMenu.Settings
             return this;
         }
 
-        public SectionBuilder Stepper(out SettingHandle<int> handle, string key, int min, int max, int def)
+        public SectionBuilder Stepper(
+            out SettingHandle<int> handle,
+            string key,
+            int min,
+            int max,
+            int def,
+            ConfigAccessLevel? access = null,
+            bool? requiresRestart = null
+        )
         {
             if (!IsUsableKey(key, nameof(Stepper)))
             {
@@ -295,7 +330,7 @@ namespace ModSettingsMenu.Settings
                 _lastDeclarationFailed = true;
                 return this;
             }
-            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)), null, null);
+            var entry = BindGuarded(key, def, new ConfigDescription(key, new AcceptableValueRange<int>(min, max)), access, requiresRestart);
             if (entry == null)
             {
                 handle = new SettingHandle<int>(def);
@@ -337,7 +372,14 @@ namespace ModSettingsMenu.Settings
         /// where the numeric handles are plain field reads. So cache it and refresh on
         /// <c>OnChanged</c> rather than reading it inside a per-tick patch.
         /// </summary>
-        public SectionBuilder List(out SettingHandle<string[]> handle, string key, string[] defaults, ListEditing editing = ListEditing.FreeText)
+        public SectionBuilder List(
+            out SettingHandle<string[]> handle,
+            string key,
+            string[] defaults,
+            ListEditing editing = ListEditing.FreeText,
+            ConfigAccessLevel? access = null,
+            bool? requiresRestart = null
+        )
         {
             string declared = ListTokenizer.Join(defaults);
             if (!IsUsableKey(key, nameof(List)))
@@ -347,7 +389,7 @@ namespace ModSettingsMenu.Settings
                 return this;
             }
             WarnAboutDefaultsThatWillNotSurvive(key, defaults, editing);
-            var entry = BindGuarded(key, declared, new ConfigDescription(key), null, null);
+            var entry = BindGuarded(key, declared, new ConfigDescription(key), access, requiresRestart);
             if (entry == null)
             {
                 handle = new SettingHandle<string[]>(ListTokenizer.Tokenize(declared).ToArray());
@@ -638,7 +680,7 @@ namespace ModSettingsMenu.Settings
         /// again. Moving OUT of <see cref="DefaultSection"/> needs no declaration — see the adoption
         /// in BindGuarded, which knows that section is MSM's own history.
         /// </summary>
-        public SectionBuilder Group(string key, string movedFrom = null)
+        public SectionBuilder Group(string key, string movedFrom = null, ConfigAccessLevel? access = null, bool? requiresRestart = null)
         {
             if (!IsUsableSectionName(key, "group name"))
             {
@@ -656,6 +698,11 @@ namespace ModSettingsMenu.Settings
             }
             _currentSection = key;
             _movedFrom = movedFrom;
+            // Both are reset on every Group() call, including one that states neither — a group
+            // that says nothing means "back to the section's default", not "keep the previous
+            // group's". Anything else would make a group's meaning depend on the one before it.
+            _groupAccess = access;
+            _groupRequiresRestart = requiresRestart;
             _section.Settings.Add(
                 new SettingDef
                 {

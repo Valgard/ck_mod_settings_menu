@@ -570,7 +570,10 @@ namespace ModSettingsMenu
         {
             Debug.Log("[ModSettingsMenu] Mod initialized.");
             NamingDiagnostics = BindNamingDiagnostics();
-            var section = ModSettings.Section(this).Toggle(out ShowForeignConfigs, "showForeignConfigs", true);
+            // Stated, not inherited. Client is also the default, but this switch decides what a
+            // PLAYER sees in their own menu, and a server has no business in it — which is a
+            // decision worth reading at the call site rather than tracing to a default.
+            var section = ModSettings.Section(this, access: ConfigAccessLevel.Client).Toggle(out ShowForeignConfigs, "showForeignConfigs", true);
             if (DevFlags.Is("TestFixtures"))
                 AddDeclaredFixtures(section);
             section.Build();

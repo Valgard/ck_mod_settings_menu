@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CoreLib.Data.Configuration;
 using CoreLib.Util.Extension;
 using PugMod;
 using UnityEngine;
@@ -21,7 +22,7 @@ namespace ModSettingsMenu.Settings
         /// Begin a settings section for the calling mod. Resolves modId +
         /// displayName from the IMod ref via CoreLib's GetModInfo (Handlers.Contains).
         /// </summary>
-        public static SectionBuilder Section(IMod consumer)
+        public static SectionBuilder Section(IMod consumer, ConfigAccessLevel access = ConfigAccessLevel.Client, bool requiresRestart = false)
         {
             var info = consumer.GetModInfo();
             string modId = info.Metadata.name;
@@ -33,7 +34,7 @@ namespace ModSettingsMenu.Settings
                 HintTerm = MsmTerms.Hint(modId),
             };
             var file = ConfigStore.ForMod(consumer, modId);
-            return new SectionBuilder(section, file);
+            return new SectionBuilder(section, file, access, requiresRestart);
         }
 
         internal static void Register(ModSection section)
