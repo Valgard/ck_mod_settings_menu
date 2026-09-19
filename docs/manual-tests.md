@@ -349,6 +349,18 @@ session. A row whose `fieldMask` is unwired can only be produced by breaking the
 prefab; the split condition in the prefix is what guards it, and reading that
 condition is cheaper than manufacturing the state.
 
+> **Watch for, unexplained (2026-09-19):** once, on the first open of the
+> drill-in after the build that removed the cancel's device test, the rows would
+> not accept typing at all. Closing and reopening the drill-in cleared it, and it
+> has not recurred. The log carried no exception beyond the deliberately-throwing
+> fixture, the mod had loaded, and no mechanism was found by which the cancel
+> could fire while typing — so this is recorded as an observation, not as a
+> diagnosis. If it happens again: note whether the typed character appears and
+> then vanishes (which would implicate the cancel) or never arrives at all (which
+> would point at `Manager.input.activeInputField` holding a destroyed row, the
+> failure mode `ListDetailScreen.Deactivate`'s comment describes). That
+> distinction is the one piece of evidence nobody has yet.
+
 ### The caret
 
 Keyboard and mouse, because they answer the question differently: typing and word
