@@ -1376,7 +1376,7 @@ box.
       now have a route: change `testGroupRestartInherited` and leave the
       settings screen — the restart prompt appears, because nothing overrode
       the flag it inherited; do the same to `testRowOverridesToClient` — no
-      prompt, because that row overrode it to `false`.
+      prompt, because that row overrode it to `false`. (Criterion 7)
       `testGroupInheritsViewOnly` itself is still not directly testable this
       way — it is locked by the group's `ViewOnly`, so there is nothing in it a
       player could ever change — which is exactly why
