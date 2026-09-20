@@ -757,6 +757,20 @@ working Choice, and one of them logs a line per keypress by design.
       **nothing**. It is not a degradation — an unhandled range is the designed
       route to an Info row, and a warning here would fire on a healthy config at
       every menu open.
+- [ ] **Criterion 10, the same row against the section reset.** `RangeDouble`
+      is `clientScope` — `Locked` is false, so nothing about a permission
+      keeps the reset off it; it is `Kind == SettingKind.Info` alone that must.
+      With the game closed, edit `RangeDouble`'s value in
+      `TestChoiceFixtures/config.cfg` to something other than `1.5` (there is
+      no widget here to change it from — that is the whole point of an Info
+      row), and cycle `ChoiceStrings` in the same box away from `Medium` while
+      you are at it. Relaunch, open `TestChoiceFixtures (detected)`, and reset
+      it from the footer hint: `ChoiceStrings` returns to `Medium`, and
+      `RangeDouble` still reads the value you hand-edited it to. This is the
+      regression `SectionReset.IsInScope`'s own comment names: for one commit,
+      spelling out `!Locked` without also asking `Kind != Info` let a
+      discovered Info row fall back into the reset, silently overwriting a
+      value the menu never showed as changeable.
 
 ### Nothing else moved
 
@@ -795,6 +809,19 @@ with one, and `TestEmptySectionFixtures`, whose first section has no name at all
       to, so an unrelated mod's scope-less entry cannot start reporting
       something else just because this mod's own binds ran in the same
       session. (Criterion 9, Review Focus 5)
+- [ ] **Criterion 14, MSM's own settings, in the same GMCM session.** Neither
+      of MSM's own two settings falls back to anything — both state a level
+      themselves. `showForeignConfigs`, the first row of this mod's own box,
+      is declared `access: ConfigAccessLevel.Client` right on
+      `ModSettings.Section(this, …)` in `Init()`; it carries GMCM's **Client**
+      icon. `reportForeignNamingStages` never becomes a row in MSM's own
+      screen at all — `BindNamingDiagnostics` binds it straight onto
+      `ConfigStore.ForMod`, bypassing `SectionBuilder` entirely — so the only
+      place it is recognised is here, as a row GMCM discovers under
+      `ModSettingsMenu (detected)`: also **Client**, from the explicit
+      `new ConfigScope(ConfigAccessLevel.Client)` at its own bind. Neither
+      ever shows **Server**, which is what a consumer's silence would have
+      produced before this point existed.
 
 ## The declared list path
 
@@ -813,6 +840,17 @@ the two paths reach the drill-in with different things known about the value.
       **and** in the `.cfg`. That is the failure: a token is also the
       localization leaf key a consumer writes into its yaml, so a key that
       changes with the machine cannot be translated once and stay right.
+- [ ] **Criterion 2, a consumer that says nothing.** `testChoiceFloat` states
+      no `access:` anywhere in its own chain — no enclosing `Group()`, no
+      argument on the `.Choice()` call itself — so it falls all the way back
+      to this mod's own section default, `access: ConfigAccessLevel.Client`.
+      With **General Mod Config Menu** installed, this row — and every other
+      fixture above that likewise states no level — carries GMCM's **Client**
+      permission icon, never **Server**. There is nothing to check in
+      `ModSettingsMenu.cfg` either way: CoreLib's `WriteDescription` emits
+      description, type, default and acceptable values, and no scope, so a
+      missing line here proves nothing about which level won — the icon is
+      the only place this is observable at all.
 
 ### `FreeText` — the same as a detected list
 
@@ -1395,6 +1433,37 @@ Then relaunch and confirm:
       declared `movedFrom` produces **no** log line at all. Silence is the
       requirement: that declaration stays in the consumer's chain forever, so a
       "nothing to migrate" line would print on every start for every player.
+
+## Constraints, checked against real consumers
+
+**Criterion 12's other half needs no fixture, and no `TestFixtures` build —
+the fixtures cannot carry it.** Both declared Sliders in this file are
+deliberate failure cases: `testDupKey`'s Slider throws on CoreLib's own cast
+for a duplicate key of a mismatched type, and `testReversedRange`'s `min >
+max` is refused by `IsUsableRange` before `BindGuarded` is ever entered.
+Neither ever binds, so neither can show a Slider's `AcceptableValueRange`
+surviving the scope this branch now threads through every bind. The subject
+lives outside this repository, in two real, already-shipped consumers of
+`SectionBuilder.Slider()` and `.Choice()`:
+
+- [ ] **Criterion 12, a Slider's range.** With **Caveling Divining Rod**
+  installed and its settings bound at least once (any launch that loads it does
+  this — the Options menu need not be opened), read
+  `CavelingDiviningRod/config.cfg`. Under `## radius` it must still carry `#
+  Acceptable value range: From 10 to 60`, exactly as it did before this branch —
+  that mod declares this Slider through `.Slider(out var radius, "radius", 10f,
+  60f, 30f, 5f, …)`, the same method every fixture's failing Sliders never
+  reach. A missing line means `BindGuarded` lost the `ConfigDescription`'s
+  `AcceptableValueRange` on the way to CoreLib's `Bind` — a silent failure
+  invisible in the menu itself until a value is pushed outside its declared
+  range.
+- [ ] **Criterion 12, a Choice's token set.** Under the same precondition, with
+  **Rebalance Key Crafting** installed, read `RebalanceKeyCrafting/config.cfg`.
+  Under `## reductionFactor` it must still carry `# Acceptable values: OneIngot,
+  Quarter, Half, Vanilla` — that mod declares this row through `.Choice(out var
+  reduction, "reductionFactor", new[] { … }, …)`. A missing or truncated list
+  here is the same class of failure as the Slider above, on the constraint type
+  no declared fixture exercises successfully at all.
 
 ## After the walk
 
