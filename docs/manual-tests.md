@@ -1270,9 +1270,10 @@ which `.Label()` alone cannot have and nothing on screen shows.
   `[testGroupMoved]` with `testMovedToggle`, `[testAccessGroup]` with
   `testGroupInheritsViewOnly`, `testGroupRestartInherited` and
   `testRowOverridesToClient`, `[testAccessGroupCleared]` with
-  `testAfterGroupIsClient`, `testListReadOnlyAndLocked`,
-  `testListReadOnlyUnlocked` and `testDupKeyAccess`, `[Settings]` with
-  everything else, and **no** `[bad[name]]` section.
+  `testAfterGroupIsClient`, `testServerScoped`, `testAdminScoped`,
+  `testListReadOnlyAndLocked`, `testListReadOnlyUnlocked` and
+  `testDupKeyAccess`, `[Settings]` with everything else, and **no**
+  `[bad[name]]` section.
 
 ### Access level cascade
 
@@ -1313,6 +1314,53 @@ box.
       player could ever change — which is exactly why
       `testGroupRestartInherited` exists: without it, the inheriting half of
       this criterion would depend on GMCM being installed. (Criterion 7)
+
+### Server and Admin, checked against a live world
+
+`testServerScoped` and `testAdminScoped`, declared right after
+`testAfterGroupIsClient` in this mod's own section, are the two levels the
+cascade fixtures above cannot reach. `ViewOnly` and `Client` are both answered
+by `AccessLock.IsLocked` without ever asking for a player, which is why every
+check above holds in plain singleplayer and even at the title screen. `Server`
+and `Admin` do the opposite: `Changeable()` reads `Manager.main.player`, so
+both need an actual world, and telling the two apart from each other needs a
+joined player who is not an admin.
+
+- [ ] **Criterion 13, singleplayer, one session, two moments.** Open Options →
+      Mod settings at the title screen: `testServerScoped` renders **locked**,
+      because with no player at all `AccessLock.IsLocked` answers `true` for
+      Server and Admin rather than risk dereferencing one. Without quitting,
+      load any world and reopen the menu: the same row is now **editable**.
+      This is the failure §4.4 exists to prevent — if `Locked` were a field set
+      once when the setting is constructed instead of a computed property, it
+      would freeze at the title screen's conservative answer and the row would
+      stay locked for the rest of the session, world included. (Criterion 13)
+- [ ] **Criterion 4, dedicated server plus a second, non-admin client.** Needs
+      `../utils/server.sh start` and a second client joined to it as a
+      non-admin. On an ordinary world — guest mode off, which is the default —
+      `testServerScoped` is editable for that player exactly as it is for
+      anyone else: `Changeable()` answers `!player.guestMode`, and `guestMode`
+      itself needs the world's own flag set *and* `adminPrivileges < 1`, so
+      with the flag off nobody is locked out of it. The check proves nothing
+      until **guest mode is enabled on that world** — with it off, a correct
+      build and a broken one are indistinguishable, since `Server` is editable
+      for everyone either way. Enable it and reopen the menu as the non-admin
+      client: the row is now locked. A dedicated server has no host player, so
+      confirm the contrast the spec actually asks for — an admin client still
+      edits it on the same, guest-mode-enabled world, a non-admin client does
+      not — rather than "host versus joiner". Singleplayer cannot substitute:
+      everyone there reports `adminPrivileges == int.MaxValue`, so
+      `Changeable()` is always true and there is no non-admin to lock.
+      (Criterion 4)
+- [ ] **Criterion 5, same setup, no guest mode needed.** `testAdminScoped` is
+  locked for the non-admin client on that same **ordinary** world, guest mode on
+  or off — `Changeable()` answers `!player.guestMode && adminPrivileges > 0` for
+  Admin, so the world's guest-mode flag never enters the answer. Confirm it
+  stays editable for the admin client throughout. The contrast with
+  `testServerScoped` on the very same world — one row locked for that player,
+  the other not, with guest mode off — is what tells the two levels apart at
+  all; toggling guest mode changes nothing about this row either way.
+  Singleplayer cannot substitute, for the same reason as above. (Criterion 5)
 
 ### Migration
 
