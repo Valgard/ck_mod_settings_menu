@@ -859,16 +859,22 @@ the two paths reach the drill-in with different things known about the value.
       **and** in the `.cfg`. That is the failure: a token is also the
       localization leaf key a consumer writes into its yaml, so a key that
       changes with the machine cannot be translated once and stay right.
-- [ ] **Criterion 2, a consumer that says nothing.** `testChoiceFloat` states
-      no `access:` anywhere in its own chain — no enclosing `Group()`, no
-      argument on the `.Choice()` call itself — so it falls all the way back
-      to this mod's own section default, `access: ConfigAccessLevel.Client`.
-      With **General Mod Config Menu** installed, this row — and every other
-      fixture above that likewise states no level — carries GMCM's **Client**
-      permission icon, never **Server**. There is nothing to check in
-      `ModSettingsMenu.cfg` either way: CoreLib's `WriteDescription` emits
-      description, type, default and acceptable values, and no scope, so a
-      missing line here proves nothing about which level won — the icon is
+- [ ] **Criterion 2, the cascade half.** `testChoiceFloat` states no `access:`
+      anywhere in its own chain — no enclosing `Group()`, no argument on the
+      `.Choice()` call itself — so it falls all the way back to this mod's own
+      section default. That default is itself a **stated** value here, not an
+      unstated one: `ModSettings.Section(this, access: ConfigAccessLevel.Client)`
+      in `Init()` says so explicitly, on purpose, for MSM's own fixtures. So
+      this row proves the `Group()`/widget half of the cascade falling back
+      onto a level someone chose — not `ModSettings.Section`'s own bare C#
+      default parameter, the half "Constraints, checked against real
+      consumers" below checks, against two consumers who state no level
+      anywhere at all. With **General Mod Config Menu** installed, this row —
+      and every other fixture above that likewise states no level — carries
+      GMCM's **Client** permission icon, never **Server**. There is nothing to
+      check in `ModSettingsMenu.cfg` either way: CoreLib's `WriteDescription`
+      emits description, type, default and acceptable values, and no scope, so
+      a missing line here proves nothing about which level won — the icon is
       the only place this is observable at all.
 
 ### `FreeText` — the same as a detected list
@@ -1500,6 +1506,21 @@ lives outside this repository, in two real, already-shipped consumers of
   reduction, "reductionFactor", new[] { … }, …)`. A missing or truncated list
   here is the same class of failure as the Slider above, on the constraint type
   no declared fixture exercises successfully at all.
+- [ ] **Criterion 2, the root default half.** Neither real consumer above
+  states an `access:` anywhere in its own chain — no `Group()`, no argument on
+  any widget — so every row in both boxes falls back to `ModSettings.Section`'s
+  own bare C# default parameter, the one half "The declared Choice" above
+  cannot reach: MSM's own fixtures section states `access:
+  ConfigAccessLevel.Client` explicitly, so nothing declared inside this
+  repository can ever leave that parameter to answer on its own. With
+  **General Mod Config Menu** installed, open each mod's own box: every row in
+  **Caveling Divining Rod**'s (`enabled`, `radius`, `maxArrows`,
+  `arrowBaseScale`) and every row in **Rebalance Key Crafting**'s (`enabled`,
+  `reductionFactor`, `scope`) carries the **Client** icon. A **Server** icon on
+  either box would mean the bare default itself was wrong, or never reached
+  the bind — exactly the pre-change behaviour this whole point exists to
+  remove, where every declared setting was formally `Server` and nobody had
+  chosen it. (Criterion 2)
 
 ## After the walk
 
