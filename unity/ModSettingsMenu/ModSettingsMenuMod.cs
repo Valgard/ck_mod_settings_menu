@@ -713,6 +713,11 @@ namespace ModSettingsMenu
             // guard existed — the box renders at all.
             section.Slider(out _, "testReversedRange", 10f, 0f, 5f, 1f);
             section.Toggle(out _, "testAfterReversedRange", true);
+            // The ONLY positive exercise of the .RequiresRestart() modifier: both other call sites
+            // are guard-refusal cases. Task 5 rewrote what this modifier does — it now writes
+            // requireReload into the entry's own ConfigScope rather than an MSM-side field — so
+            // without this row that rewrite is never reached by anything a person can observe.
+            section.Toggle(out _, "testModifierRestart", true).RequiresRestart();
             // RequiresRestart() after a HEADING must be refused too, and for a different reason than
             // the failed declaration above: nothing went wrong here, the row simply holds no value
             // and could never trigger a restart. Accepting it would leave the setting the consumer
