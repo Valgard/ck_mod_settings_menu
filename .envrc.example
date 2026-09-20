@@ -94,3 +94,16 @@ export LOC_OUT="$PWD/unity/$MOD_NAME/Localization/Generated"
 # current set — deliberately neither counted nor enumerated here, because this comment already
 # went stale once by naming exactly four of them.
 # export MOD_DEV_FLAGS="TestFixtures"
+
+# "ThrowingFixtures" adds two more fixtures on top of TestFixtures — it does
+# nothing by itself. Both bind a constraint whose description throws on
+# purpose, to prove MSM survives a hostile third-party constraint. MSM does,
+# but the throw outlives the bind: it stays on the entry and fires again for
+# any OTHER mod that later asks it for a description. General Mod Config Menu
+# does exactly that while building its own menu, with no handler of its own,
+# so a build with these two fixtures enabled makes GMCM's menu unusable. Only
+# enable this alongside TestFixtures when the manual walk specifically calls
+# for it; leave it off for every other session, including ones that install
+# GMCM to verify a different check.
+#   MOD_DEV_FLAGS=TestFixtures,ThrowingFixtures ../utils/build.sh
+# export MOD_DEV_FLAGS="TestFixtures,ThrowingFixtures"

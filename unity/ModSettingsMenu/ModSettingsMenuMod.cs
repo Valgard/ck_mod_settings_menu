@@ -58,7 +58,11 @@ namespace ModSettingsMenu
             // the MOD_DEV_FLAGS env var by CLIBuildHelper.Build on every build) — OFF by default,
             // so a normal build never ships these into a real player's settings screen; opt in
             // locally with `MOD_DEV_FLAGS=TestFixtures ../utils/build.sh` while iterating on these
-            // widgets. What each fixture is for is in docs/manual-tests.md; see .envrc.example.
+            // widgets. Two fixtures further down bind a constraint that throws when asked for a
+            // description — that throw outlives the bind and reaches any OTHER mod that later asks
+            // the same entry for one (General Mod Config Menu does), so those two sit behind a
+            // second, additive flag: `MOD_DEV_FLAGS=TestFixtures,ThrowingFixtures`. What each
+            // fixture is for is in docs/manual-tests.md; see .envrc.example.
             if (DevFlags.Is("TestFixtures"))
             {
                 // Client scope (not CoreLib's Server default) so these stay editable at the title
@@ -374,40 +378,57 @@ namespace ModSettingsMenu
                     ),
                     clientScope
                 );
-                // A constraint that throws where MSM asks it a question. Nothing else exercises the
-                // per-entry guard in BuildSection, and that guard is the difference between losing this
-                // row and losing every mod's settings at once: Populate() has no handler of its own.
-                // Alone in its file, losing the row also loses the box — a section with no rows is
-                // dropped whole — so the property this still demonstrates is that the SCREEN survives.
-                BindThrowingFixture(
-                    "TestThrowingConstraint",
-                    "ThrowingConstraint",
-                    "Alpha",
-                    "A constraint whose description throws; this row and its box may be lost, nothing else.",
-                    new DescriptionOnlyValues(typeof(string), "unused", throwOnDescribe: true),
-                    clientScope,
-                    info
-                );
-                // The other half. A real AcceptableValueList<float> whose description is unreadable: the
-                // exact read never asks for one, so this must render as a normal Choice over 0.5/1.5/2.5
-                // — and on every machine, which is what makes it the check the culture-dependent
-                // ChoiceFloats cannot be. If it ever appears as a read-only Info row, the values are
-                // coming from a description again.
-                //
-                // Read the two boxes together: the same unreadable description, opposite outcomes —
-                // ThrowingConstraint's row is lost because the parse asks, this one survives because
-                // the exact read does not. A change that made the exact path consult a description
-                // again would collapse them onto the same result, which is the regression neither
-                // reports alone.
-                BindThrowingFixture(
-                    "TestExactNoDescription",
-                    "ChoiceExactNoDescription",
-                    1.5f,
-                    "A float choice whose description throws; must still be a working Choice.",
-                    new ThrowingDescriptionValues(0.5f, 1.5f, 2.5f),
-                    clientScope,
-                    info
-                );
+                // These two fixtures are gated on a SECOND flag, ThrowingFixtures, layered on top of
+                // TestFixtures rather than living in it. Both bind a constraint whose
+                // ToDescriptionString() throws on purpose, and MSM's own BindThrowingFixture only
+                // catches that throw at BIND time — the constraint stays attached to the entry
+                // afterwards, so it throws again for anyone else who later asks the entry for a
+                // description. General Mod Config Menu is exactly that "anyone else":
+                // MiscHelper.TryExtractAcceptableValues, called from UIConfigEntry.BindEntry inside
+                // ModConfigMenu.Awake() with no handler of its own, walks every discovered entry
+                // (these two fixture files included, since raw ConfigFiles outside ConfigStore.ForMod
+                // are indistinguishable from a real third party's) and dies on the first one that
+                // throws — before it renders a single row. So a plain TestFixtures build must leave
+                // GMCM usable, and only a build that also opts into ThrowingFixtures pays for these
+                // two checks.
+                if (DevFlags.Is("ThrowingFixtures"))
+                {
+                    // A constraint that throws where MSM asks it a question. Nothing else exercises
+                    // the per-entry guard in BuildSection, and that guard is the difference between
+                    // losing this row and losing every mod's settings at once: Populate() has no
+                    // handler of its own. Alone in its file, losing the row also loses the box — a
+                    // section with no rows is dropped whole — so the property this still demonstrates
+                    // is that the SCREEN survives.
+                    BindThrowingFixture(
+                        "TestThrowingConstraint",
+                        "ThrowingConstraint",
+                        "Alpha",
+                        "A constraint whose description throws; this row and its box may be lost, nothing else.",
+                        new DescriptionOnlyValues(typeof(string), "unused", throwOnDescribe: true),
+                        clientScope,
+                        info
+                    );
+                    // The other half. A real AcceptableValueList<float> whose description is
+                    // unreadable: the exact read never asks for one, so this must render as a normal
+                    // Choice over 0.5/1.5/2.5 — and on every machine, which is what makes it the check
+                    // the culture-dependent ChoiceFloats cannot be. If it ever appears as a read-only
+                    // Info row, the values are coming from a description again.
+                    //
+                    // Read the two boxes together: the same unreadable description, opposite outcomes
+                    // — ThrowingConstraint's row is lost because the parse asks, this one survives
+                    // because the exact read does not. A change that made the exact path consult a
+                    // description again would collapse them onto the same result, which is the
+                    // regression neither reports alone.
+                    BindThrowingFixture(
+                        "TestExactNoDescription",
+                        "ChoiceExactNoDescription",
+                        1.5f,
+                        "A float choice whose description throws; must still be a working Choice.",
+                        new ThrowingDescriptionValues(0.5f, 1.5f, 2.5f),
+                        clientScope,
+                        info
+                    );
+                }
 
                 // Two sections in one file, both NAMED — unlike emptySectionFile below, whose first
                 // section has none. Their casing ("Zebra" vs "alpha") is the actual point: sorting
