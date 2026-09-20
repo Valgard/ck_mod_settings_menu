@@ -621,6 +621,24 @@ Run these with **both** devices in reach, alternating deliberately.
 - [ ] Same for a **delete**. Both change the stored value as much as typing
       does, and all three paths must raise the flag.
 - [ ] In `Short` (no restart flag), neither operation produces a prompt.
+- [ ] **Criterion 6, and where this walk leaves it incomplete.** The three
+      checks above are the restart-**prompt** half, but for a fixture that
+      goes through neither of `SectionBuilder`'s own two routes:
+      `ShortRestart` is scoped through a raw `new ConfigScope(…,
+      requireReload: true)` at bind — the discovered path's own way of
+      marking a setting. **The `.RequiresRestart()` modifier itself is never
+      positively exercised anywhere in this document.** Its only two
+      appearances in `AddDeclaredFixtures` (`testDupKey`,
+      `testLabelRestartGuard`) are both guard-**refusal** cases, proving it
+      correctly declines to attach — never that it correctly marks a row it
+      *does* attach to. Nor is GMCM's reload marker checked against
+      `ShortRestart` here. Both are left unverified by this walk: the
+      cascade's `requiresRestart:` parameter is the one route checked in
+      full, marker and prompt both, in "Access level cascade" below
+      (`testGroupRestartInherited`) — and since both routes write the same
+      `entry.Scope.requireReload` field (§4.3), nothing in the design
+      predicts the modifier would behave differently, but that is a
+      reading of the code, not something walked here.
 
 ### Classification
 
@@ -1323,6 +1341,11 @@ box.
 - [ ] `testGroupInheritsViewOnly` renders **locked**, in every session type
       including the title screen — it states no level of its own, so it
       inherits `.Group("testAccessGroup", access: ConfigAccessLevel.ViewOnly)`.
+      `AccessLock.IsLocked`'s own first branch answers `ViewOnly` outright,
+      before it would ever call `Changeable()` or look at a player, so the
+      title screen already is every session type this criterion has to hold
+      in — there is no further world or multiplayer state left to try it
+      against. (Criterion 3)
 - [ ] `testRowOverridesToClient`, further down in the same group, is
   **editable** — its own `access: ConfigAccessLevel.Client` wins over the
   enclosing group's `ViewOnly`. Together the two rows are the only place the
@@ -1351,7 +1374,19 @@ box.
       way — it is locked by the group's `ViewOnly`, so there is nothing in it a
       player could ever change — which is exactly why
       `testGroupRestartInherited` exists: without it, the inheriting half of
-      this criterion would depend on GMCM being installed. (Criterion 7)
+      this criterion would depend on GMCM being installed. The reload marker
+      and the restart prompt are `entry.Scope.requireReload` read back two
+      different ways, so together they are a complete demonstration of
+      Criterion 6 **for the cascade's own `requiresRestart:` parameter** —
+      not, by itself, for the older `.RequiresRestart()` modifier route; see
+      "### Restart flag" above for where that route is left incomplete. The
+      same contrast also answers Criterion 8: `BindGuarded` builds a fresh
+      `ConfigScope` on every single call, and its own comment names exactly
+      this risk — "sharing one instance across a group would have the same
+      effect in miniature: a modifier on one row would move its neighbours."
+      `testRowOverridesToClient`'s flag does not move `testGroupRestartInherited`'s,
+      even though both binds finish before either is ever read, which is
+      when a shared instance would have shown itself. (Criteria 6, 7 and 8)
 
 ### Server and Admin, checked against a live world
 
