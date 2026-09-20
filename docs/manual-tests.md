@@ -21,6 +21,28 @@ MOD_DEV_FLAGS=TestFixtures ../utils/build.sh
 Without that flag the fixtures do not exist and none of the list checks below
 can run — a normal build must never ship them.
 
+**Two more fixtures, further down, need a second flag on top of this one —
+and that flag makes General Mod Config Menu unusable, so this document needs
+two separate build sessions, not one.** `TestThrowingConstraint` and
+`TestExactNoDescription` each bind a constraint whose description throws on
+purpose, to prove MSM survives it. MSM does, but the throw outlives the bind
+and fires again for any OTHER mod that later asks the same entry for a
+description — which is exactly what GMCM does, with no handler of its own,
+while building its own menu. Built together with GMCM installed, GMCM's menu
+never renders and the game reads as hung rather than broken. So:
+
+```bash
+MOD_DEV_FLAGS=TestFixtures,ThrowingFixtures ../utils/build.sh
+```
+
+Walk this whole document under the plain `TestFixtures` build first,
+including every check that names General Mod Config Menu — **except**
+§ "Refused, or not, by the same fault" and the `TestThrowingConstraint` count
+inside § "The naming diagnostic", which need the `ThrowingFixtures` addition
+and are marked where they occur. Do those two under a second,
+`TestFixtures,ThrowingFixtures` build, with GMCM left uninstalled for that
+session.
+
 They are created through raw CoreLib `ConfigFile`s **outside**
 `ConfigStore.ForMod`, so `ConfigStore.IsOwn` does not recognise them and
 `ForeignConfigDiscovery` treats them exactly as it treats a third-party mod.
@@ -36,8 +58,8 @@ other still renders as a working Choice — that pair is explained further down:
 <bottle>/…/mods/TestGroupFixtures/config.cfg
 <bottle>/…/mods/TestSingleGroupFixtures/config.cfg
 <bottle>/…/mods/TestEmptySectionFixtures/config.cfg
-<bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written)
-<bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written)
+<bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written; ThrowingFixtures build only)
+<bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written; ThrowingFixtures build only)
 ```
 
 | Fixture | Value | What it is for |
@@ -76,7 +98,10 @@ otherwise — every `AcceptableValueList` here lives in a file MSM created, whic
 
 Two more fixtures have an unreadable description, and they are a pair on purpose
 — the same fault, opposite outcomes. **Each is alone in its own file**, and that
-is a hard rule rather than tidiness (below):
+is a hard rule rather than tidiness (below). **Both need the `ThrowingFixtures`
+build (`MOD_DEV_FLAGS=TestFixtures,ThrowingFixtures`) and neither exists under
+plain `TestFixtures`** — see § "Running the fixtures" for why they sit behind
+a second flag and must be walked with GMCM uninstalled:
 
 | File / box | Fixture | Expected |
 |---|---|---|
@@ -744,6 +769,10 @@ because discovery re-runs on every open.
       accepts it, so any mod could ship this by accident.
 ### Refused, or not, by the same fault
 
+**Needs `MOD_DEV_FLAGS=TestFixtures,ThrowingFixtures` — neither fixture below
+exists under plain `TestFixtures`. Walk this section in its own session, with
+GMCM not installed:** see § "Running the fixtures" for why.
+
 The two fixtures below share an unreadable description and are checked as a pair.
 Neither matches the preamble above — one loses its whole box, the other is a
 working Choice, and one of them logs a line per keypress by design.
@@ -1200,6 +1229,14 @@ with the terms already out, where every discovered section is back to shipping
 no term under either schema — that known shape is what makes the counts below
 checkable without touching `localization.yaml` at all.
 
+**The exact count in the third bullet below names `TestThrowingConstraint`, so
+run this section under `MOD_DEV_FLAGS=TestFixtures,ThrowingFixtures`** — the
+same session as § "Refused, or not, by the same fault", not the plain
+`TestFixtures` one the rest of this document uses. Under plain `TestFixtures`
+neither throwing fixture exists, so both drop out of the count together: one
+discovered section fewer, and no `TestThrowingConstraint` box to point at as
+the one that gets no line.
+
 - [ ] At the default (`reportForeignNamingStages` absent from
       `ModSettingsMenu.cfg`, or `false`), open the settings screen:
       `Player.log` carries no `[ModSettingsMenu]` line containing "rows
@@ -1537,11 +1574,18 @@ the ones the checks above deliberately provoke (`testListOrderOnlyEmpty`, the tw
 duplicate fixtures, `testDupKey`, `testReversedRange`, `testLabelRestartGuard`,
 the rejected group name `bad[name]`, `testDupKeyAccess` (the "declares … key(s)
 more than once" line — the same key twice, unlike `testDupKey`, reached `Build()`
-without a bind ever failing), one line for each `Refuse*` entry, the error from
-`ThrowingConstraint`, and one `changing '…' failed` per press on
-`ChoiceExactNoDescription`). The count no longer depends on the machine's
-culture: `ChoiceFloats` used to add a line here on a comma-decimal host and now
-never does.
+without a bind ever failing), and one line for each `Refuse*` entry). The count
+no longer depends on the machine's culture: `ChoiceFloats` used to add a line
+here on a comma-decimal host and now never does. Run this check at the end of
+the plain `TestFixtures` session; none of the above needs `ThrowingFixtures`.
+- [ ] Repeat the `Player.log` check above at the end of the separate
+`TestFixtures,ThrowingFixtures` session (§ "Refused, or not, by the same
+fault"), where the same baseline holds **plus** two more lines that only that
+session's build can produce: the error from `ThrowingConstraint`, and one
+`changing '…' failed` per press on `ChoiceExactNoDescription`. Their absence
+here, rather than in the plain session's log, is itself part of the check —
+either warning appearing in the plain-`TestFixtures` log would mean the
+fixtures it names bound without the second flag.
 - [ ] Type into a **vanilla** menu text field — the world name on the create-world
 screen will do. Characters, arrows and Backspace behave exactly as they do without
 this mod. `MenuManager.HandleTypingInput` is the game's own typing entry point,
