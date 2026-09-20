@@ -621,24 +621,25 @@ Run these with **both** devices in reach, alternating deliberately.
 - [ ] Same for a **delete**. Both change the stored value as much as typing
       does, and all three paths must raise the flag.
 - [ ] In `Short` (no restart flag), neither operation produces a prompt.
-- [ ] **Criterion 6, and where this walk leaves it incomplete.** The three
-      checks above are the restart-**prompt** half, but for a fixture that
-      goes through neither of `SectionBuilder`'s own two routes:
-      `ShortRestart` is scoped through a raw `new ConfigScope(…,
-      requireReload: true)` at bind — the discovered path's own way of
-      marking a setting. **The `.RequiresRestart()` modifier itself is never
-      positively exercised anywhere in this document.** Its only two
-      appearances in `AddDeclaredFixtures` (`testDupKey`,
-      `testLabelRestartGuard`) are both guard-**refusal** cases, proving it
-      correctly declines to attach — never that it correctly marks a row it
-      *does* attach to. Nor is GMCM's reload marker checked against
-      `ShortRestart` here. Both are left unverified by this walk: the
-      cascade's `requiresRestart:` parameter is the one route checked in
-      full, marker and prompt both, in "Access level cascade" below
-      (`testGroupRestartInherited`) — and since both routes write the same
-      `entry.Scope.requireReload` field (§4.3), nothing in the design
-      predicts the modifier would behave differently, but that is a
-      reading of the code, not something walked here.
+- [ ] **Criterion 6, the `.RequiresRestart()` modifier's own positive case.**
+      `ShortRestart` above does not exercise this modifier at all — it is
+      scoped through a raw `new ConfigScope(…, requireReload: true)` at
+      bind, the discovered path's own way of marking a setting. The
+      modifier's only two appearances in `AddDeclaredFixtures` before this
+      row (`testDupKey`, `testLabelRestartGuard`) are both guard-**refusal**
+      cases, proving it correctly declines to attach, never that it
+      correctly marks a row it *does* attach to. `testModifierRestart` is
+      that missing positive case: change it and leave the settings screen —
+      the restart prompt appears, exactly as it does for `ShortRestart`.
+      With **General Mod Config Menu** installed, this row also carries the
+      **reload marker** — the part that actually distinguishes this from a
+      pre-Task-5 regression: GMCM reads `Scope.requireReload`, and nothing
+      else, so the marker can only appear if the modifier wrote into the
+      entry's own `ConfigScope` rather than the MSM-internal field it used
+      to set. Together with the cascade's own `requiresRestart:` parameter,
+      checked the same way in "Access level cascade" below
+      (`testGroupRestartInherited`), both of `SectionBuilder`'s routes are
+      now proven, marker and prompt each. (Criterion 6)
 
 ### Classification
 
@@ -1378,9 +1379,9 @@ box.
       and the restart prompt are `entry.Scope.requireReload` read back two
       different ways, so together they are a complete demonstration of
       Criterion 6 **for the cascade's own `requiresRestart:` parameter** —
-      not, by itself, for the older `.RequiresRestart()` modifier route; see
-      "### Restart flag" above for where that route is left incomplete. The
-      same contrast also answers Criterion 8: `BindGuarded` builds a fresh
+      "### Restart flag" above checks the same pair for the older
+      `.RequiresRestart()` modifier route, against `testModifierRestart`.
+      The same contrast also answers Criterion 8: `BindGuarded` builds a fresh
       `ConfigScope` on every single call, and its own comment names exactly
       this risk — "sharing one instance across a group would have the same
       effect in miniature: a modifier on one row would move its neighbours."
