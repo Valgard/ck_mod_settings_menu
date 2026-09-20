@@ -762,6 +762,28 @@ namespace ModSettingsMenu
             // group's level rather than carry it.
             section.Group("testAccessGroupCleared");
             section.Toggle(out _, "testAfterGroupIsClient", true);
+            // MSM-18, criteria 4 and 13 — the two levels the cascade fixtures above cannot reach,
+            // because ViewOnly and Client are both answered by AccessLock.IsLocked WITHOUT
+            // consulting a player at all. Server needs one, which is exactly what makes it
+            // observable: it renders LOCKED at the title screen (no Manager.main.player yet, so
+            // IsLocked answers conservatively) and EDITABLE the moment a world exists in the same
+            // session, with no restart in between — the one behaviour §4.4 computes Locked to
+            // guarantee, because a field set at construction would freeze the title screen's
+            // answer for the rest of the session. A Toggle, not an Info row, because a lock nobody
+            // could ever try to change proves nothing about the lock. Against a dedicated server
+            // and a second, non-admin client this same row also carries criterion 4: editable for
+            // that player on an ordinary world, and locked only once guest mode is enabled there —
+            // Changeable() answers "!player.guestMode" for Server, and guestMode itself is false
+            // unless BOTH the world's flag is set AND adminPrivileges < 1.
+            section.Toggle(out _, "testServerScoped", true, access: ConfigAccessLevel.Server);
+            // MSM-18, criterion 5 — Admin, the level nothing above declares. Checked the same way
+            // as testServerScoped but needs no guest mode: Changeable() answers
+            // "!player.guestMode && adminPrivileges > 0" for Admin, so a non-admin is locked out on
+            // an ORDINARY world too, where the Server row right above stays editable. The contrast
+            // between the two rows on the very same world is what tells the levels apart — neither
+            // singleplayer nor a hosted session can, since both report
+            // adminPrivileges == int.MaxValue there.
+            section.Toggle(out _, "testAdminScoped", true, access: ConfigAccessLevel.Admin);
             // A list that declares BOTH an editing level and a locking access level. The two are
             // independent: the reset restores a ListEditing.ReadOnly list, and skips a locked one.
             section.List(out _, "testListReadOnlyAndLocked", new[] { "Alpha", "Beta" }, ListEditing.ReadOnly, access: ConfigAccessLevel.ViewOnly);
