@@ -204,7 +204,7 @@ namespace ModSettingsMenu
 
         // Commit a drill-in row BEFORE CK blanks it on a world event, and disarm the blanking.
         //
-        // UIManager.HideAllInventoryAndCraftingUI ends with, guarded by textInputIsActive:
+        // UIManager.TryHideAllInventoryAndCraftingUI ends with, guarded by textInputIsActive:
         //     Manager.input.activeInputField.SetInputText("");
         //     Manager.input.activeInputField.Deactivate(commit: false);
         // Its callers are world events, not menu actions — opening a chest, a cattle pen, a vending
@@ -223,8 +223,13 @@ namespace ModSettingsMenu
         // Committing first also clears activeInputField, so CK's own `if (textInputIsActive)`
         // (textInputIsActive => activeInputField != null) finds nothing and the blanking never runs.
         // The user's edit is preserved rather than merely not-destroyed.
-        [HarmonyPatch(typeof(UIManager), nameof(UIManager.HideAllInventoryAndCraftingUI)), HarmonyPrefix]
-        public static void UIManager_HideAllInventoryAndCraftingUI()
+        //
+        // 1.3 renamed this to TryHideAllInventoryAndCraftingUI and gave it a bool return, along
+        // with an early exit that did not exist before: it hides nothing and returns false when a
+        // QuickTrash or Locking mouse mode was toggled and forceClose is false. A Harmony prefix
+        // runs regardless, so in that one case the row commits while CK keeps the menu open.
+        [HarmonyPatch(typeof(UIManager), nameof(UIManager.TryHideAllInventoryAndCraftingUI)), HarmonyPrefix]
+        public static void UIManager_TryHideAllInventoryAndCraftingUI()
         {
             if (Manager.input.activeInputField is ModSettingsMenu.UI.ListDetailItem row && row.Owner != null)
             {
