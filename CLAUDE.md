@@ -195,6 +195,13 @@ traps, each verified in-game. Full detail (with the code paths) lives in
   built-in Sprites-Mask material and its scale is its size; a custom shader ignores the
   SpriteRenderer tint in a bundle (use built-in Sprites-Default); `VisibleInsideMask`
   glyphs are invisible with no active mask.** See tutorial §20.
+- **Since CK 1.3 the box width is stated twice in the prefab, and nothing ties the two
+  together.** The row template's `WrapperUIComponent.renderWidthPixels` (384) is what
+  the 1.3 `LinearLayout` measures, and it is what centres the rows and places the whole
+  section via `Scroll`'s `pivotPosition: TopCenter`. The `Box` sprite's `m_Size.x` (24
+  units = 384 px) is what gets drawn. Change one and you must change the other, or the
+  rows and the frame drift apart. The 1.3 placement rules themselves are in
+  `../docs/ck/ui-framework.md`.
 - **The Editor reserializes prefabs on save**, overwriting hand-authored prefab YAML
   (resets background active/z, deletes objects). Per the project rule
   (`feedback_corekeeper_prefab_edits_in_editor` memory), make prefab edits with the
