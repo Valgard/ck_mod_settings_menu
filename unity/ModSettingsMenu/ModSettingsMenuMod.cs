@@ -806,9 +806,14 @@ namespace ModSettingsMenu
             // as testServerScoped but needs no guest mode: Changeable() answers
             // "!player.guestMode && adminPrivileges > 0" for Admin, so a non-admin is locked out on
             // an ORDINARY world too, where the Server row right above stays editable. The contrast
-            // between the two rows on the very same world is what tells the levels apart — neither
-            // singleplayer nor a hosted session can, since both report
-            // adminPrivileges == int.MaxValue there.
+            // between the two rows on the very same world is what tells the levels apart, and it
+            // needs a player holding no rights. Neither singleplayer nor a hosted session supplies
+            // one, for two DIFFERENT reasons: singleplayer reports adminPrivileges == int.MaxValue,
+            // because GetAdminPrivileges short-circuits on an offline session, so every level is
+            // editable; a host is a live session and holds stage 2 rather than int.MaxValue, but
+            // until somebody joins there is nobody present who could be locked out. A dedicated
+            // server is what separates them, and needs no second account — see docs/manual-tests.md
+            // under "Server and Admin", and the permission section of the handbook for the levels.
             section.Toggle(out _, "testAdminScoped", true, access: ConfigAccessLevel.Admin);
             // A list that declares BOTH an editing level and a locking access level. The two are
             // independent: the reset restores a ListEditing.ReadOnly list, and skips a locked one.
