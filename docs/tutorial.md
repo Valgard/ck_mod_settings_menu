@@ -1218,8 +1218,8 @@ using ModSettingsMenu.Settings;
 
 // Begin — in IMod.Init (or EarlyInit for bake-time settings):
 SectionBuilder b = ModSettings.Section(this,
-    ConfigAccessLevel access = ConfigAccessLevel.Client,   // section-wide default; ViewOnly|Client|Server|Admin
-    bool requiresRestart = false);
+    access: ConfigAccessLevel.Client,       // section-wide default; ViewOnly|Client|Server|Admin
+    requiresRestart: false);                // both optional — these are the values you get anyway
 
 // Section-level:
 b.Hint(string text);                    // optional subtitle (localizable via <ModId>-Config/_hint)
