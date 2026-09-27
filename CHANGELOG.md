@@ -119,7 +119,9 @@ entry is the version published to mod.io; its body is the modfile changelog.
   to server-synced, so GMCM has been syncing all of them — HUD positions
   included — on a default no mod actually chose. Most settings now stop
   syncing there unless the mod that declares them asks for server or
-  admin-only access.
+  admin-only access. A mod rendering its own surface over `ModSettings.Sections`
+  can ask `SettingDef.IsEditable` whether a row may be operated at all, rather
+  than combining the permission and the widget shape itself.
 
 ## [1.1.0]
 
