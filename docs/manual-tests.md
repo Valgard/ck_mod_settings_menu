@@ -1052,19 +1052,39 @@ routes behave *differently* here, which nothing on screen shows.
 
 - [ ] Reorder `testListOrderOnly`, then reset this mod's section from the footer
       hint: the declared order comes back.
-- [ ] The same reset rewrites `testListReadOnly` (declared read-only, so
-      `SettingDef.Locked` is false and it is in scope) but leaves
-      `LongReadOnly` untouched (read-only through a `ViewOnly` scope, which the
-      reset skips).
-- [ ] **The same distinction, stated as an access level rather than a scope.**
-      Edit `testListReadOnlyUnlocked` and `testListReadOnlyAndLocked` in
-      `config.cfg` to something other than their declared defaults, relaunch,
-      and reset this mod's section: `testListReadOnlyUnlocked` (declared
-      `ListEditing.ReadOnly` with no access level) comes back to its declared
-      defaults, `testListReadOnlyAndLocked` (the same `ListEditing.ReadOnly`,
-      **plus** `access: ConfigAccessLevel.ViewOnly`) does not move. The two
-      statements are independent — only the access level is a permission the
-      reset has to respect. (Criterion 11)
+- [ ] The same reset leaves `LongReadOnly` untouched — read-only through a
+      `ViewOnly` scope, which the reset skips. That half is watchable because
+      the fixture binds straight onto the `ConfigFile` rather than through
+      `SectionBuilder.List`, so no reconcile runs over it and a hand-edited
+      value survives the relaunch. Its counterpart `testListReadOnly` (declared
+      read-only, so `SettingDef.Locked` is false and it *is* in scope) cannot
+      be watched being rewritten, for the reason the next entry sets out: a
+      `ReadOnly` list is reconciled to its declared defaults at every bind, so
+      by the time the reset runs there is nothing left for it to change.
+- [ ] **The same distinction as an access level rather than a scope — and not
+      observable at runtime.** `testListReadOnlyUnlocked` (declared
+      `ListEditing.ReadOnly`, no access level) and `testListReadOnlyAndLocked`
+      (the same, **plus** `access: ConfigAccessLevel.ViewOnly`) differ in
+      whether the section reset may touch them, and nothing on screen can show
+      it. `ReadOnly` means `CanAdd` is false, so `ReconcilesDefaults` is true
+      and `SectionBuilder.List` runs `ReconcileWithDefaults` at **every** bind:
+      both rows already hold their declared defaults by the time the menu
+      opens, which is exactly the value a reset would write. A hand-edited
+      `config.cfg` therefore cannot survive the relaunch that would set the
+      check up, and the reset moves nothing visible either way. An earlier
+      version of this entry asked for that edit and would have reported
+      "passed" whatever the code did — it was walked once and produced two
+      rows already sitting on their defaults before the reset was pressed.
+
+      Read the code instead, where the claim decides in three hops:
+      `SectionReset.IsInScope(def) => def.IsEditable`; `IsEditable => Entry !=
+      null && !Locked && Kind != Info`; `Locked =>
+      AccessLock.IsLocked(Entry.Scope)`. `DeclaredEditing` appears nowhere in
+      `SectionReset.cs`, and the single link between the two notions runs the
+      other way — `EffectiveEditing => Locked ? ListEditing.ReadOnly :
+      DeclaredEditing`, so a locked row is *rendered* read-only while a
+      read-only declaration locks nothing. That asymmetry is the independence
+      this criterion asserts. (Criterion 11)
 
 ## A detected mod's names
 
@@ -1452,32 +1472,56 @@ joined player who is not an admin.
       once when the setting is constructed instead of a computed property, it
       would freeze at the title screen's conservative answer and the row would
       stay locked for the rest of the session, world included. (Criterion 13)
-- [ ] **Criterion 4, dedicated server plus a second, non-admin client.** Needs
-      `../utils/server.sh start` and a second client joined to it as a
-      non-admin. On an ordinary world — guest mode off, which is the default —
-      `testServerScoped` is editable for that player exactly as it is for
-      anyone else: `Changeable()` answers `!player.guestMode`, and `guestMode`
-      itself needs the world's own flag set *and* `adminPrivileges < 1`, so
-      with the flag off nobody is locked out of it. The check proves nothing
-      until **guest mode is enabled on that world** — with it off, a correct
-      build and a broken one are indistinguishable, since `Server` is editable
-      for everyone either way. Enable it and reopen the menu as the non-admin
-      client: the row is now locked. A dedicated server has no host player, so
-      confirm the contrast the spec actually asks for — an admin client still
-      edits it on the same, guest-mode-enabled world, a non-admin client does
-      not — rather than "host versus joiner". Singleplayer cannot substitute:
-      everyone there reports `adminPrivileges == int.MaxValue`, so
-      `Changeable()` is always true and there is no non-admin to lock.
-      (Criterion 4)
-- [ ] **Criterion 5, same setup, no guest mode needed.** `testAdminScoped` is
-  locked for the non-admin client on that same **ordinary** world, guest mode on
-  or off — `Changeable()` answers `!player.guestMode && adminPrivileges > 0` for
-  Admin, so the world's guest-mode flag never enters the answer. Confirm it
-  stays editable for the admin client throughout. The contrast with
-  `testServerScoped` on the very same world — one row locked for that player,
-  the other not, with guest mode off — is what tells the two levels apart at
-  all; toggling guest mode changes nothing about this row either way.
-  Singleplayer cannot substitute, for the same reason as above. (Criterion 5)
+- [ ] **Criteria 4 and 5, dedicated server, one account, three rounds.** Both
+      levels need a live session and a player holding no rights, which
+      singleplayer cannot produce — everyone there reports `adminPrivileges ==
+      int.MaxValue`, so `Changeable()` is always true and there is nobody to
+      lock. A second account is not needed either: stage 2 is granted only
+      while the admin list is empty, so a placeholder entry carrying a foreign
+      `steamId` in `DedicatedServer/Admins.json` leaves this client on stage 0.
+      The handbook's permission section carries the mechanism and its line
+      references. Stop the server between rounds — it holds the list in memory
+      and rewrites the file on exit — and let `../utils/server.sh start` relink
+      first, then confirm `mod-settings-menu` points at the fake-id build,
+      because the published mod ships none of these fixtures.
+
+      **Round 1 — placeholder entry, guest mode off.** `testServerScoped` is
+      editable, `testAdminScoped` is locked. That is Criterion 5's first half,
+      and Criterion 4's negative control: with guest mode off, `Server` locks
+      nobody, so a correct build and a broken one are indistinguishable here
+      and the round proves nothing about Criterion 4 on its own.
+
+      **Round 2 — own entry at `privileges: 2`, switch guest mode on.** Both
+      rows are editable. This is the control that round 1's locking came from
+      the missing rights rather than from a row that is simply stuck, and it is
+      the only way to set the flag round 3 needs, since `GuestModeButton`
+      answers to an admin alone.
+
+      **Round 3 — own entry at `privileges: 1`, then remove yourself
+      in-session.** Both rows are locked. `testServerScoped` flipping against
+      round 1 — same missing rights, only guest mode differing — is Criterion
+      4. `testAdminScoped` having stayed locked in every round without rights,
+      guest mode on and off alike, completes Criterion 5: `Changeable()`
+      answers `!guestMode && adminPrivileges > 0` for Admin, so the world flag
+      never enters that answer.
+
+      **Why round 3 is built that way, rather than by restarting.** Guest mode
+      is written only by its RPC handler and lives in the running server's
+      `WorldInfoCD`, so it does not survive a restart. Coming back as a
+      placeholder would discard the flag round 2 set and silently repeat round
+      1 — which is exactly what happened the first time this was walked.
+      Stage 1 exists for the way around it: `RemoveAdminInternal` matches
+      `privileges <= 1`, and the `UNASSIGN_ADMIN` player list does not filter
+      the local player, so the role change happens inside the one session.
+
+      **Read the server log before reading the rows**, because "both locked" is
+      also what a missing `Manager.main.player` produces — `AccessLock` answers
+      conservatively when there is no player, so the expected result can appear
+      for the wrong reason. `player <name> connected islocalplayer=False`, `Set
+      guest mode=True` and `Remove admin index=<n>` each appear there, and the
+      admin list on disk shows whether the entry was consumed. The log is
+      recreated on every server start, so a line from an earlier round is gone.
+      (Criteria 4 and 5)
 
 ### Migration
 
