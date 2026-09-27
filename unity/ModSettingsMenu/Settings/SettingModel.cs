@@ -214,8 +214,16 @@ namespace ModSettingsMenu.Settings
         /// the conjunction — it used to live at four call sites, and three of them were wrong
         /// within one commit of the split: all three of SettingWidget's guards asked Locked alone,
         /// so a discovered Client-scoped Info row rendered as interactive (83e559b). The fourth,
-        /// SectionReset.IsInScope, had carried both halves since the split itself.</summary>
-        internal bool IsEditable => Entry != null && !Locked && Kind != SettingKind.Info;
+        /// SectionReset.IsInScope, had carried both halves since the split itself.
+        ///
+        /// public, although only this assembly reads it today: <see cref="Locked"/>,
+        /// <see cref="Kind"/>, <see cref="Entry"/> and ModSettings.Sections all are, so a consumer
+        /// building its own surface over that list can reach every input to this answer and
+        /// nothing else — which means keeping the property internal would not withhold anything,
+        /// it would only withhold the correct way to combine what is already handed out. That is
+        /// the re-derivation the paragraph above forbids, and it is how three guards went
+        /// wrong.</summary>
+        public bool IsEditable => Entry != null && !Locked && Kind != SettingKind.Info;
 
         /// <summary>List only: the level the CONSUMER asked for, before any permission lock.
         /// Read <see cref="EffectiveEditing"/> instead — this one is only half the answer.
