@@ -370,8 +370,8 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
-  pivot: 1
-  renderWidthPixels: 0
+  pivot: 4
+  renderWidthPixels: 384
   renderHeightPixels: 0
 --- !u!1 &1217368724061974
 GameObject:
@@ -1211,6 +1211,7 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  pivotPosition: 1
   horizontal: 0
   reversed: 0
   gapBetweenItems: 10
