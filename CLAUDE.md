@@ -230,7 +230,7 @@ menu while installed; re-run `../utils/build.sh` to restore if the cache is wipe
 - `Editor/ModSettingsMenu.Editor.asmdef` references the mod.io plugin DLL via
   `overrideReferences: true` + `precompiledReferences: ["modio.UnityPlugin.dll"]`.
 - The published version comes from the topmost `## [x.y.z]` entry of `CHANGELOG.md`
-  (currently **1.1.0**); bump it before publishing.
+  (currently **1.2.0**); bump it before publishing.
 - The profile logo is `unity/ModSettingsMenu/Editor/logo.png` (readable, uncompressed; min 512×288).
 - The real mod ID is **`6211950`**, in `unity/ModSettingsMenu/Editor/ModSettingsMenu_modio.asset`.
 - The mod.io listing lists **CoreLib** as a dependency (synced from the `.asset`

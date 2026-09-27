@@ -3,6 +3,12 @@
 All notable changes to this mod are documented here. The topmost `## [x.y.z]`
 entry is the version published to mod.io; its body is the modfile changelog.
 
+## [1.2.0]
+
+- Works with Core Keeper 1.3, which had left the Mod Settings screen empty. The
+  screen shows every mod's box again, with its heading above the box and its
+  options inside it, laid out as before the update.
+
 ## [1.1.0]
 
 - Settings can now require a game restart. A mod author marks such a setting with
