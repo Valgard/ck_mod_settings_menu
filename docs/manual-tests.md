@@ -173,7 +173,24 @@ own, though a declared list can carry both at once
 - [ ] The mod loads: `Player.log` has no `CompileFailed`, no exception from this
       mod, and the Options menu shows **Mod settings**.
 - [ ] Do **not** open the in-game Mods menu at any point — it triggers a mod.io
-      sync that deletes the fake-ID dev install.
+      sync that deletes the fake-ID dev install. Installing or subscribing to
+      anything mid-walk goes through that menu, so it ends the run: everything
+      after it is measured against the published mod, which carries none of
+      these fixtures. `Player.log`'s `Loading mod with ID 9999991` is the proof
+      that the dev build is the one loaded; a real id there means start over.
+- [ ] **The build is the right one.** `testServerScoped` appears in this mod's
+      own box. It exists only behind `TestFixtures`, so if it is missing, either
+      the flag was not set at build time or the published mod won the load.
+- [ ] **What must be installed, and what each of them is the only route to.**
+      Missing any of these does not fail a check — it removes one silently,
+      while the walk still reports every remaining box as passed:
+      - **General Mod Config Menu** — the only place Criteria 9 and 14 are
+        observable at all, and the only second, independent reader of the scope
+        data this branch writes.
+      - **Caveling Divining Rod** and **Rebalance Key Crafting** — the real
+        consumers Criterion 12 reads a Slider range and a Choice token set from.
+      - At least one sibling that declares no access level anywhere, for the
+        half of Criterion 2 that no fixture can state.
 
 ## The list drill-in
 
@@ -814,11 +831,23 @@ working Choice, and one of them logs a line per keypress by design.
       row), and cycle `ChoiceStrings` in the same box away from `Medium` while
       you are at it. Relaunch, open `TestChoiceFixtures (detected)`, and reset
       it from the footer hint: `ChoiceStrings` returns to `Medium`, and
-      `RangeDouble` still reads the value you hand-edited it to. This is the
-      regression `SectionReset.IsInScope`'s own comment names: for one commit,
-      spelling out `!Locked` without also asking `Kind != Info` let a
-      discovered Info row fall back into the reset, silently overwriting a
-      value the menu never showed as changeable.
+      `RangeDouble` still reads the value you hand-edited it to.
+
+      **Read both rows on screen, not back out of the `.cfg`.** With General Mod
+      Config Menu installed, its menu build clears `SaveOnConfigSet` on every
+      non-CoreLib config file (roadmap MSM-36), so nothing MSM writes in that
+      session need ever reach disk — and then the planted value stays in the
+      file whether the reset respected the Info row or wrote straight over it.
+      The screen says what happened; the file may just be stale. `ChoiceStrings`
+      snapping back to `Medium` is the control that the reset ran at all, and if
+      it does not, nothing else in this check means anything.
+
+      This is the regression that made `IsEditable` one property instead of a
+      conjunction spelled out per caller: for one commit after the ReadOnly
+      split, `SettingWidget`'s three guards each asked `Locked` alone without
+      `Kind != Info`, and a discovered Client-scoped Info row rendered as
+      interactive. `SectionReset.IsInScope` carried both halves from the split
+      itself — re-deriving them anywhere is the mistake, not where.
 
 ### Nothing else moved
 
@@ -1337,9 +1366,17 @@ two adjacent on purpose, and the last one the final row of the box.
       that key — and the setting declared *before* it did not silently acquire
       the restart flag.
 - [ ] The section reset (`R`) restores every real setting of the box and leaves
-      every heading untouched — except `testGroupInheritsViewOnly`, the one
-      declared row in this box that is locked, which the reset leaves alone too
-      (see "Access level cascade" under Groups).
+      every heading untouched. `testGroupInheritsViewOnly` is the one declared
+      row here that is locked, and the reset has to leave it alone too — but
+      that only shows if the row holds something other than its default when
+      the reset runs, and no widget can put it there, since the row is locked.
+      **Plant the value by hand first:** with the game closed, set it to `false`
+      in `ModSettingsMenu.cfg`, relaunch, then reset the box. It must still read
+      `false` while its neighbours have snapped back. Without that edit the
+      check passes whether the reset honours the lock or writes the default
+      straight over it, because both leave the same value on screen — the same
+      trap Criterion 11 fell into, and the reason Criterion 10 plants a value
+      before testing the Info row.
 - [ ] The footer still offers **Auswählen** and **Zurücksetzen** while a normal
       row is selected by keyboard. (They disappear when nothing is selected —
       after scrolling with the mouse wheel, for instance. That is vanilla and
@@ -1420,6 +1457,15 @@ box.
       `Client` default" — carrying `testAccessGroup`'s `ViewOnly` forward
       instead would be a silent leak nothing on screen would explain.
       (Criterion 1)
+- [ ] **The same row carries no restart marker, which is the other half of that
+      reset.** An argument-less `Group()` clears both fields, and only the
+      access half is visible in the line above: the enclosing `testAccessGroup`
+      also declares `requiresRestart: true`, so a `Group()` that reset the level
+      but forgot the flag would mark this row and the five after it, silently
+      and in a way editing one of them would blame on itself. Change
+      `testAfterGroupIsClient` and leave the settings screen — **no** restart
+      prompt may appear. With GMCM installed the row carries no reload marker
+      either, which is the same fact read the other way. (Criterion 1)
 - [ ] **The restart flag cascades the same way.** `testAccessGroup` also
       declares `requiresRestart: true`. `testGroupRestartInherited` overrides
       only the group's access level, so it stays editable while still
@@ -1559,15 +1605,28 @@ Then relaunch and confirm:
 
 ## Constraints, checked against real consumers
 
-**Criterion 12's other half needs no fixture, and no `TestFixtures` build —
-the fixtures cannot carry it.** Both declared Sliders in this file are
-deliberate failure cases: `testDupKey`'s Slider throws on CoreLib's own cast
-for a duplicate key of a mismatched type, and `testReversedRange`'s `min >
-max` is refused by `IsUsableRange` before `BindGuarded` is ever entered.
-Neither ever binds, so neither can show a Slider's `AcceptableValueRange`
-surviving the scope this branch now threads through every bind. The subject
-lives outside this repository, in two real, already-shipped consumers of
-`SectionBuilder.Slider()` and `.Choice()`:
+**Criterion 12 has a route inside this repo and a second one against real
+consumers, and the cheap one comes first.** What is claimed is that
+`BindGuarded` carries a `ConfigDescription`'s `AcceptableValueBase` through to
+CoreLib intact now that a `ConfigScope` travels beside it. No *Slider* fixture
+can show that: both declared Sliders here are deliberate failure cases —
+`testDupKey`'s throws on CoreLib's own cast for a duplicate key of a mismatched
+type, and `testReversedRange`'s `min > max` is refused by `IsUsableRange` before
+`BindGuarded` is entered — so neither ever binds. A Slider is not the only
+widget that passes a constraint through that one method, though, and an earlier
+version of this section read the Slider gap as a repo-wide one:
+
+- [ ] **Criterion 12, without leaving this repo.** Open `ModSettingsMenu.cfg`,
+      which any fixture walk has already written. Under `## testChoiceFloat` it
+      must still read `# Acceptable values: 0.5, 1.5, 2.5`, and under
+      `## testGroupedStepper` a `# Acceptable value range: From 0 to 10`. Both
+      reach CoreLib through `BindGuarded` exactly as a Slider would, so a
+      constraint dropped on that path shows here — with no foreign mod
+      installed and nothing to download. (Criterion 12)
+
+The two checks below add what no fixture can: the same guarantee on
+`SectionBuilder.Slider()` itself, and on a `.Choice()` declared by someone who
+never read this document, in two real, already-shipped consumers:
 
 - [ ] **Criterion 12, a Slider's range.** With **Caveling Divining Rod**
   installed and its settings bound at least once (any launch that loads it does
