@@ -15,4 +15,13 @@ MonoBehaviour:
   modId: 6211950
   modSettings: {fileID: 11400000, guid: 3430e94990dd4e3a9f8a7b9667c23797, type: 2}
   logo: {fileID: 0}
-  summary: 
+  title: Mod Settings Menu
+  summary: A shared in-game Options-menu screen where other mods register their settings.
+  visible: 1
+  tags:
+  - script
+  - client
+  - server
+  - library
+  - visual
+  - quality of life
