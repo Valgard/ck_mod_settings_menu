@@ -1053,3 +1053,36 @@ the same way.
   an error, only as "the button does nothing" — the same combination that
   already cost a round in ADR-002 → ADR-004. The result belongs in the handbook,
   not in code.
+
+## MSM-37 — The version tags say 1.2, and the mod needs 1.3
+
+**A release gate rather than a feature.** Nothing to build here; what has to
+happen is a decision about which game builds this mod claims to run on, before
+2.0.0 goes out.
+
+`MenuPatch` binds `UIManager.TryHideAllInventoryAndCraftingUI`, the name 1.3
+gave what used to be `HideAllInventoryAndCraftingUI`. A mod's sources are
+compiled at load time against the *installed* game, so on any 1.2 build the
+member does not resolve and the whole mod fails with `CompileFailed` — not the
+one patch, the mod.
+
+`CK_GAME_VERSION` in the parent `.envrc` still lists 1.2 builds only, and that
+list becomes the mod.io Game Version tags on publish. Shipped as it stands, the
+listing would offer 2.0.0 to players on 1.2, where it cannot load at all.
+
+That variable is shared by every mod in this workspace, which is why the fix is
+not one line. Measured 2026-09-27: this is the only one of the fourteen repos
+carrying any 1.3 adaptation, and whether the other thirteen run on 1.3 is
+**unmeasured** — none of them touches a renamed member, but nobody has loaded
+them there either. Pointing the shared variable at 1.3 would therefore claim
+for thirteen mods what has been checked for none of them, which is the same
+error as the one above with its sign flipped.
+
+- **Narrowest fix:** give this mod its own `CK_GAME_VERSION` in
+  `mod-settings-menu/.envrc`, naming 1.3 builds only. The cost is a second
+  place the variable lives, and both have to move at the next transition.
+- **Still open, and independent of this mod:** whether the siblings earn 1.3
+  tags, which needs one launch each.
+
+Found by the branch review for MSM-18; the binding itself arrived with the 1.3
+rename, not with that feature.
