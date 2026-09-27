@@ -734,17 +734,25 @@ namespace ModSettingsMenu
             // guard existed — the box renders at all.
             section.Slider(out _, "testReversedRange", 10f, 0f, 5f, 1f);
             section.Toggle(out _, "testAfterReversedRange", true);
-            // The ONLY positive exercise of the .RequiresRestart() modifier: both other call sites
-            // are guard-refusal cases. Task 5 rewrote what this modifier does — it now writes
-            // requireReload into the entry's own ConfigScope rather than an MSM-side field — so
-            // without this row that rewrite is never reached by anything a person can observe.
-            section.Toggle(out _, "testModifierRestart", true).RequiresRestart();
             // RequiresRestart() after a HEADING must be refused too, and for a different reason than
             // the failed declaration above: nothing went wrong here, the row simply holds no value
             // and could never trigger a restart. Accepting it would leave the setting the consumer
             // actually meant unflagged, with a restart demand attached to a row that can never
             // change. Expected outcome is a warning naming this key.
+            //
+            // It must stay directly after a row that does NOT carry the flag, and that is the whole
+            // point of its position: the check reads "the setting declared before it did not
+            // silently acquire the restart flag". Put a deliberately flagged row in front and the
+            // check passes whether the guard works or not — which it briefly did, when
+            // testModifierRestart below was first added between the two.
             section.Label("testLabelRestartGuard").RequiresRestart();
+            // The ONLY positive exercise of the .RequiresRestart() modifier: both other call sites
+            // are guard-refusal cases. Task 5 rewrote what this modifier does — it now writes
+            // requireReload into the entry's own ConfigScope rather than an MSM-side field — so
+            // without this row that rewrite is never reached by anything a person can observe.
+            // Declared after the label guard rather than before it, so that guard keeps a clean
+            // negative control; chaining onto its own Toggle, it marks itself either way.
+            section.Toggle(out _, "testModifierRestart", true).RequiresRestart();
             // The heading declared LAST, so the trailing segment of the sort is empty and the box's
             // final row is a heading — the two positions the sorting helper handles without a
             // special case and which nothing else here would put it in.
