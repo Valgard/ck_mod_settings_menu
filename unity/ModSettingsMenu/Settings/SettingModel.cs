@@ -211,8 +211,10 @@ namespace ModSettingsMenu.Settings
         /// Both reasons stay separately readable on purpose: MSM-10 needs the permission alone
         /// (<see cref="Locked"/>) to decide what to render as withheld, because a structurally
         /// inert row is not being withheld from anyone. What a caller must not do is re-derive
-        /// the conjunction — this used to live at four call sites, and two of them were wrong
-        /// within one commit of the split.</summary>
+        /// the conjunction — it used to live at four call sites, and three of them were wrong
+        /// within one commit of the split: all three of SettingWidget's guards asked Locked alone,
+        /// so a discovered Client-scoped Info row rendered as interactive (83e559b). The fourth,
+        /// SectionReset.IsInScope, had carried both halves since the split itself.</summary>
         internal bool IsEditable => Entry != null && !Locked && Kind != SettingKind.Info;
 
         /// <summary>List only: the level the CONSUMER asked for, before any permission lock.
@@ -221,8 +223,16 @@ namespace ModSettingsMenu.Settings
         /// Named "Declared" rather than plain "Editing" so that neither member is the short,
         /// obvious one: with a bare name, reading the wrong member compiles AND returns the same
         /// answer for every list that has no permission lock, so the mistake survives testing until
-        /// the first consumer combines a declared level with a locked scope.</summary>
-        public ListEditing DeclaredEditing { get; internal set; }
+        /// the first consumer combines a declared level with a locked scope.
+        ///
+        /// Initialised explicitly, because the enum's own default is the wrong one here: FreeText is
+        /// its first member and therefore what every def that never sets this field would claim —
+        /// including the Toggles, Sliders and Choices that are not lists at all. They would answer
+        /// "type, add and delete freely" through EffectiveEditing. Nothing reaches that today
+        /// (ListDetailWouldBeEmpty short-circuits on Kind != List), so this is the invariant being
+        /// stated rather than a bug being fixed. Step and OptionSort beside it are spelled out for
+        /// the same reason.</summary>
+        public ListEditing DeclaredEditing { get; internal set; } = ListEditing.ReadOnly;
 
         /// <summary>What the drill-in may actually offer, once a permission lock is taken into
         /// account. Locked demotes every declaration to ReadOnly; nothing ever promotes.

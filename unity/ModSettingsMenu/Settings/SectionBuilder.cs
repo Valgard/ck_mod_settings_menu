@@ -27,7 +27,8 @@ namespace ModSettingsMenu.Settings
         internal const string DefaultSection = "Settings";
 
         // The section later declarations bind into, and the group they may inherit a stranded value
-        // from. Both change together in Group() and nowhere else.
+        // from. These two change together in Group() and nowhere else — as do the two group-level
+        // overrides below, which Group() resets in the same breath.
         private string _currentSection = DefaultSection;
         private string _movedFrom;
 
@@ -40,8 +41,11 @@ namespace ModSettingsMenu.Settings
         // parameters are the one place "said nothing" resolves to Client, and the constructor below
         // is what carries that choice in. Duplicating a default here would just be a second place
         // for the two to drift apart.
-        private ConfigAccessLevel _sectionAccess;
-        private bool _sectionRequiresRestart;
+        // readonly is the difference between the two pairs, stated in the code rather than left to
+        // the reader: a section's levels are fixed when the builder is handed out, a group's change
+        // with every Group() call.
+        private readonly ConfigAccessLevel _sectionAccess;
+        private readonly bool _sectionRequiresRestart;
         private ConfigAccessLevel? _groupAccess;
         private bool? _groupRequiresRestart;
 
@@ -684,6 +688,16 @@ namespace ModSettingsMenu.Settings
         {
             if (!IsUsableSectionName(key, "group name"))
             {
+                // IsUsableSectionName has said the name is unusable. It cannot say what that costs
+                // here, and the expensive half is the quiet one: the level and restart flag this
+                // call stated go with the refusal, and the rows that follow keep whatever was in
+                // force before — the section's default, or a previous group's. Naming the level
+                // they will actually bind at is the difference between a consumer seeing a typo
+                // and a consumer seeing a typo AND every following row's permission.
+                if (access.HasValue || requiresRestart.HasValue)
+                    Debug.LogWarning(
+                        $"[ModSettingsMenu] '{_section.ModId}': the refused group also stated access={access?.ToString() ?? "unchanged"} / requiresRestart={requiresRestart?.ToString() ?? "unchanged"}, which are dropped with it. The rows after it bind at access={(_groupAccess ?? _sectionAccess)} instead."
+                    );
                 _lastDeclarationFailed = true;
                 return this;
             }
@@ -701,9 +715,15 @@ namespace ModSettingsMenu.Settings
             // Both are reset here, on every ACCEPTED Group() call, including one that states
             // neither — a group that says nothing means "back to the section's default", not
             // "keep the previous group's". Anything else would make a group's meaning depend on
-            // the one before it. A refused group name returns above before reaching this line and
-            // changes neither field: a rejected Group() is a complete no-op, and the previous
-            // group's rows keep binding into it (ADR-011's "refused whole").
+            // the one before it. A refused group name returns above without reaching this line, so
+            // neither field moves and the previous group's rows keep binding into it (ADR-011's
+            // "refused whole") — including the access level and restart flag the refused call
+            // stated, which are dropped with it.
+            //
+            // It is NOT a no-op, though: the refusal sets _lastDeclarationFailed, so a
+            // RequiresRestart() chained after it refuses rather than marking the row declared
+            // BEFORE the group. That is what the guard-ordering paragraph further down is about,
+            // and calling this path a no-op is how one would talk oneself out of that guard.
             _groupAccess = access;
             _groupRequiresRestart = requiresRestart;
             _section.Settings.Add(
@@ -775,7 +795,21 @@ namespace ModSettingsMenu.Settings
                 // entry alone, so writing through it reaches nothing else.
                 var def = _section.Settings[n - 1];
                 if (def.Entry != null)
-                    def.Entry.Scope.requireReload = true;
+                {
+                    // That ownership is an inference from four facts in three files, so it is checked
+                    // rather than trusted. CoreLib's Bind returns the CACHED entry for a repeated
+                    // definition and drops the second call's scope, so an earlier scope-less bind of
+                    // the same key would leave this pointing at ConfigScope.Empty — the single
+                    // instance every scope-less entry in the process shares. Writing there would set
+                    // a restart demand on settings belonging to mods this one has never heard of, and
+                    // nothing would report it.
+                    if (ReferenceEquals(def.Entry.Scope, ConfigScope.Empty))
+                        Debug.LogWarning(
+                            $"[ModSettingsMenu] RequiresRestart() ignored for '{_section.ModId}': '{def.Key}' carries the shared ConfigScope.Empty rather than its own, which happens when its key was already bound without a scope. Marking it would reach every scope-less setting in the game."
+                        );
+                    else
+                        def.Entry.Scope.requireReload = true;
+                }
             }
             return this;
         }
@@ -791,6 +825,13 @@ namespace ModSettingsMenu.Settings
         // same text and neither is identifiable from the screen. CoreLib catches nothing here: a
         // label never binds at all, and two settings that bind the same key with the same type get
         // the same entry handed back without complaint.
+        //
+        // Since MSM-18 that silence costs more than a pair of identical labels. CoreLib's Bind
+        // hands back the CACHED entry for a repeated definition and never looks at the second
+        // call's ConfigScope, so the second declaration's access level and restart flag are
+        // dropped and both rows run at whatever the first one stated. For a permission that is
+        // the fail-OPEN direction — a row declared ViewOnly after a Client one is editable — and
+        // this warning is the only place a consumer can learn it happened.
         //
         // Checked once at Build() rather than in each declaration method, so it catches the
         // collision in both directions — label after setting, and setting after label — from one
@@ -815,7 +856,7 @@ namespace ModSettingsMenu.Settings
             }
             if (duplicated.Count > 0)
                 Debug.LogWarning(
-                    $"[ModSettingsMenu] '{_section.ModId}' declares {duplicated.Count} key(s) more than once ({string.Join(", ", duplicated.ToArray())}). Each resolves to a single term, so those rows show the same text and cannot be told apart on screen."
+                    $"[ModSettingsMenu] '{_section.ModId}' declares {duplicated.Count} key(s) more than once ({string.Join(", ", duplicated.ToArray())}). Each resolves to a single term, so those rows show the same text and cannot be told apart on screen — and CoreLib reuses the first entry for every repeat, so any access level or restart flag the later declarations state is discarded and all of them run at the first one's level."
                 );
         }
 

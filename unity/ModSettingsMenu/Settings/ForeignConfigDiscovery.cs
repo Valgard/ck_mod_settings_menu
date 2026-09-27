@@ -438,7 +438,16 @@ namespace ModSettingsMenu.Settings
                 string sval = e.BoxedValue?.ToString() ?? "";
                 bool isList = HeuristicSaysList(sval) || ListKindStore.WasEverList(id);
                 if (isList)
+                {
                     ListKindStore.MarkAsList(id);
+                    // Stated rather than inherited. A discovered list is FreeText because its owner
+                    // declared no level at all, and full editing is the honest answer for an entry
+                    // this mod is only reading on someone else's behalf. It used to arrive here by
+                    // way of ListEditing's first member being the enum's default, which read as an
+                    // accident in a field SettingDef now initialises to ReadOnly — so that a def
+                    // which is no list at all cannot claim editing rights it can never honour.
+                    d.DeclaredEditing = ListEditing.FreeText;
+                }
                 d.Kind = isList ? SettingKind.List : SettingKind.Info;
                 return d;
             }

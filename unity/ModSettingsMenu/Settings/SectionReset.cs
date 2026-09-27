@@ -61,11 +61,14 @@ namespace ModSettingsMenu.Settings
         }
 
         // Ask IsEditable, not Locked or Kind separately: that property is the one place the
-        // conjunction of the two exclusions lives now. Spelling it out here by hand is exactly how
-        // the structural half (Kind == Info) went uncovered for one commit after the ReadOnly split
-        // — a discovered Info row briefly fell back into the reset. It is writable — but this menu
-        // has never shown it as changeable, so writing it on a reset would be a value changing
-        // where the player was told nothing can.
+        // conjunction of the two exclusions lives now. This method is not where that lesson was
+        // learned — the ReadOnly split (9b26405) carried both halves through here from the start.
+        // It was SettingWidget, whose three guards each re-derived the pair and dropped the
+        // structural half, so a discovered Client-scoped Info row rendered as interactive
+        // (83e559b). Re-deriving the conjunction is the mistake; where it is re-derived only
+        // decides which symptom appears. An Info row is writable — but this menu has never shown
+        // it as changeable, so writing it on a reset would be a value changing where the player
+        // was told nothing can.
         private static bool IsInScope(SettingDef def) => def != null && def.IsEditable;
     }
 }
