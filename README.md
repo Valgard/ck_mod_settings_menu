@@ -1,16 +1,16 @@
 # Mod Settings Menu
 
-A framework mod for [Core Keeper](https://mod.io/g/corekeeper) that gives other
-mods an in-game settings screen. Consumer mods declare their settings in a few
-lines of `IMod.Init`; the framework renders them as a box of widgets under
-**Options → Mod Settings** and persists every value through a CoreLib
-`ConfigFile`. No UI, prefab, or localization code on the consumer side.
+A framework mod for [Core Keeper](https://mod.io/g/corekeeper) that gives other mods an in-game settings
+screen. Consumer mods declare their settings in a few lines of `IMod.Init`; the
+framework renders them as a box of widgets under **Options → Mod Settings** and
+persists every value through a CoreLib `ConfigFile`. No UI, prefab, or
+localization code on the consumer side.
 
 - **Players:** install this mod because a mod you use depends on it. There is
   nothing to configure here directly — each dependent mod adds its own section.
-- **Mod authors:** read the API below — or the full
-  **[tutorial](docs/tutorial.md)** for a guided, end-to-end walkthrough
-  (integration *and* internals). Adding a settings section is ~5 lines.
+- **Mod authors:** read the API below — or the full **[tutorial](docs/tutorial.md)** for a guided,
+  end-to-end walkthrough (integration *and* internals). Adding a settings
+  section is ~5 lines.
 
 Personal-use, non-commercial (Pugstorm EULA). Built against Pugstorm's
 `CoreKeeperModSDK`; distributed on mod.io (not Thunderstore/BepInEx).
@@ -120,9 +120,21 @@ Each widget method binds a persisted CoreLib entry, hands you a typed
 | `RequiresRestart()` | — | — | marks the **last-declared** setting as restart-required (see below) |
 | `Build()` | — | — | registers the section |
 
-`key` is the persistence key and the loc-term leaf (see **Localization**). Keep it stable across releases — changing it orphans the saved value.
+`key` is the persistence key and the loc-term leaf (see **Localization**). Keep
+it stable across releases — changing it orphans the saved value.
 
-`RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key", …).RequiresRestart()`) to mark that setting as needing a game restart to take effect (e.g. a bake-time / load-time value that is only read at world load). When a so-marked setting is actually changed and you leave the Mod Settings screen, the framework raises Core Keeper's own *restart to apply mod changes* popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod subscriptions change. Settings whose value applies live (read every frame / tick) should **not** be marked. ⚠️ A bake-time setting consumed during world/database conversion must be registered in `IMod.EarlyInit`, not `Init` — that conversion runs before `Init` (see **Behaviour & gotchas**), so an `Init`-bound handle makes the bake read your hardcoded default instead of the saved value.
+`RequiresRestart()` — chain it directly after a widget (`.Choice(out h, "key",
+…).RequiresRestart()`) to mark that setting as needing a game restart to take
+effect (e.g. a bake-time / load-time value that is only read at world load).
+When a so-marked setting is actually changed and you leave the Mod Settings
+screen, the framework raises Core Keeper's own *restart to apply mod changes*
+popup (Cancel / Yes → relaunch) — the same prompt the game shows when your mod
+subscriptions change. Settings whose value applies live (read every frame /
+tick) should **not** be marked. ⚠️ A bake-time setting consumed during
+world/database conversion must be registered in `IMod.EarlyInit`, not `Init` —
+that conversion runs before `Init` (see **Behaviour & gotchas**), so an
+`Init`-bound handle makes the bake read your hardcoded default instead of the
+saved value.
 
 ### `SettingHandle<T>` — reading and writing values
 
