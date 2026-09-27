@@ -109,9 +109,13 @@ enclosing `Group`, then the `Section`. `SectionBuilder` carries two private stat
 this: `_sectionAccess`/`_sectionRequiresRestart` (set once, from the constructor's
 `ModSettings.Section` arguments) and `_groupAccess`/`_groupRequiresRestart` (nullable, set
 **and reset** by every accepted `Group()` call, including one that names neither — a group that
-says nothing means "back to the section's default", not "keep the previous group's". A `Group()`
-call CoreLib refuses (a bad section name) returns before either field is touched, so the
-previous group's level simply continues — "refused whole", per ADR-011.
+says nothing means "back to the section's default", not "keep the previous group's"). A `Group()`
+call refused for a bad section name returns before either field is touched, so the previous
+group's level simply continues — "refused whole", per ADR-011. That refusal is
+`SectionBuilder.IsUsableSectionName`, not CoreLib: the name never reaches a bind, which is the
+point, since a bad group name would otherwise fail once per setting in the group. Nor is the
+refusal inert — it sets `_lastDeclarationFailed`, so a `RequiresRestart()` chained after it
+refuses instead of marking the row declared before the group.
 `BindGuarded` resolves the three levels into one **fresh** `ConfigScope` per entry before
 calling `ConfigFile.Bind`. Fresh matters: passing `null` would alias CoreLib's `static
 readonly ConfigScope.Empty`, shared by every scope-less entry in the process and whose
@@ -176,10 +180,13 @@ where their neighbours are public. A consumer can reach any `SettingDef` through
 `ModSettings.Sections`, so a public field there would be a back door that works — set it and
 `Label()` honours it — offered to an audience that cannot see `Label()` at all.
 
-The enums: `SettingKind {Toggle,Slider,Stepper,Choice,Info,List}`, `SliderDisplay
-{Steps,Number,Percent}`, `OptionSort {AsDeclared,ByKey,ByLabel}`. The last two kinds — `Info`
-(read-only value) and `List` (comma-list with a drill-in) — are produced only by
-`ForeignConfigDiscovery` (see below), never by the explicit consumer API.
+The enums: `SettingKind {Toggle,Slider,Stepper,Choice,Info,List,Label}`, `SliderDisplay
+{Steps,Number,Percent}`, `OptionSort {AsDeclared,ByKey,ByLabel}`. `Info` (a read-only value) is
+the one kind the consumer API cannot produce — `ForeignConfigDiscovery` (see below) emits it for
+an entry whose shape no widget fits. `List` (a comma-list with a drill-in) arrives from both
+sides: the discovery infers it from a stored value, `SectionBuilder.List()` declares it. `Label`
+is a heading rather than a setting and holds no `Entry` at all, which is why anything reading a
+def out of `ModSection.Settings` gates on `Kind` or on `Entry` being non-null.
 
 ### `AccessLock`
 
