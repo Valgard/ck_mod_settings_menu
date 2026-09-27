@@ -691,77 +691,6 @@ the form is the harder half:
   left open is the form alone, plus whether the grouping point rebuilds the
   screen anyway.
 
-## MSM-18 — A consumer-declared access level, for every widget
-
-`SettingDef.ReadOnly` exists and works, and **only the discovery path can set
-it**. `SectionBuilder` passes no `ConfigScope` to `_file.Bind`, so every declared
-setting is scope-less and always editable; a consumer who wants "the host may
-change this, a joining player may only look" has no way to say so.
-
-CoreLib already carries the mechanism — `ConfigFile.Bind` takes an optional
-`ConfigScope`, and one overload takes `ConfigAccessLevel` directly — and
-`ForeignConfigDiscovery.IsReadOnly` already reads it: `ViewOnly` locks
-unconditionally, `Client` never locks, `Server`/`Admin` ask `scope.Changeable()`
-and lock conservatively at the title screen where there is no player. So the
-work is not inventing a rule but letting the standard path reach the one that
-exists.
-
-Deliberately **not** folded into `SectionBuilder.List`, which is where the
-question came up (2026-08-30): it applies to all five widget kinds equally, and
-giving exactly one of them an access level would be the wrong shape. Note that
-`ListEditing.ReadOnly` is a different thing and stays — it says "this list is
-display-only by design", where a scope says "not by you, not right now".
-
-Three clean-ups come with it, and are the reason this is its own point rather
-than a parameter:
-
-- **`IsReadOnly` sits in the discovery path** as a `private static`. If the
-  declared path uses it, it belongs somewhere both can reach.
-- **`RequiresRestart` and `requireReload` already say the same thing twice.**
-  `ConfigScope` carries `requireReload`, which discovery reads
-  (`ForeignConfigDiscovery`) — while a declared setting sets an MSM-owned flag
-  through `.RequiresRestart()` instead. Introduce scope on the declared path and
-  the two meet: one of them has to win, or a consumer can state both and
-  contradict itself.
-- **`SettingDef.ReadOnly` carries two unrelated claims** (`SettingModel.cs`):
-  "locked by permission right now" and "no editable widget exists for this
-  value's shape at all". Only the first is a lock worth showing a player, and
-  the MSM-10 feedback needs to tell them apart. Split it here, where the
-  vocabulary for the first one arrives.
-
-**The default is `Server`, and nobody chose it.** `SectionBuilder` binds without
-a `ConfigScope`, CoreLib falls back to `ConfigScope.Empty`, and that is `new()` —
-whose constructor defaults to `ConfigAccessLevel.Server`. Every setting declared
-through MSM is therefore formally server-scoped, MSM's own "show detected mod
-settings" toggle included. It is harmless only because nothing reads the level on
-the declared path today; the moment something does, a server would be entitled to
-decide whether a player's menu lists detected mods.
-
-Two consequences. The API needs a **deliberately chosen** default — and MSM's
-own toggle should state it rather than inherit it. `Client` is that default,
-and not because the consumers are HUD and UI mods: across the consumers in
-this workspace, roughly half of the declared settings change game rules
-rather than presentation — the XP multipliers, the recipe scaling, and the
-`enabled` toggles of the gameplay mods. The reason to choose `Client` is that
-it is the only level under which a consumer's silence stays silence — it
-neither syncs (`ShouldSync` is `(int)accessLevel > 0`) nor locks in any
-session type. The overload that takes a `ConfigAccessLevel` directly is not
-the fix it looks like: it takes a `string description` and builds a
-`ConfigDescription` from it internally, discarding any `AcceptableValueBase`
-— a Slider's or Stepper's range, a Choice's token list. The `ConfigScope`
-overload is the one that carries both the access level and the constraint.
-
-**`Admin` belongs in the declaration too, and it pays off before any sync.**
-`IsReadOnly` already delegates to `Changeable()`, which for `Admin` asks
-`!guestMode && adminPrivileges > 0` — a *discovered* admin entry is already
-locked for a non-admin today. What is missing is only that a consumer can say the
-same. Without it, a foreign mod can express a level an integrated one cannot.
-
-The distinction only bites with a joined player: offline sessions report
-`int.MaxValue` and the host holds level 2, so `Server` and `Admin` behave
-identically in singleplayer and while hosting. A permission feature therefore
-cannot be tested alone. Details in `docs/ck/multiplayer-and-server.md`.
-
 ## MSM-19 — Server sync — one point, not three
 
 MSM reads the server's rules in full already (`ForeignConfigDiscovery.IsReadOnly`
@@ -1010,8 +939,8 @@ the same way.
 - **To check first:** whether the loss is real in a session with both mods, and
   whether GMCM's own `Save()` happens to cover MSM's files by accident. Neither
   was tested; the whole point rests on reading.
-- **Not part of MSM-18**, which only discovered it. The spec records it under
-  its out-of-scope list.
+- **Not part of MSM-18**, which only turned it up while its own design was read
+  against General Mod Config Menu's source, and deliberately left it alone.
 
 ## Small fixes
 
