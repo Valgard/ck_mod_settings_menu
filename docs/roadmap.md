@@ -1015,3 +1015,70 @@ error as the one above with its sign flipped.
 
 Found by the branch review for MSM-18; the binding itself arrived with the 1.3
 rename, not with that feature.
+
+## MSM-38 — A consumer that still runs when MSM is not installed
+
+**A question of the framework's role, opened by a foreign mod that already
+answers it from outside.** Every consumer today references `ModSettingsMenu.dll`
+and declares MSM as a required dependency, so a player who wants one mod's
+settings screen has to install MSM, and a player without it cannot load that mod
+at all. For a settings framework that is the largest cost of adoption: an author
+weighs a mandatory second download against having no menu.
+
+**Mod Settings Proxy** (mod.io `6273365`, internal name `ModSettingsProxy`, read
+at 1.2.1 on 2026-10-02) removes that cost without touching MSM:
+
+- A consumer writes `ModSettings/<ModId>.json` through `API.ConfigFilesystem` —
+  the schema of its options plus their current values. The file is the
+  consumer's own persistence, so it works unchanged with neither the proxy nor
+  MSM present.
+- The proxy, which alone carries the hard MSM dependency, scans every loaded mod
+  in `Init`, and for each contract registers a section through
+  `ModSettings.Section(owner)` with the *consumer's* `IMod`. Heading, loc terms
+  and `config.cfg` are therefore the consumer's own, exactly as for a direct
+  integration. A ten-second rescan catches consumers that publish late.
+- A menu edit is written back into the JSON and bumps a `rev` counter that the
+  consumer watches. On load, MSM's `.cfg` wins over the JSON.
+- Without MSM the loader skips the proxy for its missing dependency, and every
+  consumer keeps running on its JSON.
+
+It is a pure consumer of the public API — it copies no MSM code — which is why
+it is also the first thing an API change in this framework breaks.
+
+Three ways for MSM to own the need, to be compared before any is chosen:
+
+1. **MSM reads a contract file itself** — ideally the proxy's own format, so its
+   existing consumers keep working with no change on their side. Costs a second
+   store beside the CoreLib `.cfg`, synchronised by `rev`, in a mod where MSM-36
+   is already an open persistence fault, and turns a file format into a public
+   API that has to stay stable beside the C# one.
+2. **An optional binding through `API.Reflection`.** The proxy's rationale says
+   reflection forces "Script (Elevated Access)"; MSM-09 records that
+   `API.Reflection` is PugMod's sandbox-legal surface and that HealthBars uses it
+   with `skipSafetyChecks: false`. Whether it reaches far enough to find and
+   call `ModSettings` at runtime is **unmeasured**, and it is the one option
+   that would keep callbacks.
+3. **Nothing in the core** — recommend the proxy in the tutorial and keep the
+   public API it binds stable on purpose.
+
+- **What a file cannot carry.** A contract is data, so `Button(onClick)`
+  (MSM-01), `Info(Func<string>)` (MSM-02) and any lock whose condition is
+  computed are out of its reach by construction. Options 1 and 3 give such
+  consumers no path, and part of MSM would stay direct-integration-only.
+- **Two patches on the same method.** The proxy ships a Harmony fix for
+  `PugTextEffectMenuOption.ResetEffect` that restores `PugTextEffect.text` and
+  `optionComponent` so the method body *runs*; `PugTextEffectPatch` here *skips*
+  that body for inactive rows on MSM's own screens. With both installed the
+  outcome depends on which prefix runs first. What is at stake is the selection
+  effect, not glyph lifetime: the body's recycling touches `glyphJumps`, a list
+  of per-glyph bounce offsets, and never the text manager's glyph pool.
+- **Open — compatibility with the proxy.** If option 1 adopts its format, the
+  proxy must stand down for mods MSM already serves; it skips a mod whose
+  `ModId` is already registered, so registration order decides. How much this
+  weighs depends on who still uses the proxy: its author intends to move his own
+  mods onto MSM directly and archive it once MSM covers the need, so what
+  remains are other authors' mods, if any.
+
+Opened 2026-10-02 after the proxy's author got in touch, asking whether MSM
+would take this on. Asked the same day, he agreed to the approach going into
+2.0 and offered to help work out the details.
