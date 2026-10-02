@@ -3,6 +3,13 @@
 All notable changes to this mod are documented here. The topmost `## [x.y.z]`
 entry is the version published to mod.io; its body is the modfile changelog.
 
+## [1.2.1]
+
+- Fixes text disappearing all over the game after the Mod Settings screen had
+  been opened several times. Every visit used up part of the game's text
+  resources without giving them back, so after a handful of visits — fewer the
+  more mods show settings — labels in every menu went blank until a restart.
+
 ## [1.2.0]
 
 - Works with Core Keeper 1.3, which had left the Mod Settings screen empty. The
