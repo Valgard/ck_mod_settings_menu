@@ -17,11 +17,12 @@ namespace ModSettingsMenu.UI
     [RequireComponent(typeof(UIScrollWindow))]
     public sealed class ModSettingsScreen : RadicalMenu, IScrollable
     {
-        public Transform contentRoot;      // Options/Scroll — hosts the top LinearLayout
+        public Transform contentRoot; // Options/Scroll — hosts the top LinearLayout
         public GameObject sectionTemplate; // inactive; SectionBox (Header + Hint + Widgets-box)
-        public GameObject toggleTemplate;  // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
+        public GameObject toggleTemplate; // inactive widget row; has a SettingWidget + Label/Value (serialized name kept)
 
-        private const int RowPaddingPx = 6;      // vertical breathing room added to each row's text height
+        private const int RowPaddingPx = 6; // vertical breathing room added to each row's text height
+
         // Inter-item gaps (contentRoot=6, SectionTemplate=12) live on the prefab's LinearLayouts, not here.
         // Content position is owned by UIScrollWindow, not this component (no anchor constant).
 
@@ -36,7 +37,7 @@ namespace ModSettingsMenu.UI
 
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
-        private readonly List<GameObject> _sectionRoots = new List<GameObject>();   // rendered inner-to-outer after activation
+        private readonly List<GameObject> _sectionRoots = new List<GameObject>(); // rendered inner-to-outer after activation
 
         // Rebuild on every open (Populate) — the vanilla PugTexts free their glyphs on disable
         // (freeResourcesOnDisable), so a once-only build shows empty on reopen. Populate builds the
@@ -51,7 +52,7 @@ namespace ModSettingsMenu.UI
 
         public override void Activate()
         {
-            RestartPending = false;   // fresh visit — only changes made from now on count
+            RestartPending = false; // fresh visit — only changes made from now on count
             Populate();
             base.Activate();
             RenderContent();
@@ -82,13 +83,27 @@ namespace ModSettingsMenu.UI
         internal static void ShowRestartPrompt()
         {
             Manager.menu.centerPopUpText.StartNewDisplaySequence(
-                "Menu/RestartToApplyModChanges", null, menuInputCooldown: true, 0f, 1.5f,
-                useUnscaledTime: true, 0f, 1f, localize: true, TextManager.FontFace.boldMedium,
-                delegate (PopupResponse response)
+                "Menu/RestartToApplyModChanges",
+                null,
+                menuInputCooldown: true,
+                0f,
+                1.5f,
+                useUnscaledTime: true,
+                0f,
+                1f,
+                localize: true,
+                TextManager.FontFace.boldMedium,
+                delegate(PopupResponse response)
                 {
-                    if (response.IsConfirm) Manager.platform.Restart();
+                    if (response.IsConfirm)
+                        Manager.platform.Restart();
                 },
-                new List<string> { "cancelDialogue", "yes" }, 10f, 0.8f, 0, 20f);
+                new List<string> { "cancelDialogue", "yes" },
+                10f,
+                0.8f,
+                0,
+                20f
+            );
         }
 
         // Pay the one-time first-enable cost (bundle asset load / shader-variant compile, ~1 s
@@ -153,11 +168,11 @@ namespace ModSettingsMenu.UI
 
                 foreach (var def in OrderedSettings(section))
                 {
-                    var wGo = Object.Instantiate(toggleTemplate, container);   // nest INTO the box
+                    var wGo = Object.Instantiate(toggleTemplate, container); // nest INTO the box
                     wGo.SetActive(true);
                     wGo.name = def.Kind + " " + def.Key;
                     var widget = wGo.GetComponent<SettingWidget>();
-                    widget.Bind(def);            // renders label/value → dimensions available
+                    widget.Bind(def); // renders label/value → dimensions available
                     widget.SetParentMenu(this);
                     // The template's WrapperUIComponent lets the box layout measure this row;
                     // only its (content-adaptive) height is set here.
@@ -181,7 +196,8 @@ namespace ModSettingsMenu.UI
         {
             foreach (var sGo in _sectionRoots)
             {
-                if (sGo == null) continue;
+                if (sGo == null)
+                    continue;
                 // Inner layouts first (box, and the heading sub-group if the prefab has one), so the
                 // section-root layout measures their real heights; then the section root, then the top.
                 ContainerOf(sGo).GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
@@ -228,7 +244,7 @@ namespace ModSettingsMenu.UI
             var sGo = Object.Instantiate(sectionTemplate, contentRoot);
             sGo.SetActive(true);
             sGo.name = "Section " + section.ModId;
-            FindLayout(sGo);   // prefab-authored vertical layout: stacks heading + hint + box
+            FindLayout(sGo); // prefab-authored vertical layout: stacks heading + hint + box
 
             var box = sGo.GetComponent<SectionBox>();
             if (box != null && box.header != null)
@@ -280,7 +296,8 @@ namespace ModSettingsMenu.UI
         // the scroll viewport). localize=false renders the raw string instead of a loc term.
         private static void RenderStatic(PugText pt, string text)
         {
-            if (pt == null) return;
+            if (pt == null)
+                return;
             pt.localize = false;
             pt.Render(text, rewindEffectAnims: false, force: true);
         }
@@ -292,7 +309,8 @@ namespace ModSettingsMenu.UI
             {
                 var t = transform.Find(path);
                 var pt = t != null ? t.GetComponent<PugText>() : null;
-                if (pt != null) RenderStatic(pt, Loc.T("ModSettingsMenu-UI/Title"));
+                if (pt != null)
+                    RenderStatic(pt, Loc.T("ModSettingsMenu-UI/Title"));
             }
         }
 
@@ -303,15 +321,19 @@ namespace ModSettingsMenu.UI
         private void DeactivateTemplates()
         {
             var templates = transform.Find("WidgetTemplates");
-            if (templates == null) return;
+            if (templates == null)
+                return;
             for (int i = 0; i < templates.childCount; i++)
                 templates.GetChild(i).gameObject.SetActive(false);
         }
 
         // IScrollable — window height comes from the layout (basis for scroll clipping, #3).
         public void UpdateContainingElements(float scroll) { }
+
         public bool IsBottomElementSelected() => false;
+
         public bool IsTopElementSelected() => false;
+
         public float GetCurrentWindowHeight() => _layout != null ? _layout.GetUIComponentRenderHeight() : 0f;
     }
 }
