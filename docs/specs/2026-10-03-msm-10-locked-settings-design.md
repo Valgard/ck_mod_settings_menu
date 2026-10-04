@@ -28,19 +28,28 @@ until ADR-012 split them.
 | **view-only** | the author declared `ConfigAccessLevel.ViewOnly`; never editable through the menu |
 | **shapeless** | `Kind == Info`: no editable widget exists for this value's form |
 
-**The two scope levels do not lock under the same conditions**, and an earlier
-draft of this document got that wrong by treating "no rights" as a lock for
-both. `ConfigScope.Changeable()` is the authority:
+**The two scope levels do not lock under the same conditions**, and two earlier
+drafts of this document got it wrong in opposite ways. The reason both failed is
+that `PlayerController.guestMode` is not the world's flag: it returns the world
+flag **and** `adminPrivileges < 1` (`Pug.Other:308097-308103`). An admin in a
+guest-mode world is not a guest. Feeding that into
+`ConfigScope.Changeable()`:
 
 | Scope | Locked when |
 |---|---|
 | `Client` | never |
-| `Server` | **guest mode is on** — `!player.guestMode`, with no rights check |
-| `Admin` | guest mode is on **or** `adminPrivileges <= 0` |
+| `Server` | the world's guest-mode flag is on **and** `adminPrivileges < 1` |
+| `Admin` | `adminPrivileges < 1` — the world flag never enters this answer, because `!guestMode` is already implied by having rights |
 | any non-`Client` | there is no player at all — `AccessLock` answers conservatively before `Changeable()` can dereference one |
 
-So a non-admin in a world *without* guest mode can change a `Server`-scoped
-setting. Any check that expects red there will not see it.
+So a non-admin in a world without the guest-mode flag can change a
+`Server`-scoped setting, and an admin can change one in a guest-mode world. Any
+check that expects red in either case will not see it.
+
+Two places in this repository already said so and were not consulted: the
+`testServerScoped` fixture's comment (`ModSettingsMenuMod.cs:810-811`) and
+`docs/ck/multiplayer-and-server.md`. Reading them first would have been cheaper
+than deriving it twice.
 
 **CoreLib's scope default depends on which `Bind` overload a mod called**, which
 an earlier draft also got wrong, and which decides how much of this feature a
@@ -105,9 +114,10 @@ ADR-012 left the vocabulary in place:
 - **`IsEditable`** already gates every write: `SettingWidget.Adjust` returns
   early, `SectionReset.IsInScope` skips the row, the value text renders static.
 
-What this design adds is the rendering, plus four things that are not rendering:
-a narrower question (4.1), the reason text and its carrier (4.6), the repaint on
-a state change (4.7), and the value refresh (4.8).
+What this design adds is the rendering, plus five things that are not rendering:
+a narrower question (4.1), the suppressed activation sound and footer hint
+(4.5), the reason text and its carrier (4.6), the repaint on a state change
+(4.7), and the value refresh (4.8).
 
 Both widgets currently rule `GRAYED_OUT` out explicitly:
 
@@ -160,7 +170,7 @@ otherwise be operable"**:
 ```csharp
 Entry != null
   && Kind != SettingKind.Info
-  && AccessLock.Reason(Entry.Scope) is LockReason.NoWorld or LockReason.NoRights
+  && AccessLock.Reason(Entry.Scope) is LockReason.NoWorld or LockReason.ConditionUnmet
 ```
 
 - `Kind != Info` is what § 0's multi-state paragraph warns about. Without it, a
@@ -177,7 +187,10 @@ from.
 **`AccessLock` returns a reason, and the enum needs four values.** `IsLocked`
 answers `bool` today, which cannot say which note applies nor whether the lock
 came from `ViewOnly`. It becomes `Reason(ConfigScope)` over
-`LockReason { None, NoWorld, NoRights, ViewOnly }` — `None` is the value an
+`LockReason { None, NoWorld, ConditionUnmet, ViewOnly }` — `ConditionUnmet`
+rather than `NoRights`, because § 0's table shows the two scopes fail their
+conditions differently and only one of them is about rights alone; `None` is the
+value an
 earlier draft forgot, and without it every row would read as locked. `Locked`
 stays available as `Reason(...) != None`. The branch order stays: it is what
 keeps `ViewOnly` and `Client` from reaching a player dereference at the title
@@ -242,8 +255,9 @@ row `OnDeselected` writes the ordinary grey, because `IsSelectionEnabled(true)`
 answers `true` there (decision 3 lost). Both happen at the first selection
 change.
 
-**So a locked row keeps no `menuOptionEffects` at all**, and MSM writes every
-colour it needs:
+**MSM therefore writes every colour a locked row shows**, at these points — the
+two overrides already exist in both widgets, `ListWidget` for `TintDrill`,
+`SettingWidget` for `SuppressValueSelectionEffect`:
 
 | What | Where it is written |
 |---|---|
@@ -251,8 +265,24 @@ colour it needs:
 | the selected tone | the `OnSelected` override, after `base.OnSelected()` |
 | back to the deselected tone | the `OnDeselected` override, after `base.OnDeselected()` |
 
-The two overrides exist in both widgets already — `ListWidget` uses them for
-`TintDrill`, `SettingWidget` for `SuppressValueSelectionEffect`.
+**What silences CK's own writes is an open implementation question, and
+emptying `menuOptionEffects` is not the whole answer.** Three facts bound it,
+and the combination that satisfies all three has to be established at the
+keyboard rather than predicted here:
+
+- `menuOptionEffects` (on `RadicalMenuOption`) drives `OnSelected` /
+  `OnDeselected`; `PugText.effects` is a **different array** and drives
+  `Render` → `ResetEffects`, which runs at the end of every render. The label
+  carries no `dontResetEffectsOnRender`, so that path is live on a locked row
+  even with `menuOptionEffects` empty.
+- `OnParentMenuActivation` (`Pug.Other:358643-358645`) refills
+  `menuOptionEffects` when it is empty, so emptying it is not a stable state.
+- Disabling an effect stops its `LateUpdate` but not the direct recolouring
+  above, which is the asymmetry `SuppressValueSelectionEffect` exists for.
+
+What is settled is the goal (MSM owns the colours of a locked row) and the
+write points (the table above). What is not settled is which combination of
+disabling, filtering and re-applying gets there.
 
 **The selected tone, computed once here.** Unity's `Color.grayscale`
 (0.299 R + 0.587 G + 0.114 B) is the formula, chosen because engine code can
@@ -311,7 +341,7 @@ The consumer's own `Hint` is left alone. Folding the lock reason into it would
 mix two senders in one line and displace one of them in a section that has
 both — the objection MSM-17 already records against repurposing that line.
 
-### 4.7 · One poll, and five mutations to reverse
+### 4.7 · One poll, and six mutations to reverse
 
 A state change does not repaint a row by itself, and `ResetEffects()` is not the
 remedy: `PugText.ResetEffects` (`Pug.Other:367402`) calls `ResetEffect` on every
@@ -320,25 +350,28 @@ effect regardless of `enabled`, and `dontResetEffectsOnRender` gates only the
 if the row is selected. It is not a no-op; it is the wrong tool. MSM painted
 these colours, so MSM re-applies them.
 
-**Five mutations make a row locked, and each needs a reversal.** Earlier drafts
-named one, then four; the fifth is the one 4.4 added:
+**Six mutations make a row locked, and each needs a reversal.** Earlier drafts
+named one, then four, then five; the sixth is 4.4's label colour:
 
 | Mutation | Where | Reversal |
 |---|---|---|
 | `fx.enabled = false` on both value effects | `MakeValueReadOnly` | restore each effect's **captured** prior state — not a blanket re-enable: the prefab ships `JuicyAppear` disabled, so switching everything on would turn on an effect the row never had |
 | `valueText.dontResetEffectsOnRender = true` | `MakeValueReadOnly` | clear |
 | `valueText.style.color` | `MakeValueReadOnly` | restore the captured prefab value. `PugTextStyle` is `[Serializable]`, so the instance is per row and this write reaches nothing else |
-| `menuOptionEffects` loses the **value** effect | `SuppressValueSelectionEffect` | destructive — the array must be captured before filtering, because `base.Awake` fills it once, before `Bind` |
+| `labelText`'s colour, newly written by 4.4 | new | restore the captured prefab value, as for the value column |
+| `menuOptionEffects` loses the **value** effect | `SuppressValueSelectionEffect` | destructive — capture the array **where the filtering happens**, not in `Bind`: `base.Awake` fills it *after* `Bind` (`SettingWidget.cs:76` and `:87` both say so), so a capture in `Bind` would save an empty array |
 | `menuOptionEffects` loses the **label** effect | new, per 4.4 | same capture |
 
-The last two collapse into one capture of the original array, restored whole.
+The last two collapse into one capture of the original array, restored whole —
+noting that `OnParentMenuActivation` refills it when empty, so the restore may
+have less to do than the table suggests.
 
 **The poll goes before the reset guard, not after it.** `Update()` today reads:
 top-menu check (`ModSettingsScreen.cs:495`), then
 `if (!SectionReset.CanReset(section)) return;` (`:498`), then the reset keys.
-`CanReset` is false when no row of the section is `IsEditable` — which is exactly
-a fully locked section, the state criterion 12 starts from. A poll added "to the
-reset poll" would be silent in the only case it exists for. It belongs
+`CanReset` is false when no row of the section is `IsEditable`, which a fully
+locked section satisfies — and that is the state criterion 12 starts from. A
+poll added "to the reset poll" would be silent there. It belongs
 immediately after the top-menu check.
 
 **The poll compares inputs, not a verdict.** It reads the three values every
@@ -351,7 +384,8 @@ its colours and every section note is re-evaluated.
 **A poll is what the base game does here, though not for this question.** There
 is no event and there cannot be one: `adminPrivileges` and `guestMode` are
 `[GhostField]` ECS fields whose changes arrive as a NetCode snapshot, so no code
-path exists that could raise anything. CK's comparable cases are polls —
+path raises an event on a change — the RPC handler that writes `guestMode` is
+the only writer, and it notifies nobody. CK's comparable cases are polls —
 `RadicalMenuOption.Update()` re-evaluates its own gate every frame, and
 `SettingsNotAvailableNote` is a ten-line `Update()` component switching a note on
 from another option's state. The second is a precedent for the shape; what it
@@ -425,28 +459,33 @@ different conditions.
    note — at the title screen, and in a guest-mode session.
 5. A **`Server`-scoped list row** renders label, preview and drill arrow red,
    stays reachable by navigation, and opens its drill-in read-only.
-6. That row, while selected, renders the lightened red rather than selection
-   blue; so does a locked toggle that is selected. **Measured by screenshot
-   against the two reference rows in the same screen** — a deselected locked row
-   (`UNSELECTABLE_TEXT_COLOR`) and a selected editable one
-   (`SELECTED_TEXT_COLOR`): the three must be distinguishable, and the selected
-   locked row must read as red rather than blue. The exact triple is not
-   readable off a screen and is not what this criterion checks.
+6. The locked list row, while selected, renders the lightened red rather than
+   selection blue; so does a settings row locked while it holds the selection.
+   **Measured across two screenshots**, because `RadicalMenu` has one selection
+   at a time: the same row selected-and-editable, then selected-and-locked. It
+   must read as red rather than blue, and differ from the deselected locked rows
+   beside it. The exact triple is not readable off a screen and is not what this
+   checks. The settings-row half needs the live transition in § 9's step 3 or 4,
+   since navigation cannot move onto a `GRAYED_OUT` row.
 7. A section with at least one contextually locked row shows the note between
    hint and box; a section with none shows no note and no gap.
 8. The note names the world when no player exists, and rights when a player
    exists whose scope condition is unmet.
-9. A **registered consumer's** section whose settings state no scope shows no
-   note and no red row, at the title screen and in a session — ADR-012's
-   `Client` default holds. A discovered foreign entry bound through a
+9. A **registered consumer's** section whose builder calls name no access level
+   shows no note and no red row, at the title screen and in a session —
+   ADR-012's `Client` default holds, and MSM passes it explicitly, so CoreLib's
+   own defaults never apply here. A discovered foreign entry bound through a
    `Server`-defaulting overload (§ 0) does go red where its kind is editable;
    where the kind is `Info`, criterion 4 governs.
-10. Pressing confirm on a locked toggle produces neither a sound nor a footer
-    select hint. The locked list row keeps both: activating it opens the
-    read-only drill-in.
-11. An admin elsewhere in the session switching guest mode on turns the
-    `Server`-scoped rows red and shows the note **without this player leaving
-    the screen**. Revoking an admin level does the same for `Admin`-scoped rows.
+10. Pressing confirm on a locked toggle **that holds the selection** produces
+    neither a sound nor a footer select hint — reachable only through § 9's live
+    transition, for the same reason as criterion 6. The locked list row keeps
+    both: activating it opens the read-only drill-in, and that half is
+    observable without a server.
+11. An admin elsewhere in the session revoking this player's level turns the
+    `Admin`-scoped rows red and shows the note **without this player leaving
+    the screen**; switching guest mode on afterwards does the same for the
+    `Server`-scoped rows. That order is required, not incidental — § 0.
 12. Reversing either change restores the rows: editable again, their values
     selectable, their label and value colours back to the prefab's, and the
     `JuicyAppear` effect still disabled. The locked **list** row returns to its
@@ -460,9 +499,17 @@ different conditions.
     update, including the one that did not cause the change.
 
 New fixtures this requires: a `Server`-scoped **list** (criteria 5, 6) and a
-`Server`-scoped **`Info`** row (criterion 4). Whether a `Server`-scoped toggle
-fixture is also needed depends on which `Bind` overload the existing
-direct-bound fixtures use — to check while implementing, not to assume.
+`Server`-scoped **`Info`** row (criterion 4). No new toggle is needed —
+`testServerScoped` (`ModSettingsMenuMod.cs:812`) and `testAdminScoped` (`:825`)
+declare both levels explicitly.
+
+**One side effect on the existing fixture set, to settle before building.** Six
+group and section fixtures bind through the `ConfigDescription` overload with no
+scope (`ModSettingsMenuMod.cs:439`, `:440`, `:441`, `:446`, `:455`, `:461`), so
+they are `Server` and would go red and unnavigable at the title screen —
+obstructing the heading and sort-order checks they exist for. Either they get an
+explicit `clientScope`, or their checks move into a session. The comment at
+`:68-71` currently claims the opposite and would need correcting either way.
 
 ## 6 · Edge cases the design covers
 
@@ -493,9 +540,9 @@ direct-bound fixtures use — to check while implementing, not to assume.
 
 - **The three loc term names** (two notes, and whether the `ViewOnly` reason
   ever needs one). They follow MSM's own schema; no decision rests on them.
-- **Which `Bind` overload the direct-bound test fixtures use** (§ 5). It decides
-  whether a new `Server`-scoped toggle fixture is needed or an existing one
-  already is one.
+- **What exactly silences CK's own colour writes** (§ 4.4). Three constraints
+  are known and the combination that satisfies them is not; it is cheaper to
+  establish at the keyboard than to predict.
 
 ## 9 · Verification
 
@@ -505,7 +552,8 @@ direct-bound fixtures use — to check while implementing, not to assume.
 these rows and does not say so. `docs/manual-tests.md` opens with this and is
 where these checks are written down.
 
-**Criteria 1, 2, 3, 5, 6, 7, 10, 13 and 14, and the first note of 8, need no
+**Criteria 1, 2, 3, 5, 7, 13 and 14, the list-row halves of 6 and 10, and the
+first note of 8, need no
 server.** The title screen produces the no-player lock on its own — `AccessLock`
 treats a non-`Client` scope as locked while `Manager.main.player` is null — and
 singleplayer produces the unlocked case, since `GetAdminPrivileges`
@@ -515,23 +563,33 @@ short-circuits to `int.MaxValue` offline.
 a session: per § 0 a `Server`-scoped row is free for a non-admin as long as
 guest mode is off. They ride along with the server round below.
 
-**Criteria 11 and 12 need two accounts, and the setup is this.** A single
-account can reach the lock — `docs/manual-tests.md` round 2 walks it with one,
+**Criteria 11 and 12, and the settings-row halves of 6 and 10, need two
+accounts.** A single
+account can reach the lock — `docs/manual-tests.md` round 3 walks it with one
+(round 2 is the control, where nothing locks),
 and `docs/ck/multiplayer-and-server.md` explains why self-revocation works at
 stage 1 — but it cannot *observe* the live repaint (the player list is another
 menu, so the poll is dormant, and returning rebuilds every row) and cannot
 reverse it (after self-revocation the admin check rejects every command). So:
 
-1. `Admins.json` on the dedicated server lists the **admin** account at
-   `privileges: 2`. The bootstrap rule `adminList.adminList.Count == 0 ||
+**The order matters, because the two halves of criterion 11 need different
+starting points.** Per § 0, guest mode does not lock a `Server` row for a player
+who holds rights — so the observer has to lose their level *before* guest mode
+can show anything:
+
+1. `Admins.json` lists the **admin** at `privileges: 2` and the **observer** at
+   `privileges: 1`. The bootstrap rule `adminList.adminList.Count == 0 ||
    isLocalPlayer` (`Pug.Other:293683`) hands out stage 2 only while the list is
-   empty, so the entry has to be written rather than earned — and a non-empty
-   list is also what leaves the second account at stage 0.
-2. The **observer** account joins, opens Options → Mod Settings, and stays
-   there.
-3. The admin switches guest mode, or revokes the observer's level, from the
-   player list. The observer watches without touching their own screen.
-4. The admin reverses it for criterion 12.
+   empty, so both entries have to be written rather than earned.
+2. The observer joins, opens Options → Mod Settings, and stays there for the
+   rest of the sequence, touching nothing.
+3. The admin **revokes the observer's level** from the player list. The
+   `Admin`-scoped rows go red — criterion 11's second half. `Server`-scoped rows
+   do not move: guest mode is still off.
+4. The admin **switches guest mode on**. Now that the observer is at stage 0,
+   the `Server`-scoped rows go red too — criterion 11's first half.
+5. The admin switches guest mode off and restores the level. Both reverse —
+   criterion 12.
 
 Guest mode does not survive a server restart (its only writer is the RPC
 handler), so both changes have to happen inside one session.
@@ -547,14 +605,15 @@ installed source, including **which overload** it uses (§ 0).
 |---|---|---|
 | PlacementPlus | 6 live entries (its `.cfg` also holds 2 CoreLib orphans) | **all `Client`** — two state it explicitly, four use the `Client`-defaulting overload, and the mod's own comment says every entry is Client on purpose |
 | CoreLib | 16 | mixed |
-| GeneralConfigMenu | 1 | mixed |
-| CK-QOL | ~21 from 11 `Bind` call sites, one of which runs per feature — no `.cfg`, because the mod is switched off | no `ConfigAccessLevel` in its source; which default applies depends on the overload, unchecked |
+| GeneralConfigMenu | 1 | `Admin`, declared (`ModConfig.cs:13`) |
+| CK-QOL | ~21 from 11 `Bind` call sites, one of which runs per feature — no `.cfg`, because the mod is switched off | **all `Server`** — no `ConfigAccessLevel` in its source, and its call sites use the first overload, which defaults that way |
 
 `SignLabels` and `AutoRailBridges` are family repos and registered MSM
 consumers, not foreign mods — an earlier draft counted the first as foreign.
 
 What this establishes is that a foreign mod's scope cannot be guessed from the
 absence of a `ConfigScope` argument, because one overload defaults the other
-way. What it does **not** establish is how much red a player sees: the largest
-foreign config here produces none at all, and four mods on one machine are not a
-sample.
+way. What it does **not** establish is how much red a player sees. The spread
+here runs from PlacementPlus, which produces none at all, to CK-QOL, whose
+roughly twenty-one entries would all be locked — and four mods on one machine
+are not a sample of anything.
