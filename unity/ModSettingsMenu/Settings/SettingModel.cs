@@ -203,7 +203,20 @@ namespace ModSettingsMenu.Settings
         /// widget exists for this value's shape". That is Kind == SettingKind.Info and needs no
         /// field of its own; the two were only ever conflated because discovery set both at once.
         /// A row can be both, and only now can a caller tell which.</summary>
-        public bool Locked => Entry != null && AccessLock.IsLocked(Entry.Scope);
+        public bool Locked => Reason != LockReason.None;
+
+        /// <summary>Why <see cref="Locked"/> is true, or None. The one place the permission question
+        /// is asked; <see cref="Locked"/> and <see cref="WithheldNow"/> are both read off it.</summary>
+        internal LockReason Reason => Entry == null ? LockReason.None : AccessLock.Reason(Entry.Scope);
+
+        /// <summary>True when this row is locked by a condition that may change — no world yet, or
+        /// the scope's condition unmet — as opposed to ViewOnly, which is permanent.
+        ///
+        /// <c>Kind != Info</c> is deliberate and must not be simplified away: a structurally inert
+        /// row (no editable widget for its shape) is not being withheld from anyone, whatever its
+        /// scope says, so it must never take the withheld treatment. This is the seam MSM-16
+        /// attaches to.</summary>
+        internal bool WithheldNow => Entry != null && Kind != SettingKind.Info && (Reason == LockReason.NoWorld || Reason == LockReason.ConditionUnmet);
 
         /// <summary>Whether this row can be operated at all — the question every widget and the
         /// section reset actually ask, as opposed to WHY it cannot be.

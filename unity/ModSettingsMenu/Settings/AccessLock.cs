@@ -2,7 +2,19 @@ using CoreLib.Data.Configuration;
 
 namespace ModSettingsMenu.Settings
 {
-    /// <summary>The one answer to "may this entry be changed in this session, right now".
+    /// <summary>Why an entry cannot be changed right now, if it cannot. Nothing reads it for display
+    /// yet; <see cref="LockReason.NoWorld"/> and <see cref="LockReason.ConditionUnmet"/> are the two
+    /// that name a condition the player could meet, <see cref="LockReason.ViewOnly"/> is permanent.</summary>
+    internal enum LockReason
+    {
+        None,
+        NoWorld,
+        ConditionUnmet,
+        ViewOnly,
+    }
+
+    /// <summary>The one answer to "may this entry be changed in this session, right now,
+    /// and if not, why".
     ///
     /// It lived in ForeignConfigDiscovery as a private static while only discovery had a scope to
     /// ask about. Both paths have one now, and MSM-19's send façade would be a third caller — so
@@ -16,7 +28,7 @@ namespace ModSettingsMenu.Settings
     /// world, and they are the two that fall through to the guard below.</summary>
     internal static class AccessLock
     {
-        internal static bool IsLocked(ConfigScope scope)
+        internal static LockReason Reason(ConfigScope scope)
         {
             // Unreachable through an Entry: CoreLib normalises every entry's scope on construction
             // (ConfigEntryBase.cs:78, Scope = scope ?? ConfigScope.Empty). Kept as fail-shut rather
@@ -24,16 +36,16 @@ namespace ModSettingsMenu.Settings
             // whose constructor defaults to Server, not Client. Returning false here would hand a
             // caller the opposite of what the same entry reports through CoreLib.
             if (scope == null)
-                return true;
+                return LockReason.ConditionUnmet;
             if (scope.accessLevel == ConfigAccessLevel.ViewOnly)
-                return true;
+                return LockReason.ViewOnly;
             if (scope.accessLevel == ConfigAccessLevel.Client)
-                return false;
+                return LockReason.None;
             // Server/Admin: Changeable() reads Manager.main.player; at the title screen there is no
-            // player, so be conservative (locked) rather than risk an NRE.
+            // player, so be conservative (locked, NoWorld) rather than risk an NRE.
             if (Manager.main == null || Manager.main.player == null)
-                return true;
-            return !scope.Changeable();
+                return LockReason.NoWorld;
+            return scope.Changeable() ? LockReason.None : LockReason.ConditionUnmet;
         }
     }
 }

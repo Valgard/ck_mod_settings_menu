@@ -48,9 +48,11 @@ They are created through raw CoreLib `ConfigFile`s **outside**
 `ForeignConfigDiscovery` treats them exactly as it treats a third-party mod.
 They are not an imitation of the foreign path; they are that path with files we
 own. Most of the files below hold ordinary fixtures and are worth inspecting
-after a write. Two hold one throwing fixture each and can never be written at
-all; one of them additionally loses its row and its box entirely, while the
-other still renders as a working Choice — that pair is explained further down:
+after a write. `TestViewOnlyFixtures` holds a single `ViewOnly` row and can
+never be written at all, because nothing can change it. Two hold one throwing
+fixture each and can never be written at all either; one of them additionally
+loses its row and its box entirely, while the other still renders as a working
+Choice — that pair is explained further down:
 
 ```
 <bottle>/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/TestListFixtures/config.cfg
@@ -58,6 +60,7 @@ other still renders as a working Choice — that pair is explained further down:
 <bottle>/…/mods/TestGroupFixtures/config.cfg
 <bottle>/…/mods/TestSingleGroupFixtures/config.cfg
 <bottle>/…/mods/TestEmptySectionFixtures/config.cfg
+<bottle>/…/mods/TestViewOnlyFixtures/config.cfg
 <bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written; ThrowingFixtures build only)
 <bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written; ThrowingFixtures build only)
 ```
@@ -876,13 +879,15 @@ with one, and `TestEmptySectionFixtures`, whose first section has no name at all
       line under — then a heading `named` above its row `afterHeader`. Two
       sections is what makes headings appear here at all: the empty one still
       counts toward that threshold even though it renders no caption of its own.
-- [ ] **Untouched by MSM's own binds.** `TestGroupFixtures`'s three rows
-      (`lastAlphabetically`, `firstAlphabetically`, `second`) bind with no
-      `ConfigScope` at all — CoreLib's own default for that case. In GMCM, open
+- [ ] **Untouched by MSM's own binds.** `TestEmptySectionFixtures`'s row
+      `afterHeader` (under the `named` heading) is the one group fixture bound
+      with no `ConfigScope` at all — CoreLib's own default for that case; the
+      other group fixtures were given a Client scope so they stay editable at
+      the title screen, and this one is left bare on purpose. In GMCM, open
       this mod's own **Mod settings** box first, so every declared fixture above
-      has bound, then check `TestGroupFixtures` there: all three rows still
-      show the **Server** permission icon and no reload marker, exactly as
-      before this mod's section existed. `ConfigScope.Empty` is never written
+      has bound, then check `TestEmptySectionFixtures` there: `afterHeader`
+      still shows the **Server** permission icon and no reload marker, exactly
+      as before this mod's section existed. `ConfigScope.Empty` is never written
       to, so an unrelated mod's scope-less entry cannot start reporting
       something else just because this mod's own binds ran in the same
       session. (Criterion 9, Review Focus 5)
@@ -1105,10 +1110,11 @@ routes behave *differently* here, which nothing on screen shows.
       "passed" whatever the code did — it was walked once and produced two
       rows already sitting on their defaults before the reset was pressed.
 
-      Read the code instead, where the claim decides in three hops:
+      Read the code instead, where the claim decides in four hops:
       `SectionReset.IsInScope(def) => def.IsEditable`; `IsEditable => Entry !=
-      null && !Locked && Kind != Info`; `Locked =>
-      AccessLock.IsLocked(Entry.Scope)`. `DeclaredEditing` appears nowhere in
+      null && !Locked && Kind != Info`; `Locked => Reason !=
+      LockReason.None`; `Reason => Entry == null ? LockReason.None :
+      AccessLock.Reason(Entry.Scope)`. `DeclaredEditing` appears nowhere in
       `SectionReset.cs`, and the single link between the two notions runs the
       other way — `EffectiveEditing => Locked ? ListEditing.ReadOnly :
       DeclaredEditing`, so a locked row is *rendered* read-only while a
@@ -1442,7 +1448,7 @@ box.
 - [ ] `testGroupInheritsViewOnly` renders **locked**, in every session type
       including the title screen — it states no level of its own, so it
       inherits `.Group("testAccessGroup", access: ConfigAccessLevel.ViewOnly)`.
-      `AccessLock.IsLocked`'s own first branch answers `ViewOnly` outright,
+      `AccessLock.Reason` answers `ViewOnly` outright, ahead of any player lookup,
       before it would ever call `Changeable()` or look at a player, so the
       title screen already is every session type this criterion has to hold
       in — there is no further world or multiplayer state left to try it
@@ -1503,7 +1509,7 @@ box.
 `testServerScoped` and `testAdminScoped`, declared right after
 `testAfterGroupIsClient` in this mod's own section, are the two levels the
 cascade fixtures above cannot reach. `ViewOnly` and `Client` are both answered
-by `AccessLock.IsLocked` without ever asking for a player, which is why every
+by `AccessLock.Reason` without ever asking for a player, which is why every
 check above holds in plain singleplayer and even at the title screen. `Server`
 and `Admin` do the opposite: `Changeable()` reads `Manager.main.player`, so
 both need an actual world, and telling the two apart from each other needs a
@@ -1511,8 +1517,8 @@ joined player who is not an admin.
 
 - [ ] **Criterion 13, singleplayer, one session, two moments.** Open Options →
       Mod settings at the title screen: `testServerScoped` renders **locked**,
-      because with no player at all `AccessLock.IsLocked` answers `true` for
-      Server and Admin rather than risk dereferencing one. Without quitting,
+      because with no player at all `AccessLock.Reason` answers `LockReason.NoWorld`
+      for Server and Admin rather than risk dereferencing one. Without quitting,
       load any world and reopen the menu: the same row is now **editable**.
       This is the failure §4.4 exists to prevent — if `Locked` were a field set
       once when the setting is constructed instead of a computed property, it
@@ -1661,6 +1667,65 @@ never read this document, in two real, already-shipped consumers:
   the bind — exactly the pre-change behaviour this whole point exists to
   remove, where every declared setting was formally `Server` and nobody had
   chosen it. (Criterion 2)
+
+## MSM-10 Task 1 — the permission answer names its reason
+
+This task is a refactor: `AccessLock.IsLocked` became `AccessLock.Reason`, and
+`SettingDef` gained `Reason`, `Locked` and `WithheldNow`. No code path changes what
+a row does. The one visible change comes from the fixtures, not the refactor: five
+group fixtures were bound with no scope, so CoreLib gave them `Server` and they were
+locked at the title screen; they now carry a Client scope and are editable. Build
+with `MOD_DEV_FLAGS=TestFixtures`; inspect at the **title screen**.
+
+- [ ] `testServerScoped` is **unchanged**: still looks editable at the title
+      screen. Making it look withheld is Task 2's change, not this one.
+- [ ] The `ViewOnly` fixtures (`LongReadOnly`, `ChoiceReadOnly`) are unchanged —
+      read-only exactly as before.
+- [ ] The new `ViewOnlyInfo` row (under the list fixtures, `ViewOnly` **and** a
+      prose value with no editable widget) is unchanged: an inert Info row, no
+      widget to operate. It is the one row where both exclusions apply at once.
+- [ ] **Locked becomes editable, on purpose.** The five converted group
+      fixtures (`lastAlphabetically`, `firstAlphabetically`, `second`, `value`,
+      `beforeAnyHeader`) were locked at the title screen (no scope, so CoreLib's
+      `Server` default, so `NoWorld`) and are now **editable**. `afterHeader`,
+      bound without a scope deliberately, must stay **locked**: it is the one
+      witness that a discovered entry with no scope goes red.
+- [ ] **MSM-10 criterion 13, per section.** `IsEditable` now reads the new
+      `Locked`, and `SectionReset` reads `IsEditable`, so the reset is checked
+      section by section (one section is one config file), at the title screen:
+      Every "restores" below needs a value that differs from its default first,
+      or the reset has nothing to write and the check passes whatever the code
+      does. Before launching, with the game closed, hand-edit these in the
+      `config.cfg` files: `TestEmptySectionFixtures` `afterHeader = false`,
+      `TestListFixtures` `LongReadOnly = Item01` and `ViewOnlyInfo = Changed
+      prose`. Nothing reconciles those files at bind, so the edits survive the
+      relaunch. Then, at the title screen:
+      - `TestGroupFixtures` offers the reset hint now, where before it offered
+        none. Switch `lastAlphabetically` off and raise `second` from 3 to 5,
+        confirm both hold, press the reset: `lastAlphabetically` is on and
+        `second` is 3 again.
+      - `TestSingleGroupFixtures` likewise: switch `value` off, confirm it
+        holds, reset, and it is on again.
+      - `TestEmptySectionFixtures`: switch `beforeAnyHeader` off, reset, and it
+        is on again. `afterHeader` is still **off** and still locked — the reset
+        skipped it.
+      - `TestListFixtures`: the hint is offered. After a reset `LongReadOnly`
+        still reads `Item01` and `ViewOnlyInfo` still reads `Changed prose`;
+        both are `ViewOnly`, so the reset skipped them.
+      - This mod's own `testListReadOnly` cannot be walked: it is reconciled to
+        its defaults at every bind, so no changed value survives to be reset.
+        Its behaviour is decided by reading the code, as the entry under "The
+        section reset, which is the only escape hatch" sets out.
+      - `TestViewOnlyFixtures (detected)`, one section holding one `ViewOnly`
+        row, `onlyViewOnly`, is the negative case: the row renders, and the
+        section offers **no** reset hint. `ViewOnly` is answered ahead of any
+        player lookup, so this holds at the title screen and in a loaded world
+        alike — check both. The file exists for this one claim; no heading,
+        sort-order or cascade check may use it.
+
+**Expected result:** the refactor itself moves nothing; the only differences from
+the build before this task are the locked-to-editable fixtures and the reset hints
+that follow from them, as listed above.
 
 ## After the walk
 

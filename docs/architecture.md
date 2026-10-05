@@ -159,10 +159,11 @@ declared path's answer at whatever it was when `Init` ran, title screen included
 - **`RequiresRestart`** reads `Entry?.Scope?.requireReload ?? false` — one storage location for
   both the `requiresRestart:` cascade and `.RequiresRestart()`, and the same field General Mod
   Config Menu's own reload marker reads. The `?? false` carries a `Label`, whose `Entry` is null.
-- **`Locked`** reads `Entry != null && AccessLock.IsLocked(Entry.Scope)` — replaces the old
-  `ReadOnly` field and means less than it did: `ReadOnly` used to conflate a contextual permission
-  lock with a structural "no editable widget exists for this shape at all" (see `AccessLock`
-  below); `Locked` is only the first of those.
+- **`Locked`** reads `Reason != LockReason.None`, where `Reason` is
+  `AccessLock.Reason(Entry.Scope)` (`None` for a `Label`, whose `Entry` is null) —
+  replaces the old `ReadOnly` field and means less than it did: `ReadOnly` used to
+  conflate a contextual permission lock with a structural "no editable widget exists for
+  this shape at all" (see `AccessLock` below); `Locked` is only the first of those.
 - **`IsEditable`**, new, is `Entry != null && !Locked && Kind != SettingKind.Info` — the single
   conjunction every caller that asks "can this row be operated at all" now uses (`SectionReset`
   below is one), rather than re-deriving the same two-part answer at each call site by hand.
@@ -190,13 +191,14 @@ def out of `ModSection.Settings` gates on `Kind` or on `Entry` being non-null.
 
 ### `AccessLock`
 
-`internal static bool IsLocked(ConfigScope scope)` — the one answer to "may this entry
-be changed in this session, right now". Lived in `ForeignConfigDiscovery` as a `private
+`internal static LockReason Reason(ConfigScope scope)` — the one answer to "may this entry
+be changed in this session, right now, and if not, why" (`None`, `NoWorld`,
+`ConditionUnmet`, `ViewOnly`). Lived in `ForeignConfigDiscovery` as a `private
 static` while only the discovery path had a scope to ask about; both paths have one now,
 and MSM-19's send façade would be a third caller, which is why it moved to a place all
 of them reach. `ViewOnly` and `Client` are answered without consulting a player at all —
 which is why both hold at the title screen and are observable in a single-player session
-— and only `Server`/`Admin` ask `scope.Changeable()`, conservatively locked (`true`)
+— and only `Server`/`Admin` ask `scope.Changeable()`, answered as `LockReason.NoWorld`
 when `Manager.main` or `Manager.main.player` is null, i.e. the title screen, rather than
 risk dereferencing either.
 

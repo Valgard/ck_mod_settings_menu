@@ -66,9 +66,10 @@ namespace ModSettingsMenu
             if (DevFlags.Is("TestFixtures"))
             {
                 // Client scope (not CoreLib's Server default) so these stay editable at the title
-                // screen too, where Manager.main.player is null — AccessLock.IsLocked
-                // conservatively treats a non-Client scope as read-only there (real foreign mods, incl.
+                // screen too, where Manager.main.player is null — AccessLock.Reason
+                // conservatively answers NoWorld for a non-Client scope there (real foreign mods, incl.
                 // PlacementPlus's own ExcludeItems, are typically Server-scoped and share that limit).
+                // One fixture below is bound WITHOUT a scope on purpose: afterHeader, under the "named" heading in TestEmptySectionFixtures.
                 var clientScope = new ConfigScope(ConfigAccessLevel.Client);
                 var testFile = new ConfigFile("TestListFixtures/config.cfg", saveOnInit: true, info);
                 testFile.Bind("Settings", "Short", "Alpha, Beta, Gamma", new ConfigDescription("A short test list."), clientScope);
@@ -77,15 +78,26 @@ namespace ModSettingsMenu
                     + "Item11, Item12, Item13, Item14, Item15, Item16, Item17, Item18, Item19, Item20";
                 testFile.Bind("Settings", "Long", longValue, new ConfigDescription("A long test list (scroll-follow check)."), clientScope);
                 // ViewOnly (not Server) is read-only unconditionally, regardless of Manager.main.player —
-                // AccessLock.IsLocked only treats Server/Admin as read-only AT THE TITLE
+                // AccessLock.Reason only treats Server/Admin as read-only AT THE TITLE
                 // SCREEN specifically (no player yet); a real world session would make a Server-scoped
-                // entry editable again. ViewOnly is the one access level AccessLock.IsLocked returns true for
+                // entry editable again. ViewOnly is the one access level AccessLock.Reason locks
                 // unconditionally, so this stays a genuine read-only List regression check in any session.
                 testFile.Bind(
                     "Settings",
                     "LongReadOnly",
                     longValue,
                     new ConfigDescription("A read-only copy of Long, to check the read-only List path."),
+                    new ConfigScope(ConfigAccessLevel.ViewOnly)
+                );
+                // ViewOnly AND Info at once: prose (no comma, so not a list) has no editable widget, and
+                // the scope locks it besides. The only row where both exclusions apply together, which
+                // is what tells "withheld" apart from "inert" — an Info row is never withheld, whatever
+                // its scope says.
+                testFile.Bind(
+                    "Settings",
+                    "ViewOnlyInfo",
+                    "A single sentence of prose with nothing to edit",
+                    new ConfigDescription("A read-only prose row: ViewOnly and Info together."),
                     new ConfigScope(ConfigAccessLevel.ViewOnly)
                 );
                 // Exercises OnRowTextCommitted's RequiresRestart wiring (no other fixture above sets
@@ -228,7 +240,7 @@ namespace ModSettingsMenu
                 // row takes a different path through the widget (MakeValueReadOnly, the early return in
                 // Adjust) while still having to DISPLAY the right token — and the display line is one of
                 // the two this change rewrote. It is also the shape a real foreign Choice usually has
-                // here: ConfigScope defaults to Server, which AccessLock.IsLocked treats as locked at the title
+                // here: ConfigScope defaults to Server, which AccessLock.Reason treats as locked at the title
                 // screen, and the title screen is where this walk is easiest to run.
                 choiceFile.Bind(
                     "Settings",
@@ -436,14 +448,14 @@ namespace ModSettingsMenu
                 // show. Ordinary values, because what is under test is the heading and the order, not
                 // the widgets.
                 var groupFile = new ConfigFile("TestGroupFixtures/config.cfg", saveOnInit: true, info);
-                groupFile.Bind("Zebra", "lastAlphabetically", true, new ConfigDescription("Its section sorts last; it must render second."));
-                groupFile.Bind("alpha", "firstAlphabetically", true, new ConfigDescription("Its section sorts first despite the lower case."));
-                groupFile.Bind("alpha", "second", 3, new ConfigDescription("A second row under the same heading."));
+                groupFile.Bind("Zebra", "lastAlphabetically", true, new ConfigDescription("Its section sorts last; it must render second."), clientScope);
+                groupFile.Bind("alpha", "firstAlphabetically", true, new ConfigDescription("Its section sorts first despite the lower case."), clientScope);
+                groupFile.Bind("alpha", "second", 3, new ConfigDescription("A second row under the same heading."), clientScope);
 
                 // Exactly ONE section, which must render NO heading — the case the rule exists for,
                 // and the one a two-section fixture cannot show.
                 var singleGroupFile = new ConfigFile("TestSingleGroupFixtures/config.cfg", saveOnInit: true, info);
-                singleGroupFile.Bind("OnlySection", "value", true, new ConfigDescription("Its file has one section; no heading may appear."));
+                singleGroupFile.Bind("OnlySection", "value", true, new ConfigDescription("Its file has one section; no heading may appear."), clientScope);
 
                 // A section with an EMPTY name — CoreLib's own encoding for every line it files before
                 // a file's first [Header] — beside a named one. ADR-011 spends its longest decision on
@@ -456,9 +468,30 @@ namespace ModSettingsMenu
                     "",
                     "beforeAnyHeader",
                     true,
-                    new ConfigDescription("Filed under the empty section; must render with no heading above it.")
+                    new ConfigDescription("Filed under the empty section; must render with no heading above it."),
+                    clientScope
                 );
+                // Deliberately bound WITHOUT a scope, unlike every other row in these group fixtures:
+                // it is Server by CoreLib's default, so it is the one witness that a discovered entry
+                // with no scope goes red. Do not "fix" it to clientScope.
                 emptySectionFile.Bind("named", "afterHeader", true, new ConfigDescription("Its own named section; must get a heading."));
+
+                // One section, one row, ViewOnly — and nothing else may ever rest on this file. It is the
+                // witness that a section with no editable row offers no reset hint (MSM-10 criterion 13).
+                // ViewOnly is answered ahead of any player lookup, so that holds in every session, not
+                // only at the title screen. It is a file of its own because the two fixtures that used to
+                // witness this, TestGroupFixtures and TestSingleGroupFixtures, were converted to Client
+                // scope for their heading and sort-order checks and now witness the opposite; a fixture
+                // carrying two roles breaks one when it is changed for the other. No sort-order, heading
+                // or cascade claim may use this file, so nobody has a reason to convert it.
+                var viewOnlyFile = new ConfigFile("TestViewOnlyFixtures/config.cfg", saveOnInit: true, info);
+                viewOnlyFile.Bind(
+                    "Settings",
+                    "onlyViewOnly",
+                    true,
+                    new ConfigDescription("The only row of its section, and it can never be edited; the section must offer no reset."),
+                    new ConfigScope(ConfigAccessLevel.ViewOnly)
+                );
             }
         }
 
@@ -797,10 +830,10 @@ namespace ModSettingsMenu
             section.Group("testAccessGroupCleared");
             section.Toggle(out _, "testAfterGroupIsClient", true);
             // MSM-18, criteria 4 and 13 — the two levels the cascade fixtures above cannot reach,
-            // because ViewOnly and Client are both answered by AccessLock.IsLocked WITHOUT
+            // because ViewOnly and Client are both answered by AccessLock.Reason WITHOUT
             // consulting a player at all. Server needs one, which is exactly what makes it
             // observable: it renders LOCKED at the title screen (no Manager.main.player yet, so
-            // IsLocked answers conservatively) and EDITABLE the moment a world exists in the same
+            // AccessLock.Reason answers conservatively) and EDITABLE the moment a world exists in the same
             // session, with no restart in between — the one behaviour §4.4 computes Locked to
             // guarantee, because a field set at construction would freeze the title screen's
             // answer for the rest of the session. A Toggle, not an Info row, because a lock nobody
