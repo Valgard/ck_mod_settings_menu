@@ -1727,6 +1727,49 @@ with `MOD_DEV_FLAGS=TestFixtures`; inspect at the **title screen**.
 the build before this task are the locked-to-editable fixtures and the reset hints
 that follow from them, as listed above.
 
+## MSM-10 Task 2 — a withheld row leaves navigation and input
+
+A row whose setting exists but cannot be changed right now (`NoWorld` or
+`ConditionUnmet`) now reports `GRAYED_OUT`. The colour is **not** part of this
+task: CK paints the label red by itself, and the value column stays as it was
+until Task 3. Build with `MOD_DEV_FLAGS=TestFixtures`; inspect at the **title
+screen**, where `testServerScoped` is withheld (`Server` scope, no world).
+
+**Before this task** (recorded from the previous build, not re-run): at the title
+screen `testServerScoped` took the selection, answered a keypress, and its value
+did not change, because `Adjust()` already returned early on `!IsEditable`. So the
+row looked operable, answered input and did nothing.
+
+- [ ] **Navigation skips it.** Select the row directly above `testServerScoped`
+      and press down: the selection lands on the row directly below, never on
+      `testServerScoped`. Press up from there: it lands on the row above again.
+      This is the keyboard and controller path; a grayed row cannot take the
+      selection at all.
+- [ ] **A mouse click does nothing.** Click `testServerScoped`: no selection
+      highlight appears on it and no sound plays. The click collider is only
+      enabled for an `ACTIVE` row, so the click never arrives; the value staying
+      unchanged follows from that and is not itself the test.
+- [ ] **It is still visible.** The row renders with its label and its current
+      value; it is not hidden and not collapsed.
+- [ ] **Counter-cases stay operable.** `testAfterGroupIsClient` (Client scope,
+      right above `testServerScoped`) is still selectable and still steps on
+      confirm. The `ViewOnly` fixtures (`LongReadOnly`, `ChoiceReadOnly`) are
+      **still selectable**, as before, because they are read-only rather than
+      withheld. `ViewOnlyInfo` is still an inert `Info` row: its value is shown
+      and there is nothing to operate.
+- [ ] **It comes back.** Load any singleplayer world without restarting, and
+      reopen the menu: the same row is now selectable and steps on confirm. Quit
+      to the title screen and it is skipped again. `testAdminScoped` follows the
+      same path.
+
+Not covered here, on purpose: `ConditionUnmet`, the second reason `WithheldNow`
+answers for. It is unreachable at the title screen; it is criterion 11 (an admin
+elsewhere in the session revoking this player's level), needs two accounts, and
+belongs to Task 5.
+
+**Expected result:** only `Server`/`Admin`-scoped rows without a world leave
+navigation and input. Nothing else moves.
+
 ## After the walk
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly

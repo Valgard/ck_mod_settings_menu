@@ -107,7 +107,15 @@ namespace ModSettingsMenu.UI
         }
 
         // Only bound rows activate; the inactive template (never bound → _def null) stays hidden.
-        public override OptionActiveState GetActiveStateInCurrentScene() => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
+        // A row that exists but cannot be changed right now reports GRAYED_OUT, CK's own convention: the
+        // navigation skips it and it stays visible. WithheldNow is false for ViewOnly and Info rows.
+        public override OptionActiveState GetActiveStateInCurrentScene() =>
+            _def == null ? OptionActiveState.INACTIVE
+            : _def.WithheldNow ? OptionActiveState.GRAYED_OUT
+            : OptionActiveState.ACTIVE;
+
+        // Input is gated by this too, so a withheld row cannot be activated even if something reaches it.
+        public override bool CanBeActivated() => base.CanBeActivated() && (_def == null || !_def.WithheldNow);
 
         public override void OnParentMenuActivation()
         {
