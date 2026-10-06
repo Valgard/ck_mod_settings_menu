@@ -62,6 +62,7 @@ Choice — that pair is explained further down:
 <bottle>/…/mods/TestEmptySectionFixtures/config.cfg
 <bottle>/…/mods/TestViewOnlyFixtures/config.cfg
 <bottle>/…/mods/TestLockedFixtures/config.cfg
+<bottle>/…/mods/TestLockedInfoFixtures/config.cfg
 <bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written; ThrowingFixtures build only)
 <bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written; ThrowingFixtures build only)
 ```
@@ -1869,6 +1870,62 @@ helper. The templates themselves are never bound, so they are never painted.
 
 **Expected result:** the red and the lighter red appear on exactly the withheld rows,
 and `ServerInfo`, `ViewOnly` rows and every editable row look as they did.
+
+## MSM-10 Task 4 — the section note
+
+A section that holds withheld rows says why, once, in a line between its hint and its
+box. Build with `MOD_DEV_FLAGS=TestFixtures`; start at the **title screen**.
+
+**The note cannot appear until the prefab object exists.** The code reads
+`SectionBox.lockNote` and treats a null as "no note, no error"; the `LockNote` `PugText`
+is authored in the Editor and wired to that field afterwards. So the first item below
+is checkable on the commit alone, and every item after it only once the object is wired.
+
+Fixtures: `TestLockedFixtures` (`ServerList` withheld, `ServerInfo` Info; both
+`Server`-scoped), `TestLockedInfoFixtures` (one `Server`-scoped Info row,
+`ServerInfoOnly`, nothing else), `TestViewOnlyFixtures` (one `ViewOnly` row), this mod's
+own section (holds `testServerScoped`), and `TestListFixtures` (`Client` rows, plus
+`ViewOnly` rows).
+
+**Checkable before the prefab is wired:**
+
+- [ ] **A missing object is silent.** Open Mod settings at the title screen, and again
+      after loading a world. The menu opens, every section renders, and `Player.log` holds
+      no `NullReferenceException` from this mod. No section shows a note line yet.
+
+**Checkable once `LockNote` is wired (title screen):**
+
+- [ ] **Withheld rows put the note on screen.** In this mod's own section and in
+      `TestLockedFixtures (detected)`, the line *Some settings can only be changed in a
+      world* sits between the hint (or heading, where there is no hint) and the box. In
+      the German game the line reads *Einige Einstellungen können nur in einer Welt
+      geändert werden*. (Criterion 8, first half)
+- [ ] **No withheld row, no note, and no gap.** `TestListFixtures` has no withheld row, and
+      no line appears in it; the space between its heading or hint and its box is the
+      same as it was before this task, not a blank line's worth larger. (Criterion 7)
+- [ ] **A locked `Info` row alone puts no note up.** `TestLockedInfoFixtures (detected)`
+      renders its one row, locked by scope, and shows **no** note. In the same session
+      `TestLockedFixtures` does show one, which is what makes the first half of this item a
+      real contrast: its `ServerInfo` row is no different, `ServerList` is what carries it.
+- [ ] **A `ViewOnly` row alone puts no note up.** `TestViewOnlyFixtures (detected)`
+      shows no note either, although its only row is locked.
+- [ ] **A consumer that names no access level shows nothing.** Open a registered
+      consumer's section whose builder calls state no access level (Faster Talents, or any
+      other sibling): no note and no red row. (Criterion 9, first sentence)
+- [ ] **The consumer's own hint is untouched.** A section with a `Hint` and withheld rows
+      shows the hint text unchanged on its own line, with the note on a line of its own
+      under it.
+
+**Checkable once `LockNote` is wired (in a world):**
+
+- [ ] **Load a singleplayer world and reopen.** The note is gone from every section,
+      including the ones that carried it at the title screen. Quit to the title screen and
+      reopen: it is back. (Criterion 8, second half is the dedicated-server item below.)
+- [ ] **Session wording, dedicated server, no rights.** In the round-3 setup of § "Server
+      and Admin, checked against a live world", this mod's own section shows *Some settings
+      require permissions you do not have here* and not the *world* text. A section with
+      only `ConditionUnmet` rows must never say "world", and the title screen never says
+      "permissions".
 
 ## After the walk
 

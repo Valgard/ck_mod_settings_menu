@@ -686,7 +686,39 @@ namespace ModSettingsMenu.UI
                 if (hasHint)
                     box.hint.RenderPlain(hint);
             }
+            RenderLockNote(section, box);
             return sGo;
+        }
+
+        // One line per section saying why some of its rows are withheld, so the reason is not
+        // repeated per row. Same shape as the hint: resolve the text, SetActive on whether there
+        // is one, RenderPlain when there is. A null field means the section template carries no
+        // such object (yet): no note, no error. WithheldNow is false for Info and ViewOnly rows,
+        // so neither can put the note on screen. The consumer's own Hint is left alone.
+        private static void RenderLockNote(ModSection section, SectionBox box)
+        {
+            if (box == null || box.lockNote == null)
+                return;
+
+            string note = LockNoteText(section);
+            bool hasNote = note != null;
+            box.lockNote.gameObject.SetActive(hasNote);
+            if (hasNote)
+                box.lockNote.RenderPlain(note);
+        }
+
+        private static string LockNoteText(ModSection section)
+        {
+            bool session = false;
+            foreach (var def in section.Settings)
+            {
+                if (!def.WithheldNow)
+                    continue;
+                if (def.Reason == LockReason.NoWorld)
+                    return Loc.T("ModSettingsMenu-UI/LockNoteWorld");
+                session = true;
+            }
+            return session ? Loc.T("ModSettingsMenu-UI/LockNoteSession") : null;
         }
 
         // Find the GameObject's (prefab-authored) vertical LinearLayout. Its horizontal flag +

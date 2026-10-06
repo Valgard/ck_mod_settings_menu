@@ -517,6 +517,20 @@ namespace ModSettingsMenu
                     new ConfigDescription("The only row of its section, and it can never be edited; the section must offer no reset."),
                     new ConfigScope(ConfigAccessLevel.ViewOnly)
                 );
+
+                // One section, one row, Server-scoped and Info: locked at the title screen by its scope
+                // yet never withheld, because Info is inert rather than locked out. It is the witness
+                // that such a section shows NO lock note (MSM-10 criterion 7); TestLockedFixtures cannot
+                // be, because its ServerList row puts the note on screen there. A file of its own, for
+                // the reason the one above is: nothing else may rest on it.
+                var lockedInfoFile = new ConfigFile("TestLockedInfoFixtures/config.cfg", saveOnInit: true, info);
+                lockedInfoFile.Bind(
+                    "Settings",
+                    "ServerInfoOnly",
+                    "A single sentence of prose with nothing to edit",
+                    new ConfigDescription("The only row of its section: Server-scoped and Info, so never withheld; the section must carry no note."),
+                    new ConfigScope(ConfigAccessLevel.Server)
+                );
             }
         }
 

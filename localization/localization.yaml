@@ -34,6 +34,14 @@ ModSettingsMenu-UI:
     hint: "Confirmation question before removing one entry from a list. {0} is that entry's text, inserted via string.Format."
     en: "Remove {0} from this list?"
     de: "{0} aus dieser Liste entfernen?"
+  LockNoteWorld:
+    hint: "Section note shown at the title screen when a section holds settings that need a world."
+    en: "Some settings can only be changed in a world"
+    de: "Einige Einstellungen können nur in einer Welt geändert werden"
+  LockNoteSession:
+    hint: "Section note shown in a session when a section holds settings whose access condition is unmet."
+    en: "Some settings require permissions you do not have here"
+    de: "Für einige Einstellungen fehlen dir hier die Rechte"
 ModSettingsMenu-Config:
   showForeignConfigs:
     hint: "Master toggle label: show config from other mods that use CoreLib config but did not integrate MSM."
