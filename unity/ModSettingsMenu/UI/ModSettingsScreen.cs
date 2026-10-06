@@ -8,7 +8,7 @@ namespace ModSettingsMenu.UI
     /// Own settings menu — the adapted vanilla UISettings prefab (this component swapped
     /// in for RadicalOptionsMenu). Layout follows CK's ControlMapper (ControlMappingMenu):
     /// nested LinearLayoutUIComponents. contentRoot stacks one instance per registered
-    /// section; each section instance stacks [Header, Hint, Widgets-box] vertically, and the
+    /// section; each section instance stacks [Header, Hint, LockNote, Widgets-box] vertically, and the
     /// Widgets box (a LinearLayout with a 9-slice background) stacks that section's toggles —
     /// so a bordered frame wraps just the options, with the heading + hint above it. Each WIDGET
     /// ROW gets a WrapperUIComponent so its (composite Label+Value) layout measures it; Header and
@@ -379,7 +379,7 @@ namespace ModSettingsMenu.UI
 
         // Render section content inner-to-outer AFTER base.Activate (the hierarchy is active now, so
         // LinearLayout counts the rows + computes real heights): each box sizes its 9-slice
-        // background to its toggles, each section stacks [heading, hint, box], then the top layout
+        // background to its toggles, each section stacks [heading, hint, lock note, box], then the top layout
         // stacks the sections.
         internal void RenderContent()
         {
@@ -650,8 +650,8 @@ namespace ModSettingsMenu.UI
         }
 
         // Build one section (Option A): instantiate the sectionTemplate and render its heading
-        // (Heading(), which may translate it) plus an optional hint ABOVE a bordered box. The section root stacks
-        // [Header, Hint, Widgets] vertically; the caller nests the toggles into the Widgets box,
+        // (Heading(), which may translate it) plus an optional hint and lock note ABOVE a bordered box. The section root stacks
+        // [Header, Hint, LockNote, Widgets] vertically; the caller nests the toggles into the Widgets box,
         // whose LinearLayout carries a 9-slice background (32x32_itemui_border) that auto-sizes
         // to them. Header (bright) and hint (dimmed) are distinct prefab-styled PugTexts, so
         // they render differently. Returns the section-root GameObject.
@@ -707,6 +707,9 @@ namespace ModSettingsMenu.UI
                 box.lockNote.RenderPlain(note);
         }
 
+        // The first match decides, and it cannot be arbitrary: AccessLock.Reason answers NoWorld only
+        // when there is no player and ConditionUnmet only when there is one, so one section never
+        // holds rows with both reasons at once.
         private static string LockNoteText(ModSection section)
         {
             bool session = false;

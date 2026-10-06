@@ -11,7 +11,7 @@ namespace ModSettingsMenu.UI
     {
         public PugText header; // "DisplayName" heading
         public PugText hint; // optional dimmed sub-line under the heading
-        public PugText lockNote; // optional line naming why the section withholds settings; null until the prefab carries one
+        public PugText lockNote; // line under the hint naming why the section withholds settings; null means the template has none
         public Transform widgetContainer; // parent for the widget rows
     }
 }

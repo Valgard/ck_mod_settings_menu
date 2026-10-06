@@ -2,8 +2,8 @@ using CoreLib.Data.Configuration;
 
 namespace ModSettingsMenu.Settings
 {
-    /// <summary>Why an entry cannot be changed right now, if it cannot. Nothing reads it for display
-    /// yet; <see cref="LockReason.NoWorld"/> and <see cref="LockReason.ConditionUnmet"/> are the two
+    /// <summary>Why an entry cannot be changed right now, if it cannot. The menu reads it to
+    /// paint withheld rows and to word the section note; <see cref="LockReason.NoWorld"/> and <see cref="LockReason.ConditionUnmet"/> are the two
     /// that name a condition the player could meet, <see cref="LockReason.ViewOnly"/> is permanent.</summary>
     internal enum LockReason
     {

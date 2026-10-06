@@ -668,7 +668,13 @@ namespace ModSettingsMenu
             // decision worth reading at the call site rather than tracing to a default.
             var section = ModSettings.Section(this, access: ConfigAccessLevel.Client).Toggle(out ShowForeignConfigs, "showForeignConfigs", true);
             if (DevFlags.Is("TestFixtures"))
+            {
+                // Test scaffolding, not copy. No installed consumer both sets a hint and declares a
+                // withheld row, so without this the MSM-10 check that the section note leaves the
+                // consumer's own hint alone would have no section to be walked on.
+                section.Hint("Test fixture hint: this line must stay on its own, above the lock note.");
                 AddDeclaredFixtures(section);
+            }
             section.Build();
         }
 
