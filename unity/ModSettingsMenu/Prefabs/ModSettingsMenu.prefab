@@ -49,6 +49,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -57,7 +60,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 1
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 0
   dontResetEffectsOnRender: 0
@@ -330,6 +332,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   pivot: 4
   renderWidthPixels: 384
   renderHeightPixels: 0
@@ -627,6 +632,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -635,7 +643,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 1
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
@@ -785,6 +792,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -793,7 +803,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 1
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
@@ -875,6 +884,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   uiComponent: {fileID: 114632746491512912}
   inheritWidth: 1
   width: 0
@@ -929,6 +941,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -937,7 +952,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 0
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 0
   dontResetEffectsOnRender: 0
@@ -1192,13 +1206,16 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   pivotPosition: 1
   horizontal: 0
-  reversed: 0
   gapBetweenItems: 10
   paddingStart: 0
   paddingEnd: 0
   background: {fileID: 0}
+  backgroundImagePivot: 4
   renderFrameLate: 0
 --- !u!1 &1709254077376921
 GameObject:
@@ -1288,6 +1305,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   menuEntryVirtualHeight: 2
   menuEntryStartPositionY: -1
   menuEntryHorizontalSpacing: 1.4
@@ -1855,6 +1875,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -1863,7 +1886,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 1
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
@@ -1963,6 +1985,7 @@ Transform:
   m_Children:
   - {fileID: 8719119960680466008}
   - {fileID: 4771092198100777}
+  - {fileID: 62696414759477196}
   m_Father: {fileID: 73884534012020332}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2272333094510546156
@@ -1980,12 +2003,16 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
+  pivotPosition: 0
   horizontal: 0
-  reversed: 0
   gapBetweenItems: -1
   paddingStart: 0
   paddingEnd: 0
   background: {fileID: 0}
+  backgroundImagePivot: 4
   renderFrameLate: 0
 --- !u!1 &1810696107057770637
 GameObject:
@@ -2036,6 +2063,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -2044,7 +2074,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 1
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 0
   dontResetEffectsOnRender: 0
@@ -2196,6 +2225,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -2204,7 +2236,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 1
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
@@ -2389,6 +2420,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -2397,7 +2431,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 0
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 1
   dontResetEffectsOnRender: 0
@@ -2518,6 +2551,97 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 1
   m_SpriteSortPoint: 0
+--- !u!1 &3703533017469707045
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 62696414759477196}
+  - component: {fileID: 372325419043956533}
+  m_Layer: 5
+  m_Name: LockNote
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &62696414759477196
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3703533017469707045}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: -0.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3054085269736549703}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+--- !u!114 &372325419043956533
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3703533017469707045}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 1873953792, guid: 548e3dd2d27c1e2d0bdf82f0889cb8a7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  centerInParent: 0
+  activeInPlatforms: -1
+  activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
+  renderOnStart: 1
+  keepEnabledOnStart: 0
+  alwaysUpdateDynamicTextPixelPos: 0
+  isWrittenToByUser: 0
+  checkForProfanity: 0
+  isHidden: 0
+  trackDynamicTextCharacterEndPositions: 0
+  localize: 0
+  languagesToForceLatinFont: 
+  localizePlaceholders: 0
+  dontResetEffectsOnRender: 0
+  hideInStreamerMode: 0
+  maxWidth: 22
+  textString: Section Hint
+  textSuffix: 
+  formatFields: []
+  overrideMaterial: {fileID: 0}
+  offsetKey: 
+  style:
+    fontFace: 16777232
+    capitalization: 0
+    horizontalAlignment: 0
+    verticalAlignment: 1
+    extraCharSpacing: 0
+    extraSpaceWidth: 0
+    extraLineSpacing: 0
+    extraEmptyLineSpacing: 0
+    forceMonospace: 0
+    wrapAtComma: 0
+    rightToLeftXOffset: 0
+    invertHorizontalAlignment: 1
+    color: {r: 0.6, g: 0.6, b: 0.6, a: 1}
+    outline: 0
+    outlineColor: {r: 0, g: 0, b: 0, a: 0}
+    supportColorTags: 0
+    sortingLayer: -2147483648
+    orderInLayer: 9999
+    maskInteraction: 1
+  styleOverrides: []
+  usePooledResources: 1
+  freeResourcesOnDisable: 1
 --- !u!1 &4204975582969082767
 GameObject:
   m_ObjectHideFlags: 0
@@ -2570,6 +2694,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   pivot: 4
   renderWidthPixels: 384
   renderHeightPixels: 0
@@ -2786,6 +2913,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   header: {fileID: 5255929089774228046}
   hint: {fileID: 5255929089100777}
+  lockNote: {fileID: 372325419043956533}
   widgetContainer: {fileID: 1251879244675153234}
 --- !u!114 &7273324412641452292
 MonoBehaviour:
@@ -2802,12 +2930,16 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
+  pivotPosition: 0
   horizontal: 0
-  reversed: 0
   gapBetweenItems: 2
   paddingStart: 0
   paddingEnd: 0
   background: {fileID: 0}
+  backgroundImagePivot: 4
   renderFrameLate: 0
 --- !u!1 &7285690620076366903
 GameObject:
@@ -2857,12 +2989,16 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
+  pivotPosition: 0
   horizontal: 0
-  reversed: 0
   gapBetweenItems: 0
   paddingStart: 0
   paddingEnd: 0
   background: {fileID: 631140525951845915}
+  backgroundImagePivot: 4
   renderFrameLate: 0
 --- !u!1 &7589533252999751819
 GameObject:
@@ -2913,6 +3049,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   pivot: 4
   renderWidthPixels: 384
   renderHeightPixels: 0
@@ -2976,6 +3115,9 @@ MonoBehaviour:
   centerInParent: 0
   activeInPlatforms: -1
   activeInStoreFronts: -1
+  onResized:
+    m_PersistentCalls:
+      m_Calls: []
   renderOnStart: 1
   keepEnabledOnStart: 0
   alwaysUpdateDynamicTextPixelPos: 0
@@ -2984,7 +3126,6 @@ MonoBehaviour:
   isHidden: 0
   trackDynamicTextCharacterEndPositions: 0
   localize: 1
-  topAligned: 0
   languagesToForceLatinFont: 
   localizePlaceholders: 0
   dontResetEffectsOnRender: 0
