@@ -143,11 +143,19 @@ namespace ModSettingsMenu.UI
         private void MakeValueReadOnly()
         {
             CapturePaint();
-            foreach (var fx in valueText.GetComponents<PugTextEffect>())
-                fx.enabled = false;
+            DisableValueEffects();
             valueText.dontResetEffectsOnRender = true;
             if (valueText.style != null)
                 valueText.style.color = PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR;
+        }
+
+        // Both value effects off, so the colour transition and the pop-in never animate. The prior state
+        // is in _valueEffectsEnabled (CapturePaint runs first at both call sites), which is what
+        // ReleaseLockAppearance hands back.
+        private void DisableValueEffects()
+        {
+            foreach (var fx in valueText.GetComponents<PugTextEffect>())
+                fx.enabled = false;
         }
 
         // RadicalMenuOption.OnSelected/OnDeselected recolour every menuOptionEffect DIRECTLY (they
@@ -209,6 +217,12 @@ namespace ModSettingsMenu.UI
             CaptureEffects();
             if (_effectsCaptured)
                 menuOptionEffects = new PugTextEffectMenuOption[0];
+            // A row built editable still has its value effects running, because only a row bound
+            // read-only went through MakeValueReadOnly. The live poll is what relocks such a row, and
+            // an enabled effect would tick over the colour painted below. Captured first, so the
+            // release gives back exactly the states the prefab had (JuicyAppear stays disabled).
+            if (valueText != null)
+                DisableValueEffects();
             var c = selected ? LockedSelectedColor : PugTextEffectMenuOption.UNSELECTABLE_TEXT_COLOR;
             PaintLocked(labelText, c);
             PaintLocked(valueText, c);

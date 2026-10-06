@@ -1926,6 +1926,98 @@ own section (holds `testServerScoped`), and `TestListFixtures` (`Client` rows, p
       line in a session, is not walked: `AccessLock.Reason` answers `NoWorld` only without
       a player and `ConditionUnmet` only with one, so the two cannot meet.
 
+## MSM-10 Task 5 — the screen follows a permission change
+
+The rows, the notes and the section heights are computed when the screen opens; this task
+makes them follow a change that happens while it is open (criteria 11 and 12). Build with
+`MOD_DEV_FLAGS=TestFixtures`. The check needs a live dedicated-server session and one
+account, because a player cannot lose their own rights without leaving the settings
+screen, which is exactly what the criterion forbids.
+
+**The trigger.** A `TestFixtures` build polls a file and sends the RPC the game's own
+buttons would send. The file lives at
+
+~~~text
+<LocalLow>/Pugstorm/Core Keeper/Steam/<user-id>/mods/ModSettingsMenu/permission-trigger
+~~~
+
+Write one token into it from a shell; the game reads it, deletes the file and acts:
+
+~~~bash
+D="$HOME/Library/Application Support/CrossOver/Bottles/Core Keeper/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/10510784/mods/ModSettingsMenu"
+printf 'revoke-admin' > "$D/permission-trigger"   # this player loses stage 1
+printf 'guest-on'     > "$D/permission-trigger"   # SetGuestMode(true)
+printf 'guest-off'    > "$D/permission-trigger"   # SetGuestMode(false)
+~~~
+
+`Player.log` answers each one with `permission trigger: sent '<token>'`, and the
+file is gone within a frame. Nothing grants rights back (`AddAdmin` refuses a
+caller holding none), so `revoke-admin` is one-way: **reversing a change is
+walkable for guest mode only.**
+
+**Setup.** As round 3 of § "Server and Admin, checked against a live world": the
+dedicated server's `Admins.json` lists this account at `privileges: 1` (stage 2
+cannot be revoked), guest mode off. Join, open Options → Mod settings, and
+**touch nothing until the last step**. Keep `Player.log` open: each transition
+the screen reacts to writes exactly one line, `permissions changed under the
+open screen: player=… guestMode=… adminPrivileges=…`.
+
+Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
+`testAfterGroupIsClient`, the fixture hint), `TestLockedFixtures` (`ServerList` withheld,
+`ServerInfo` an `Info` row), `TestViewOnlyFixtures`, `TestListFixtures`.
+
+- [ ] **0. Before anything: all quiet.** Both `testServerScoped` and `testAdminScoped` are
+      editable, no section shows a note, and the log has no `permissions changed` line. Wait
+      ten seconds: still none. A line here means the poll fires without a change.
+- [ ] **1. Guest mode while holding rights: nothing moves.** `guest-on`, then `guest-off`.
+      The server log shows `Set guest mode=True` and `=False`; **the client screen does not
+      change at all and writes no `permissions changed` line.** The player's `guestMode` is
+      the world flag *and* `adminPrivileges < 1`, so for an admin it never turns true (§ 0).
+      A poll that read the world flag would repaint here.
+- [ ] **2. `revoke-admin`: only the `Admin` row follows.** Server log: `Remove admin
+      index=<n>`; client log: one `permissions changed … adminPrivileges=0` line. Changed:
+      `testAdminScoped` turns red and is skipped by navigation; this mod's section gains
+      the line *Some settings require permissions you do not have here* between the fixture
+      hint and the box, and everything below it moves down by one line. **Must not
+      change:** `testServerScoped` (guest mode is still off, so it stays editable and its
+      normal colour), `testAfterGroupIsClient`, every `TestListFixtures` and
+      `TestViewOnlyFixtures` row, `ServerList` and `ServerInfo` in `TestLockedFixtures`
+      (no note appears there), the fixture hint (still its own line, above the note),
+      and the scroll position. (Criterion 11, first half)
+- [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
+  `guestMode=True`. Changed: `testServerScoped` and `ServerList` turn red;
+  `TestLockedFixtures` gains the same *permissions* note (and grows), while this
+  mod's section keeps the note it already had. **Must not change:**
+  `testAdminScoped` (already red, still the same red), `ServerInfo` (an `Info`
+  row is not painted), the `ViewOnly` and `Client` rows. (Criterion 11, second
+  half)
+- [ ] **4. `guest-off`: the `Server` rows come back, the `Admin` row does not.**
+  Client log: one line, `guestMode=False`. `testServerScoped` and `ServerList`
+  are editable again and the `TestLockedFixtures` note is gone, with the section
+  shrinking back. **Must not change:** `testAdminScoped` stays red and this
+  mod's section keeps its note, because the rights are still gone. (Criterion
+  12, guest-mode direction)
+- [ ] **5. What the relocked row gave back.** Only now touch the screen. Move to
+      `testServerScoped` (it was editable when built, locked in step 3, released in step 4):
+      it is selectable, its value turns blue on selection, and confirming flips it. Press
+      confirm on it and on `testAfterGroupIsClient`, which never went through the cycle: the
+      two value texts behave identically, in particular neither pops in on change
+      (`JuicyAppear` is disabled in the prefab, and the cycle must not have switched it
+      on). Failure looks like a value that pops, or stays red-grey while selected.
+
+**Not walkable here, and why.**
+
+- *The admin-rights direction of criterion 12.* Nothing can give the rights back from the
+  client; step 2 is a one-way door. Walking it needs a second admin account (the spec's
+  original choreography), or a restart, which loses guest mode and so also loses what the
+  walk set up.
+- *A row relocking while it holds the selection.* A withheld settings row leaves navigation
+  by being skipped; whether the selection is moved off a row that is withheld *under* it is
+  CK's own behaviour and is not exercised here (step 0 touches nothing, so no row holds the
+  selection when the transitions arrive).
+- *A change while the list drill-in is open.* The poll is dormant there (another menu is on
+  top) and returning rebuilds every row, so the screen is correct again without it.
+
 ## After the walk
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly

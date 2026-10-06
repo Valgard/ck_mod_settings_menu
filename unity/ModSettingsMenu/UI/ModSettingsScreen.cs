@@ -76,6 +76,7 @@ namespace ModSettingsMenu.UI
         private UIScrollWindow _scroll;
         private LinearLayoutUIComponent _layout;
         private readonly List<GameObject> _sectionRoots = new List<GameObject>(); // rendered inner-to-outer after activation
+        private readonly List<ModSection> _sectionModels = new List<ModSection>(); // parallel to _sectionRoots: what each root was built from
         private readonly List<ListWidget> _listWidgets = new List<ListWidget>(); // single-line rows; height set in RenderContent from the preview's rendered text height
 
         // Rebuild on every open (Populate) — the vanilla PugTexts free their glyphs on disable
@@ -103,6 +104,7 @@ namespace ModSettingsMenu.UI
             Populate();
             base.Activate();
             RenderContent();
+            SnapshotPermissions(); // what the rows were just built against, so the poll in Update reports changes since
         }
 
         // Leaving the Mod settings screen (RadicalMenu's deactivate/back hook). If a restart-required
@@ -292,6 +294,7 @@ namespace ModSettingsMenu.UI
             }
             menuOptions.Clear();
             _sectionRoots.Clear();
+            _sectionModels.Clear();
             _listWidgets.Clear();
 
             // Boxes render alphabetically by the heading actually shown — a stable, findable order
@@ -317,6 +320,7 @@ namespace ModSettingsMenu.UI
             {
                 var sGo = BuildSection(section);
                 _sectionRoots.Add(sGo);
+                _sectionModels.Add(section);
                 var box = sGo.GetComponent<SectionBox>();
                 var container = (box != null && box.widgetContainer != null) ? box.widgetContainer : sGo.transform;
 
@@ -494,6 +498,9 @@ namespace ModSettingsMenu.UI
         {
             if (Manager.menu == null || Manager.menu.GetTopMenu() != (RadicalMenu)this)
                 return;
+            // Before the reset guard below, never behind it: CanReset is false for a section with
+            // nothing editable, which is exactly the state this poll has to see lifted (spec § 4.7).
+            PollPermissions();
             var section = SelectedSection();
             if (!SectionReset.CanReset(section))
                 return;
@@ -502,6 +509,60 @@ namespace ModSettingsMenu.UI
             if (!keyboard && !gamepad)
                 return;
             ConfirmReset(section);
+        }
+
+        // The three inputs every lock decision rests on (spec § 0, § 4.7), kept apart rather than folded
+        // into "is anything locked": Server locks on guestMode and Admin on adminPrivileges, so one
+        // derived answer would not tell which of them moved. guestMode is the PLAYER's, which is the
+        // world flag AND adminPrivileges < 1 — the very value ConfigScope.Changeable() reads.
+        private bool _seenPlayer;
+        private bool _seenGuestMode;
+        private int _seenAdminPrivileges;
+
+        private static void ReadPermissions(out bool player, out bool guestMode, out int adminPrivileges)
+        {
+            var pc = Manager.main == null ? null : Manager.main.player;
+            player = pc != null;
+            guestMode = player && pc.guestMode;
+            adminPrivileges = player ? pc.adminPrivileges : 0;
+        }
+
+        private void SnapshotPermissions() => ReadPermissions(out _seenPlayer, out _seenGuestMode, out _seenAdminPrivileges);
+
+        // No event announces a change to either value (both ride a NetCode snapshot, spec § 4.7), so
+        // this compares them with last frame's: three reads and no allocation on a quiet frame.
+        private void PollPermissions()
+        {
+            ReadPermissions(out bool player, out bool guestMode, out int adminPrivileges);
+            if (player == _seenPlayer && guestMode == _seenGuestMode && adminPrivileges == _seenAdminPrivileges)
+                return;
+            _seenPlayer = player;
+            _seenGuestMode = guestMode;
+            _seenAdminPrivileges = adminPrivileges;
+            if (DevFlags.Is("TestFixtures"))
+                Debug.Log(
+                    $"[ModSettingsMenu] permissions changed under the open screen: player={player} guestMode={guestMode} adminPrivileges={adminPrivileges}"
+                );
+            FollowPermissionChange();
+        }
+
+        // Every row re-reads its own lock state through Refresh — which releases a lifted lock BEFORE
+        // its render and paints a new one AFTER it, the order ApplyLockAppearance's contract needs, so a
+        // bare ApplyLockAppearance here would leave a just-unlocked selected row in the wrong tone —
+        // then each section's note is re-evaluated, then the layouts run again, because a note
+        // appearing or going away changes its section's height.
+        private void FollowPermissionChange()
+        {
+            foreach (var option in menuOptions)
+            {
+                var row = option as ISectionRow;
+                if (row != null)
+                    row.Refresh();
+            }
+            for (int i = 0; i < _sectionRoots.Count; i++)
+                if (_sectionRoots[i] != null)
+                    RenderLockNote(_sectionModels[i], _sectionRoots[i].GetComponent<SectionBox>());
+            RenderContent();
         }
 
         // Scroll the viewport so the selected row follows keyboard / controller navigation.

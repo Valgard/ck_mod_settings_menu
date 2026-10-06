@@ -942,8 +942,71 @@ namespace ModSettingsMenu
 
         internal static void RequestRestartPrompt() => _restartPromptCountdown = 3;
 
+        // MSM-10 criteria 11 and 12, drivable from outside the game. A tester cannot revoke their own
+        // rights, nor flip guest mode, without leaving the settings screen, and leaving it is what the
+        // criteria forbid — so the RPCs the game's own buttons send are sent from here instead, on a
+        // file's say-so. The server checks neither sender (the handlers look only at the target and at
+        // the world singleton), so a client that has given up its rights can still send both.
+        //
+        // The file is written from a shell: the content is one token, the file is read, acted on and
+        // deleted. Tokens: "revoke-admin" (this player loses stage 1), "guest-on", "guest-off".
+        // There is no token that grants rights: AddAdmin's handler refuses a caller holding none, so
+        // revoke-admin is one-way and only the guest-mode pair can be reversed.
+        //
+        // Reached only behind DevFlags.Is("TestFixtures"), like the fixtures it serves: a build for a
+        // player carries no code path that can send an admin RPC.
+        private const string PermissionTriggerPath = "ModSettingsMenu/permission-trigger";
+        private static bool _permissionTriggerBroken;
+
+        private static void PollPermissionTrigger()
+        {
+            if (_permissionTriggerBroken)
+                return;
+            try
+            {
+                if (!API.ConfigFilesystem.FileExists(PermissionTriggerPath))
+                    return;
+                // Not ready (title screen, no ECS yet): leave the file where it is and say nothing, so a
+                // trigger written early is still there when the world is.
+                var player = Manager.main == null ? null : Manager.main.player;
+                var world = Manager.ecs == null ? null : Manager.ecs.ClientWorld;
+                if (player == null || world == null || !world.IsCreated || Manager.networking == null)
+                    return;
+                var token = System.Text.Encoding.UTF8.GetString(API.ConfigFilesystem.Read(PermissionTriggerPath)).Trim().ToLowerInvariant();
+                if (token.Length == 0)
+                    return; // caught mid-write: the content has not landed yet
+                API.ConfigFilesystem.Delete(PermissionTriggerPath);
+                switch (token)
+                {
+                    case "revoke-admin":
+                        Manager.networking.RemoveAdmin(player, world);
+                        break;
+                    case "guest-on":
+                        Manager.networking.SetGuestMode(true, world);
+                        break;
+                    case "guest-off":
+                        Manager.networking.SetGuestMode(false, world);
+                        break;
+                    default:
+                        Debug.LogWarning($"[ModSettingsMenu] permission trigger: unknown token '{token}' (revoke-admin | guest-on | guest-off).");
+                        return;
+                }
+                Debug.Log($"[ModSettingsMenu] permission trigger: sent '{token}'.");
+            }
+            catch (System.Exception ex)
+            {
+                // Stop for the session rather than retry: a file that cannot be read or deleted would
+                // otherwise resend its RPC every frame.
+                _permissionTriggerBroken = true;
+                Debug.LogWarning($"[ModSettingsMenu] permission trigger disabled for this session: {ex.Message}");
+            }
+        }
+
         public void Update()
         {
+            if (DevFlags.Is("TestFixtures"))
+                PollPermissionTrigger();
+
             if (_restartPromptCountdown >= 0 && _restartPromptCountdown-- == 0)
                 ModSettingsScreen.ShowRestartPrompt();
 
