@@ -476,6 +476,31 @@ namespace ModSettingsMenu
                 // with no scope goes red. Do not "fix" it to clientScope.
                 emptySectionFile.Bind("named", "afterHeader", true, new ConfigDescription("Its own named section; must get a heading."));
 
+                // The two rows MSM-10 colours differently, in a file of their own for the same reason as
+                // the one below: no sort-order, heading, naming-diagnostic or reset claim may use it, so
+                // nobody has a reason to change it. Both are Server-scoped, so both are locked at the
+                // title screen and editable in any session that has a world.
+                //   - ServerList is a comma list, so it renders as a list row — the only fixture that is
+                //     withheld AND an ACTIVE-state row, which is the case that needs MSM to paint it red.
+                //   - ServerInfo is prose with no comma, so it is an Info row: never withheld whatever its
+                //     scope says, and therefore the one Server-scoped row that must NOT go red.
+                var lockedFile = new ConfigFile("TestLockedFixtures/config.cfg", saveOnInit: true, info);
+                var serverScope = new ConfigScope(ConfigAccessLevel.Server);
+                lockedFile.Bind(
+                    "Settings",
+                    "ServerList",
+                    "Alpha, Beta, Gamma",
+                    new ConfigDescription("A Server-scoped list: red while withheld."),
+                    serverScope
+                );
+                lockedFile.Bind(
+                    "Settings",
+                    "ServerInfo",
+                    "A single sentence of prose with nothing to edit",
+                    new ConfigDescription("A Server-scoped Info row: never withheld, so never red."),
+                    serverScope
+                );
+
                 // One section, one row, ViewOnly — and nothing else may ever rest on this file. It is the
                 // witness that a section with no editable row offers no reset hint (MSM-10 criterion 13).
                 // ViewOnly is answered ahead of any player lookup, so that holds in every session, not

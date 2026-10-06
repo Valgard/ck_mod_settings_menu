@@ -61,6 +61,7 @@ Choice — that pair is explained further down:
 <bottle>/…/mods/TestSingleGroupFixtures/config.cfg
 <bottle>/…/mods/TestEmptySectionFixtures/config.cfg
 <bottle>/…/mods/TestViewOnlyFixtures/config.cfg
+<bottle>/…/mods/TestLockedFixtures/config.cfg
 <bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written; ThrowingFixtures build only)
 <bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written; ThrowingFixtures build only)
 ```
@@ -1769,6 +1770,105 @@ belongs to Task 5.
 
 **Expected result:** only `Server`/`Admin`-scoped rows without a world leave
 navigation and input. Nothing else moves.
+
+## MSM-10 Task 3 — MSM paints every withheld row
+
+Task 2 made a withheld row leave navigation; CK then painted its **label** red on its
+own. This task paints the rest: the value column, the whole list row (label, preview and
+drill arrow), and the lightened tone while a locked row holds the selection. Build with
+`MOD_DEV_FLAGS=TestFixtures`; start at the **title screen**.
+
+Two fixtures carry it, both `Server`-scoped and both in `TestLockedFixtures`, a file of
+its own so that no sort-order, heading, naming-diagnostic or reset check can come to
+depend on it: `ServerList` (`Alpha, Beta, Gamma`, a list row) and `ServerInfo` (prose
+with no comma, an `Info` row). With `testServerScoped`, in this mod's own section, they
+are the three rows this walk uses. Nothing else in this file counts or enumerates the
+rows of that file: the naming diagnostic's "one line per discovered section" simply
+gains one section, and the reset checks name their files.
+
+**Before this task**, observed on the Task 2 build: `testServerScoped` had a red label
+beside a grey value, and no list row was red anywhere. The split is the part worth
+remembering — the label was CK's own doing, not MSM's: `GRAYED_OUT` picks
+`UNSELECTABLE_TEXT_COLOR` through `IsSelectionEnabled(visualOnly: true)`
+(`docs/ck/ui-framework.md`, § "Options that exist but cannot be changed right now"), so
+half the paint arrived for free from Task 2 alone, and the mismatched half is what made
+the row look broken rather than withheld. The value stayed the static grey
+`MakeValueReadOnly` writes; a list row stays `ACTIVE`, and CK's red is chosen only for a
+row that does not, so nothing there went red at all.
+
+**What is checked is a difference between two rows, never one row on its own**, because a
+colour that "looks red" is not an outcome. At the title screen, in the same box:
+
+- [ ] **Toggle: label and value are the same dull red.** `testServerScoped` is
+      deselected (put the selection elsewhere first). Label *and* value read as the same
+      dull red, and both are visibly redder than the grey of `testAfterGroupIsClient`
+      right above it. A grey value beside a red label is the failure this task exists
+      for. (Criterion 1)
+- [ ] **List: label, preview and arrow are red together.** `ServerList` shows its
+      label, its `Alpha, Beta, Gamma` preview and its drill arrow in that same red, and
+      is redder than `Short` in `TestListFixtures`, which is `Client`-scoped and must
+      stay grey. Arrow red while the text is grey, or the reverse, is a miss. (5)
+- [ ] **List: still reachable, still opens read-only.** Select `ServerList` with the
+      keyboard — it takes the selection, unlike the toggle — and confirm: its drill-in
+      opens and, like `LongReadOnly`, shows no ↑/↓/✕ buttons and no Add button; an
+      editable list such as `Short` shows all of them. (5)
+- [ ] **Info: not red.** `ServerInfo` renders in the ordinary grey of `ViewOnlyInfo`
+      (`TestListFixtures`), not in red. It is the one `Server`-scoped row that must
+      look like the rows around it. (4)
+- [ ] **Selected and locked reads lighter red, not blue.** Take two screenshots,
+      because there is one selection at a time: `Short` selected (an editable row, in
+      CK's selection blue) and `ServerList` selected (locked). The second must
+      read as a lighter red than the deselected locked rows beside it, and must show no
+      blue anywhere on the row, arrow included. The exact triple is not readable off a
+      screen and is not what this checks. (6)
+- [ ] **Leaving it returns to the dull red.** Move off `ServerList` and back: after
+      leaving, it is the same dull red as before the first selection, not the grey of the
+      editable rows. This is the deselect path, which CK would otherwise repaint with the
+      ordinary grey the first time the selection moves.
+- [ ] **A locked settings row can hold the selection.** `testServerScoped` takes it
+      only if `Activate()` picks it first, which it does when it is the first
+      `ACTIVE`-or-`GRAYED_OUT` row of the screen; if not, this item cannot be reached
+      from the keyboard and is covered by the lock-arrives-under-the-cursor case in
+      Task 5. When it does hold the selection, its label and value both read the lighter
+      red. (6)
+
+**The same three rows in singleplayer.** Load any singleplayer world, open the menu.
+This checks that the three rows render and behave normally in a world, and nothing
+more: `Populate` rebuilds every row on each open, and in a world it builds them
+unlocked, so a row is never painted here and therefore never handed back.
+
+- [ ] `testServerScoped` is editable and **not red**: label and value in the ordinary
+      selection colours (grey at rest, blue on selection), and it steps on confirm. (2)
+- [ ] `ServerList` is **not red** at rest and shows the arrow in the ordinary tint; it
+      opens its drill-in with editing available.
+- [ ] `ServerInfo` is unchanged: inert, grey, no widget. (2)
+- [ ] Quit to the title screen and reopen: all three are red / red / not red again.
+
+**Not exercised by anything in this task: the restore path.** `ReleaseLockAppearance`,
+and the `RestoreTo` calls under it, run only when a row that was painted while locked
+becomes unlocked while it is still alive. Rows are rebuilt on every open, so that never
+happens from the keyboard; it first happens in Task 5's live poll, and that is where the
+restore is checked. Until then it is reviewed by reading, not walked. Recorded with it,
+for the same reason: relocking a row that was **editable** when built leaves its value
+effects enabled, because only a row bound locked had them disabled by
+`MakeValueReadOnly`; also Task 5's.
+
+**What would go wrong, and how it shows.** A capture taken in `Bind` saves an empty
+effect array (`base.Awake` fills it afterwards), so the failure appears when a lock
+*lifts* mid-open, not at first render: the row's selection colours stop working. That
+transition needs a live permission change and belongs to Task 5.
+
+**`PreWarm` capture, reviewed rather than walked.** `PreWarm` builds rows at load, where
+no player exists, so every scoped row is locked and a capture there records the locked
+state as "original". It cannot leak. The capture lives in widget instance fields
+(`_labelMemo`, `_valueMemo`, `_origMenuOptionEffects` and their kin in `SettingWidget`
+and `ListWidget`); `Populate` instantiates every row from the inactive templates, destroys
+all old rows before building new ones, and so discards each capture with its row. The
+only statics added are `SettingWidget.LockedSelectedColor` (immutable) and a stateless
+helper. The templates themselves are never bound, so they are never painted.
+
+**Expected result:** the red and the lighter red appear on exactly the withheld rows,
+and `ServerInfo`, `ViewOnly` rows and every editable row look as they did.
 
 ## After the walk
 

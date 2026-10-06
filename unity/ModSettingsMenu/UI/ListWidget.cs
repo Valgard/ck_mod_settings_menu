@@ -18,6 +18,14 @@ namespace ModSettingsMenu.UI
         private ModSection _section;
         private ListWidgetBox _box;
 
+        // What the row looked like before MSM first painted it locked. Per-widget fields: Populate
+        // destroys and rebuilds every row, so a capture cannot outlive the row it describes.
+        private SettingWidget.TextPaintMemo _labelMemo;
+        private SettingWidget.TextPaintMemo _previewMemo;
+        private bool _effectsCaptured;
+        private PugTextEffectMenuOption[] _origMenuOptionEffects;
+        private bool _lockPainted;
+
         public ModSection Section => _section;
 
         public void Bind(SettingDef def, ModSection section)
@@ -36,6 +44,7 @@ namespace ModSettingsMenu.UI
         {
             Render();
             TintDrill(IsSelected() ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+            ApplyLockAppearance(); // after the tint above, which would otherwise leave a locked row's arrow blue
         }
 
         public override OptionActiveState GetActiveStateInCurrentScene() => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
@@ -102,9 +111,67 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning("[ModSettingsMenu] ListWidget has no ListWidgetBox — row renders blank.");
                 return;
             }
+            // Release before the render and paint after it, for the same reasons as SettingWidget.Refresh:
+            // a lifted lock must be undone first so the render's ResetEffects colours the row, and the
+            // first render must run unsuppressed because it sizes the label effect's glyph list.
+            if (!_def.WithheldNow)
+                ReleaseLockAppearance();
             _box.label.RenderPlain(_def.Label());
             _box.preview.RenderPlain(Preview());
             TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR); // start in the unselected grey
+            ApplyLockAppearance();
+        }
+
+        /// <summary>Paints the row for its current lock state, or hands back what it painted. The list
+        /// row stays ACTIVE (it must remain reachable and open its drill-in), so CK would write the
+        /// ordinary grey at every render; spec § 4.4's second step is what makes it red at all. Reads
+        /// WithheldNow and the selection itself; the overrides below pass the selection explicitly
+        /// because IsSelected() still answers true for the row being left during OnDeselected.</summary>
+        internal void ApplyLockAppearance() => ApplyLockAppearance(IsSelected());
+
+        private void ApplyLockAppearance(bool selected)
+        {
+            if (_def == null || _box == null)
+                return;
+            if (!_def.WithheldNow)
+            {
+                ReleaseLockAppearance();
+                return;
+            }
+            if (!_lockPainted)
+            {
+                _labelMemo = SettingWidget.TextPaintMemo.Of(_box.label);
+                _previewMemo = SettingWidget.TextPaintMemo.Of(_box.preview);
+            }
+            if (!_labelMemo.Restorable || !_previewMemo.Restorable)
+                return; // refuse to paint what cannot be handed back (see SettingWidget.TextPaintMemo)
+            // Capture at the point of mutation, never in Bind: base.Awake fills menuOptionEffects AFTER
+            // Bind runs, so a capture there would save a null. Until it exists there is nothing to empty.
+            if (!_effectsCaptured && menuOptionEffects != null)
+            {
+                _origMenuOptionEffects = menuOptionEffects;
+                _effectsCaptured = true;
+            }
+            if (_effectsCaptured)
+                menuOptionEffects = new PugTextEffectMenuOption[0];
+            var c = selected ? SettingWidget.LockedSelectedColor : PugTextEffectMenuOption.UNSELECTABLE_TEXT_COLOR;
+            SettingWidget.PaintLocked(_box.label, c);
+            SettingWidget.PaintLocked(_box.preview, c);
+            TintDrill(c);
+            _lockPainted = true;
+        }
+
+        private void ReleaseLockAppearance()
+        {
+            if (!_lockPainted)
+                return;
+            _lockPainted = false;
+            if (_effectsCaptured)
+                menuOptionEffects = _origMenuOptionEffects;
+            _effectsCaptured = false;
+            _labelMemo.RestoreTo(_box.label);
+            _previewMemo.RestoreTo(_box.preview);
+            TintDrill(IsSelected() ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
         }
 
         // A row whose drill-in would be refused must not present itself as activatable: CK gates the
@@ -128,12 +195,14 @@ namespace ModSettingsMenu.UI
         {
             base.OnSelected();
             TintDrill(PugTextEffectMenuOption.SELECTED_VALUE_COLOR);
+            ApplyLockAppearance(selected: true); // after the base and the tint, so both are overwritten, not raced
         }
 
         public override void OnDeselected(bool playEffect = true)
         {
             base.OnDeselected(playEffect);
             TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+            ApplyLockAppearance(selected: false);
         }
 
         private void TintDrill(Color c)

@@ -21,8 +21,74 @@ namespace ModSettingsMenu.UI
         private const char StepActive = '\u2666';
         private const char StepInactive = '\u2662';
 
+        /// <summary>What a withheld row's text looked like before MSM painted it, so lifting the lock
+        /// can hand back the row it found rather than a guess at it.
+        ///
+        /// Invariant: a text may be painted only if its memo is <see cref="Restorable"/>. Capture is
+        /// one-shot while painting is not, so a precondition guarded only at capture would let a row be
+        /// painted that can never be handed back. Callers therefore refuse to paint, rather than retry
+        /// the capture, and "painted" and "restorable" cannot come apart. A missing text is restorable:
+        /// there is nothing to paint and nothing to give back.</summary>
+        internal struct TextPaintMemo
+        {
+            private Color _color;
+            private bool _dontResetEffectsOnRender;
+            private bool _present;
+
+            public bool Restorable { get; private set; }
+
+            public static TextPaintMemo Of(PugText t) =>
+                t == null
+                    ? new TextPaintMemo { Restorable = true }
+                    : new TextPaintMemo
+                    {
+                        _color = t.style != null ? t.style.color : default,
+                        _dontResetEffectsOnRender = t.dontResetEffectsOnRender,
+                        _present = true,
+                        Restorable = t.style != null,
+                    };
+
+            public void RestoreTo(PugText t)
+            {
+                if (t == null || !_present || !Restorable)
+                    return;
+                t.dontResetEffectsOnRender = _dontResetEffectsOnRender;
+                t.style.color = _color;
+                t.SetTempColor(_color);
+            }
+        }
+
+        /// <summary>The selected tone of a locked row: CK's selection factor applied channel-wise to
+        /// UNSELECTABLE_TEXT_COLOR, so it reads as a lighter red rather than as selection blue
+        /// (spec § 4.4 gives the derivation).</summary>
+        internal static readonly Color LockedSelectedColor = new Color(0.642f, 0.263f, 0.277f, 1f);
+
+        /// <summary>The one write a withheld row's text takes, shared with ListWidget: stop CK's render
+        /// path from repainting it (dontResetEffectsOnRender), then set the base colour a render would
+        /// use and the live glyphs, which a render does not run for.</summary>
+        internal static void PaintLocked(PugText t, Color c)
+        {
+            if (t == null || t.style == null)
+                return;
+            t.dontResetEffectsOnRender = true;
+            t.style.color = c;
+            t.SetTempColor(c);
+        }
+
         private SettingDef _def;
         private ModSection _section;
+
+        // What this row looked like before MSM first touched it. Per-widget fields on purpose: Populate
+        // destroys and rebuilds every row, so nothing here can outlive the row it describes — PreWarm's
+        // load-time rows, where every scoped row is locked, are discarded with the rest.
+        private bool _paintCaptured;
+        private TextPaintMemo _labelMemo;
+        private TextPaintMemo _valueMemo;
+        private PugTextEffect[] _valueEffects;
+        private bool[] _valueEffectsEnabled;
+        private bool _effectsCaptured;
+        private PugTextEffectMenuOption[] _origMenuOptionEffects;
+        private bool _lockPainted; // we hold a mutation that has to be handed back when the lock lifts
 
         public ModSection Section => _section;
 
@@ -76,6 +142,7 @@ namespace ModSettingsMenu.UI
         // of use in SuppressValueSelectionEffect (below).
         private void MakeValueReadOnly()
         {
+            CapturePaint();
             foreach (var fx in valueText.GetComponents<PugTextEffect>())
                 fx.enabled = false;
             valueText.dontResetEffectsOnRender = true;
@@ -91,19 +158,97 @@ namespace ModSettingsMenu.UI
         {
             if (_def == null || _def.IsEditable || menuOptionEffects == null)
                 return;
+            CaptureEffects(); // before the filter, so lifting a lock never hands back a thinned array
             menuOptionEffects = System.Array.FindAll(menuOptionEffects, fx => fx != null && !fx.isValueText);
+        }
+
+        // Record what the row looked like before MSM's first write to it. Called at the point of the
+        // first mutation, never from Bind: base.Awake fills menuOptionEffects AFTER Bind runs, so a
+        // capture there would save a null and the restore would wipe the row's effects.
+        private void CaptureEffects()
+        {
+            if (_effectsCaptured || menuOptionEffects == null)
+                return;
+            _origMenuOptionEffects = menuOptionEffects;
+            _effectsCaptured = true;
+        }
+
+        private void CapturePaint()
+        {
+            if (_paintCaptured || valueText == null)
+                return;
+            _labelMemo = TextPaintMemo.Of(labelText);
+            _valueMemo = TextPaintMemo.Of(valueText);
+            _valueEffects = valueText.GetComponents<PugTextEffect>();
+            _valueEffectsEnabled = System.Array.ConvertAll(_valueEffects, fx => fx.enabled);
+            _paintCaptured = true;
+        }
+
+        /// <summary>Paints the row for its current lock state, or hands back what it painted. Idempotent;
+        /// reads WithheldNow and the selection itself, so a caller cannot disagree with the row about
+        /// its own state. Spec § 4.4: CK's own writes are silenced in two steps (the selection path via
+        /// menuOptionEffects, the render path via dontResetEffectsOnRender), and then only MSM writes.
+        ///
+        /// The two overrides below pass the selection state explicitly instead, because during
+        /// OnDeselected CK has not yet moved its selection (SelectOptionIndex deselects the old row
+        /// BEFORE assigning selectedIndex), so IsSelected() still answers true for the row being left.</summary>
+        internal void ApplyLockAppearance() => ApplyLockAppearance(IsSelected());
+
+        private void ApplyLockAppearance(bool selected)
+        {
+            if (_def == null)
+                return;
+            if (!_def.WithheldNow)
+            {
+                ReleaseLockAppearance();
+                return;
+            }
+            CapturePaint();
+            if (!_labelMemo.Restorable || !_valueMemo.Restorable)
+                return; // refuse to paint what cannot be handed back (see TextPaintMemo)
+            CaptureEffects();
+            if (_effectsCaptured)
+                menuOptionEffects = new PugTextEffectMenuOption[0];
+            var c = selected ? LockedSelectedColor : PugTextEffectMenuOption.UNSELECTABLE_TEXT_COLOR;
+            PaintLocked(labelText, c);
+            PaintLocked(valueText, c);
+            _lockPainted = true;
+        }
+
+        // The lock lifted under a row that was painted: give back what MSM overwrote, then re-impose the
+        // read-only state if the row is still not editable. Runs BEFORE a render in Refresh, so that the
+        // render's ResetEffects (no longer suppressed) is what colours the row.
+        private void ReleaseLockAppearance()
+        {
+            if (!_lockPainted)
+                return;
+            _lockPainted = false;
+            if (_effectsCaptured)
+                menuOptionEffects = _origMenuOptionEffects;
+            _effectsCaptured = false;
+            _labelMemo.RestoreTo(labelText);
+            _valueMemo.RestoreTo(valueText);
+            if (_valueEffects != null)
+                for (int i = 0; i < _valueEffects.Length; i++)
+                    if (_valueEffects[i] != null)
+                        _valueEffects[i].enabled = _valueEffectsEnabled[i];
+            _paintCaptured = false;
+            if (!_def.IsEditable && valueText != null)
+                MakeValueReadOnly();
         }
 
         public override void OnSelected()
         {
             SuppressValueSelectionEffect();
             base.OnSelected();
+            ApplyLockAppearance(selected: true); // after the base, so its direct writes are overwritten, not raced
         }
 
         public override void OnDeselected(bool playEffect = true)
         {
             SuppressValueSelectionEffect();
             base.OnDeselected(playEffect);
+            ApplyLockAppearance(selected: false);
         }
 
         // Only bound rows activate; the inactive template (never bound → _def null) stays hidden.
@@ -255,8 +400,15 @@ namespace ModSettingsMenu.UI
         {
             if (_def == null)
                 return;
+            // Release first and paint last: a lifted lock must be undone BEFORE the render, so its
+            // ResetEffects colours the row; and a lock must be painted AFTER the first render, which is
+            // what sizes the label effect's glyph list — painting first would leave it empty, and the
+            // effect's selected-state dance indexes it every frame.
+            if (!_def.WithheldNow)
+                ReleaseLockAppearance();
             SetText(labelText, _def.Label()); // localized; falls back to the raw key
             SetText(valueText, ValueString());
+            ApplyLockAppearance();
         }
 
         private string ValueString()
