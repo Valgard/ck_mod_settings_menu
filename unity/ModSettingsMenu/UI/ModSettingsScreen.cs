@@ -551,18 +551,51 @@ namespace ModSettingsMenu.UI
         // bare ApplyLockAppearance here would leave a just-unlocked selected row in the wrong tone —
         // then each section's note is re-evaluated, then the layouts run again, because a note
         // appearing or going away changes its section's height.
+        //
+        // PollPermissions has already consumed this transition, so the next frame sees no change and
+        // never retries: an exception escaping from here would leave the screen half-updated — the rows
+        // before the throwing one refreshed, the rest not, no note re-rendered, no layout run — until it
+        // is closed and reopened. So each row, each note and the layout pass are guarded SEPARATELY, and
+        // a failure in one must not stop the others. Deliberately no latch like PollPermissionTrigger's:
+        // the consume-first order already bounds the logging to one line per failing stage per
+        // transition, and a latch would also silence every LATER, genuine change.
         private void FollowPermissionChange()
         {
             foreach (var option in menuOptions)
             {
                 var row = option as ISectionRow;
-                if (row != null)
+                if (row == null)
+                    continue;
+                try
+                {
                     row.Refresh();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"[ModSettingsMenu] refreshing a row after a permission change failed: {e}");
+                }
             }
             for (int i = 0; i < _sectionRoots.Count; i++)
-                if (_sectionRoots[i] != null)
+            {
+                if (_sectionRoots[i] == null)
+                    continue;
+                try
+                {
                     RenderLockNote(_sectionModels[i], _sectionRoots[i].GetComponent<SectionBox>());
-            RenderContent();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"[ModSettingsMenu] re-rendering the lock note of '{_sectionModels[i].DisplayName}' failed: {e}");
+                }
+            }
+            try
+            {
+                RenderContent();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[ModSettingsMenu] re-laying out the screen after a permission change failed: {e}");
+            }
         }
 
         // Scroll the viewport so the selected row follows keyboard / controller navigation.
