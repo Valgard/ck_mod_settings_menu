@@ -63,6 +63,7 @@ Choice — that pair is explained further down:
 <bottle>/…/mods/TestViewOnlyFixtures/config.cfg
 <bottle>/…/mods/TestLockedFixtures/config.cfg
 <bottle>/…/mods/TestLockedInfoFixtures/config.cfg
+<bottle>/…/mods/TestZRemeasureFixtures/config.cfg
 <bottle>/…/mods/TestThrowingConstraint/config.cfg      (header only, never written; ThrowingFixtures build only)
 <bottle>/…/mods/TestExactNoDescription/config.cfg       (header only, never written; ThrowingFixtures build only)
 ```
@@ -2073,10 +2074,62 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   row buttons, and a row does not respond to activation. This covers a list that is
   already locked when the drill-in opens, which is the `NoWorld` case; it is not a lock
   arriving while the drill-in is open (see below).
+- [ ] **3. A row whose value changes its own height.** The section
+  `TestZRemeasureFixtures (detected)` holds three rows: `1Above`, `2Wrap` and
+  `3Below`. `2Wrap` is a Choice over two values, `Short` (one line) and a
+  sentence that wraps over several lines of the value column. Its section name
+  sorts after the other fixture sections, so it is the last box on the screen
+  unless an installed mod sorts later; if one does, scroll to it. The outside
+  writer is a file, read the way the permission trigger's is (see below). Open
+  the screen, leave it open, and from a shell:
 
-Not walked: a mod writing its own entry from gameplay code while the screen is open. No
-fixture does that; step 1 exercises the same path, because a second row's `Adjust` is an
-outside writer to the first.
+  ~~~bash
+  D="$HOME/Library/Application Support/CrossOver/Bottles/Core Keeper/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/10510784/mods/ModSettingsMenu"
+  printf 'long'   > "$D/remeasure-trigger"   # wrapped value
+  printf 'short'  > "$D/remeasure-trigger"   # one-line value
+  printf 'toggle' > "$D/remeasure-trigger"   # whichever it is not showing
+  ~~~
+
+  `Player.log` answers each with `remeasure trigger: wrote the … value`, and the file
+  is gone within a frame. Write `long`, then look at, in this order:
+  1. **The row itself.** `2Wrap` grows to hold every line of its value, with the
+     label staying on the first line. *Failure:* the row keeps its one-line
+     height and the extra lines run out of it.
+  2. **The row below, inside the box.** `3Below` moves down by the added height, and no
+     text of `2Wrap` touches or covers it. *Failure:* the lines of the long value overprint
+     `3Below`'s label and value.
+  3. **The box.** Its frame grows with the rows, so `3Below` still sits inside
+     it with the same margin as before. *Failure:* the frame stays where it was
+     and `3Below` hangs out of its bottom edge.
+  4. **The sections below.** If the section is not the last, the next box starts
+     a normal gap under this one. *Failure:* the next section's heading sits on
+     top of this box.
+  5. **The scroll position.** Scroll to the very bottom first, then write
+     `short`. The content is now shorter than the view's offset assumed. What to
+     watch is whether the view comes back to the new end or leaves empty space
+     below the last box. This is an observation rather than a pass condition: it
+     settles how the scroll window behaves after a height change, which reading
+     the code did not.
+
+  Then write `short` (from the top of the screen as well as from the bottom) and look at
+  the same five: the row shrinks, `3Below` moves back up with no gap left in the box, the
+  frame shrinks with it. *Failure:* a tall empty band between `2Wrap` and `3Below`. Write
+  `toggle` a few times in a row: each write must leave the layout matching the value now shown, whatever the one before it showed. (Criterion 14)
+
+  **Would this step pass with `RemeasureRow` deleted?** No, for `SettingWidget` rows — by
+  reading the code, not by having run it: the deletion has not been tried.
+  The write still reaches the row and `Refresh` still changes the text, so the value
+  reads right, but nothing re-measures the row: `long` overprints `3Below` (point 2)
+  and `short` leaves the band above. Points 1 to 4 show what that function
+  contributes.
+  What the step cannot tell apart is a *wrong* `RemeasureRow` that still moves the height,
+  such as one that skipped the section pass: that shows up in 3 and 4 only if the frame or
+  the next box fails to follow.
+
+Not walked: a mod writing its own entry from *gameplay code* while the screen is open.
+Step 3's trigger is the closest thing there is: it writes through the entry's own `Value`,
+which is the call a mod's gameplay code makes, but it is issued from `Update` and not from
+a game system.
 
 Not walkable, and therefore unverified by this walk:
 
@@ -2092,15 +2145,12 @@ Not walkable, and therefore unverified by this walk:
   row only renders twice. Neither leaves a log line or a visible difference, so a walk that
   opens and closes the screen repeatedly passes whether or not the unsubscribe works. The
   lifetime handling rests on reading the code.
-- *That a row is re-measured after an outside write changes its height.* No step
-  here can fail for it: `testDupKeyAccess` is a toggle, whose height never moves, so
-  step 1 passes with `RemeasureRow` deleted. The case needs a row whose rendered value
-  wraps differently after the write, such as a `Kind == Info` row (`ServerInfo` in
-  `TestLockedFixtures` is one) or a list preview, and an outside writer for that same
-  entry. No fixture has the pair: nothing here writes `ServerInfo` while the screen is
-  open. A step would need a new fixture, an editable second row over one entry whose
-  values run from a single line to a wrapped one, so that flipping it from the first
-  row can be watched resizing the second. Until then it rests on reading the code.
+- *That a **list** row is re-measured after an outside write changes its
+  height.* Step 3 covers the `SettingWidget` rows, which are the ones
+  `SettingRowHeightPx` sizes. A list row takes the other branch of the same
+  function, from `ListWidget.OnEntryChanged` with the preview's height, and no
+  fixture changes a list's preview height from outside: the trigger writes a
+  Choice. That branch rests on reading the code.
 - *That a row on the inactive screen is left alone.* While the `ServerList`
   drill-in is open the parent screen is inactive, but at the title screen that
   list is read-only, so the drill-in cannot write the entry, and no fixture
