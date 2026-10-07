@@ -2092,6 +2092,15 @@ Not walkable, and therefore unverified by this walk:
   row only renders twice. Neither leaves a log line or a visible difference, so a walk that
   opens and closes the screen repeatedly passes whether or not the unsubscribe works. The
   lifetime handling rests on reading the code.
+- *That a row is re-measured after an outside write changes its height.* No step
+  here can fail for it: `testDupKeyAccess` is a toggle, whose height never moves, so
+  step 1 passes with `RemeasureRow` deleted. The case needs a row whose rendered value
+  wraps differently after the write, such as a `Kind == Info` row (`ServerInfo` in
+  `TestLockedFixtures` is one) or a list preview, and an outside writer for that same
+  entry. No fixture has the pair: nothing here writes `ServerInfo` while the screen is
+  open. A step would need a new fixture, an editable second row over one entry whose
+  values run from a single line to a wrapped one, so that flipping it from the first
+  row can be watched resizing the second. Until then it rests on reading the code.
 - *That a row on the inactive screen is left alone.* While the `ServerList`
   drill-in is open the parent screen is inactive, but at the title screen that
   list is read-only, so the drill-in cannot write the entry, and no fixture
