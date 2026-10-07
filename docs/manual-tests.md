@@ -1951,9 +1951,15 @@ printf 'guest-off'    > "$D/permission-trigger"   # SetGuestMode(false)
 ~~~
 
 `Player.log` answers each one with `permission trigger: sent '<token>'`, and the
-file is gone within a frame. Nothing grants rights back (`AddAdmin` refuses a
-caller holding none), so `revoke-admin` is one-way: **reversing a change is
-walkable for guest mode only.**
+file is gone within a frame. Nothing grants rights back, and the server drops
+every command from a caller holding none ("Ignoring admin command from non-admin
+player"), so `revoke-admin` is the last command this account can send. Walked in-game
+against a 1.3.0.5 dedicated server on 2026-10-07: `revoke-admin` works and the lock
+direction shows in full; the `guest-on` sent after it is refused. Guest mode cannot
+be demonstrated by one player at all, because `PlayerController.guestMode` is true
+only while `adminPrivileges < 1`, yet sending `SetGuestMode` needs it above zero.
+Steps 3 to 5 below therefore need a second, admin-holding player to send the guest
+commands, and so does reversing a revoke.
 
 **Setup.** As round 3 of § "Server and Admin, checked against a live world": the
 dedicated server's `Admins.json` lists this account at `privileges: 1` (stage 2

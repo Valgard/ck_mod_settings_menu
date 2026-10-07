@@ -945,16 +945,21 @@ namespace ModSettingsMenu
         // MSM-10 criteria 11 and 12, drivable from outside the game. A tester cannot revoke their own
         // rights, nor flip guest mode, without leaving the settings screen, and leaving it is what the
         // criteria forbid — so the RPCs the game's own buttons send are sent from here instead, on a
-        // file's say-so. The server checks neither sender (the handlers look only at the target and at
-        // the world singleton), so a client that has given up its rights can still send both.
+        // file's say-so. The server does check the sender, once, in front of its whole command switch
+        // (NetworkCommandServerSystem): a client holding no admin rights has every command dropped, so
+        // revoke-admin is the LAST command this player can send. The gate reads SourceConnection !=
+        // Entity.Null, so only a locally-issued command on a client-host bypasses it, never a dedicated
+        // server. The per-command bodies look only at the target and the world singleton, which is
+        // easy to mistake for "no check" (docs/ck/multiplayer-and-server.md, "Who is allowed to change
+        // things").
         //
         // The file is written from a shell: the content is one token, the file is read, acted on and
         // deleted. Tokens: "revoke-admin" (this player loses stage 1), "guest-on", "guest-off".
-        // There is no token that grants rights: AddAdmin's handler refuses a caller holding none, so
-        // revoke-admin is one-way and only the guest-mode pair can be reversed.
+        // There is no token that grants rights: AddAdmin is refused for a caller holding none, so
+        // after revoke-admin the server drops guest-on and guest-off too.
         //
-        // Reached only behind DevFlags.Is("TestFixtures"), like the fixtures it serves: a build for a
-        // player carries no code path that can send an admin RPC.
+        // Reached only behind DevFlags.Is("TestFixtures"), like the fixtures it serves: a player
+        // build's flag set is empty, so the path is never entered.
         private const string PermissionTriggerPath = "ModSettingsMenu/permission-trigger";
         private static bool _permissionTriggerBroken;
 
