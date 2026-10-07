@@ -2072,20 +2072,24 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   screen**, open the drill-in of `ServerList` (`TestLockedFixtures`). It is
   read-only the moment it opens, with no editing affordance appearing after you
   step out and back in. (Review focus 4)
-- [ ] **3. The subscription does not pile up.** Open and close Options → Mod settings about
-      ten times, going through the `ServerList` drill-in on some of the visits, then repeat
-      step 1. `Player.log` holds no `MissingReferenceException` and no `refreshing '…' after
-      an outside change failed` line. A handler left behind by a destroyed row would fire on
-      every flip in step 1 and be logged here.
-- [ ] **4. Rows behind the drill-in are not touched while it is open.** In the `ServerList`
-      drill-in nothing on the parent screen can be seen, so this is checked by what follows:
-      leave the drill-in and the parent rows show the current values (the screen rebuilds
-      them on return), with no text missing anywhere in the game afterwards — the symptom
-      of glyphs taken from the pool by a render on an inactive row.
 
 Not walked: a mod writing its own entry from gameplay code while the screen is open. No
 fixture does that; step 1 exercises the same path, because a second row's `Adjust` is an
 outside writer to the first.
+
+Not walkable, and therefore unverified by this walk:
+
+- *That a destroyed row stops listening.* The handler that a destroyed row leaves behind
+  ends itself silently (`this == null`, then `Stop()`), and a second subscription on a live
+  row only renders twice. Neither leaves a log line or a visible difference, so a walk that
+  opens and closes the screen repeatedly passes whether or not the unsubscribe works. The
+  lifetime handling rests on reading the code.
+- *That a row on the inactive screen is left alone.* While the `ServerList`
+  drill-in is open the parent screen is inactive, but at the title screen that
+  list is read-only, so the drill-in cannot write the entry, and no fixture
+  writes it from outside. A drill-in commit in a session does write it, yet the
+  parent is rebuilt on return, so what the player sees afterwards is the same
+  with the skip removed.
 
 ## After the walk
 
