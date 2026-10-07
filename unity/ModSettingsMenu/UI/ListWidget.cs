@@ -43,8 +43,8 @@ namespace ModSettingsMenu.UI
 
         // See SettingWidget.OnEntryChanged: the same three decisions — Refresh() is the whole cycle
         // including the drill tint and the lock appearance, a row on an inactive screen is left for
-        // the rebuild on return, a throwing render is logged against this row, and the height is
-        // re-measured because the preview can still wrap (see Preview).
+        // the rebuild on return, and a throwing render is logged against this row — plus a fourth:
+        // the height is re-measured because the preview can still wrap (see Preview).
         private void OnEntryChanged()
         {
             if (this == null)
