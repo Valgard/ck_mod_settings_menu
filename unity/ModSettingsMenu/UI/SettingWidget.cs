@@ -376,7 +376,17 @@ namespace ModSettingsMenu.UI
             : _def.WithheldNow ? OptionActiveState.GRAYED_OUT
             : OptionActiveState.ACTIVE;
 
-        // Input is gated by this too, so a withheld row cannot be activated even if something reaches it.
+        // Not redundant beside GetActiveStateInCurrentScene, and the reason is worth stating because it
+        // was read the other way once: GRAYED_OUT keeps navigation off this row, but RadicalMenu.Activate
+        // still hands the selection to the first option that is ACTIVE *or* GRAYED_OUT (Pug.Other:359134
+        // → SelectOptionIndex, :359260, which has no state gate). So a withheld row DOES hold the
+        // selection whenever it is the screen's first option, and this override is the only thing CK
+        // then asks. It drives two observables, both through RadicalMenu.CanActivateCurrentOption:
+        // MenuManager suppresses the menu-select SFX (:278869) and the footer drops its Select prompt,
+        // because GetHelpButtonsToShow returns helpButtonsNoSelect — [NAVIGATE, BACK] — instead of
+        // defaultHelpButtons (:359480, :358966, :278117). The value is safe either way: Adjust() refuses
+        // on !IsEditable, which WithheldNow implies. 0TestFirstWithheldFixtures is what makes that
+        // selected state reachable for a walk.
         public override bool CanBeActivated() => base.CanBeActivated() && (_def == null || !_def.WithheldNow);
 
         public override void OnParentMenuActivation()

@@ -532,6 +532,45 @@ namespace ModSettingsMenu
                     new ConfigScope(ConfigAccessLevel.Server)
                 );
 
+                // The witness for SettingWidget.CanBeActivated (MSM-10 criterion 10) and for the
+                // selected half of criterion 6 on a SETTINGS row — the two things no other fixture can
+                // reach, because both need a withheld row to be holding the selection.
+                //
+                // Navigation cannot put it there: SelectIndexInDirection selects the adjacent element
+                // only while its IsSelectionEnabled() holds (Pug.Other:359207), and SelectNextIndex /
+                // SelectPrevIndex skip onward past every index where it does not (:359231, :359253).
+                // What CAN is RadicalMenu.Activate(), whose scan accepts
+                // ACTIVE *or* GRAYED_OUT (:359134) and hands the first such index to SelectOptionIndex
+                // (:359153/:359161/:359166) — and that method gates on CanChangeIndex() alone, with no
+                // state check (:359260). So on an OPEN, a withheld row holds the selection exactly when
+                // it is the screen's FIRST option — the live poll relocking a row under the selection
+                // reaches the same state by another road, and is task 5's. Which is why this fixture
+                // exists rather than a reuse of
+                // testServerScoped or TestLockedFixtures: neither is first, and nothing may be reordered
+                // to make them first without breaking the checks that rest on where they are.
+                //
+                // Hence the name, and it is the whole mechanism: sections render sorted by Heading()
+                // with StringComparison.OrdinalIgnoreCase (ModSettingsScreen.Populate), the heading of a
+                // discovered section is its directory name, and a leading digit sorts below every
+                // letter. One row, so it is also first WITHIN its box. The mirror of
+                // TestZRemeasureFixtures, which buys the opposite end of the same order with a 'Z'.
+                // A section whose heading sorts below a digit — a leading space or punctuation — would
+                // displace it; nothing installed here does, and the walk says what to do if one appears.
+                //
+                // Server-scoped, so the title screen withholds it (no player → NoWorld). A Toggle
+                // because criterion 10 lives on SettingWidget and a Toggle is its plainest shape. One
+                // row and one role: no sort-order, heading, naming-diagnostic, note or reset check may
+                // come to rest on this file, exactly as for the three lock fixtures above — and with one
+                // more reason here, since a second row would take the first position away from this one.
+                var firstWithheldFile = new ConfigFile("0TestFirstWithheldFixtures/config.cfg", saveOnInit: true, info);
+                firstWithheldFile.Bind(
+                    "Settings",
+                    "firstWithheldRow",
+                    true,
+                    new ConfigDescription("The screen's first option, and withheld at the title screen: the one row Activate() can hand the selection to."),
+                    new ConfigScope(ConfigAccessLevel.Server)
+                );
+
                 // The witness for ModSettingsScreen.RemeasureRow (MSM-10 task 6): one row whose value
                 // changes its own wrapped height when something other than the row writes the entry.
                 // A Choice, because it is editable and its value is shown whole — an Info row would

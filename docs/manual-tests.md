@@ -1738,6 +1738,15 @@ task: CK paints the label red by itself, and the value column stays as it was
 until Task 3. Build with `MOD_DEV_FLAGS=TestFixtures`; inspect at the **title
 screen**, where `testServerScoped` is withheld (`Server` scope, no world).
 
+Two fixtures carry it. `testServerScoped`, in this mod's own section, is the row
+navigation must skip. `0TestFirstWithheldFixtures` is a file of its own holding one
+`Server`-scoped toggle, and its name is its function: discovered sections sort
+case-insensitively by their heading, so the leading digit puts this box above every
+other section and its one row first in `menuOptions` — the only position from which
+`Activate()` hands a withheld row the selection. Nothing else may come to rest on that
+file, a second row above all: that would take the first position from the row that needs
+it.
+
 **Before this task** (recorded from the previous build, not re-run): at the title
 screen `testServerScoped` took the selection, answered a keypress, and its value
 did not change, because `Adjust()` already returned early on `!IsEditable`. So the
@@ -1746,8 +1755,38 @@ row looked operable, answered input and did nothing.
 - [ ] **Navigation skips it.** Select the row directly above `testServerScoped`
       and press down: the selection lands on the row directly below, never on
       `testServerScoped`. Press up from there: it lands on the row above again.
-      This is the keyboard and controller path; a grayed row cannot take the
-      selection at all.
+      This is the keyboard and controller path. What it shows is that the
+      selection cannot be **moved onto** a grayed row — not that such a row never
+      holds it: `RadicalMenu.Activate()` hands the selection to the first option
+      that is `ACTIVE` *or* `GRAYED_OUT`, which the next step is built to reach.
+- [ ] **A withheld row holding the selection offers no Select.** The one step
+      that reaches `CanBeActivated()`, so read its two preconditions first — miss
+      either and it checks nothing. **(a)** A **keyboard or controller** must be
+      the active input device: `Activate()` calls `DeselectAnyCurrentOption` when
+      `Manager.input.SystemIsUsingMouse()`, so a mouse-driven open selects
+      nothing. Press a direction key before opening, and do not touch the mouse.
+      **(b)** It must be the **first open since launch**, because `Activate()`
+      remembers the last index and prefers it when it is still `ACTIVE`; nothing
+      resets that between opens, so move the selection once and a reopen no
+      longer starts at the top. Now, at the title screen: open Options → Mod
+      settings. The topmost box is `0TestFirstWithheldFixtures (detected)` and
+      its single row `firstWithheldRow` holds the selection — it is the screen's
+      first option, which is the only way a withheld row gets it. Check, in this
+      order:
+      1. **The footer shows two prompts, Navigate and Back, and no Select.** This
+         is the check: CK asks the selected row and gets `helpButtonsNoSelect`
+         instead of its default three. No Reset prompt either, and that one is
+         not evidence — a section whose only row is uneditable has nothing to
+         reset, independently of this.
+      2. **Confirm plays no menu-select sound and nothing happens.** Weaker than
+         point 1 by nature, and the value is the wrong thing to watch: `Adjust()`
+         refuses on `!IsEditable` as well, so the value would hold even if this
+         check failed.
+      *Failure:* a Select prompt in the footer, or the select sound on confirm.
+      *If the box is not topmost*, an installed mod sorts below a digit — note
+      which, and read this step as unwalked rather than passed; scrolling to the
+      box will not do, since the point is which row `Activate()` picked.
+      (Criterion 10)
 - [ ] **A mouse click does nothing.** Click `testServerScoped`: no selection
       highlight appears on it and no sound plays. The click collider is only
       enabled for an `ACTIVE` row, so the click never arrives; the value staying
@@ -1784,9 +1823,11 @@ Two fixtures carry it, both `Server`-scoped and both in `TestLockedFixtures`, a 
 its own so that no sort-order, heading, naming-diagnostic or reset check can come to
 depend on it: `ServerList` (`Alpha, Beta, Gamma`, a list row) and `ServerInfo` (prose
 with no comma, an `Info` row). With `testServerScoped`, in this mod's own section, they
-are the three rows this walk uses. Nothing else in this file counts or enumerates the
-rows of that file: the naming diagnostic's "one line per discovered section" simply
-gains one section, and the reset checks name their files.
+are the three rows most of this walk uses; the selected-settings-row item at the end adds
+a fourth, `0TestFirstWithheldFixtures`'s row, for the reason given there. Nothing else in
+this file counts or enumerates the rows of `TestLockedFixtures`: the naming diagnostic's
+"one line per discovered section" simply gains one section, and the reset checks name
+their files.
 
 **Before this task**, observed on the Task 2 build: `testServerScoped` had a red label
 beside a grey value, and no list row was red anywhere. The split is the part worth
@@ -1827,12 +1868,16 @@ colour that "looks red" is not an outcome. At the title screen, in the same box:
       leaving, it is the same dull red as before the first selection, not the grey of the
       editable rows. This is the deselect path, which CK would otherwise repaint with the
       ordinary grey the first time the selection moves.
-- [ ] **A locked settings row can hold the selection.** `testServerScoped` takes it
-      only if `Activate()` picks it first, which it does when it is the first
-      `ACTIVE`-or-`GRAYED_OUT` row of the screen; if not, this item cannot be reached
-      from the keyboard and is covered by the lock-arrives-under-the-cursor case in
-      Task 5. When it does hold the selection, its label and value both read the lighter
-      red. (6)
+- [ ] **A locked settings row holding the selection reads the lighter red.** The
+      list-row half above uses `ServerList`; this is the settings-row half, and it needs
+      the row to hold the selection, which navigation cannot arrange (Task 2 says why).
+      Use the same open as Task 2's `CanBeActivated()` step — same two preconditions,
+      keyboard or controller and the first open since launch — where
+      `0TestFirstWithheldFixtures`'s `firstWithheldRow` has the selection from the first
+      frame. Its label *and* value read the lighter red, with no blue on either, and are
+      distinguishable from the dull red of the deselected `testServerScoped` further
+      down. *Failure:* the dull red (the selection override never fired) or any blue (it
+      fired and MSM's paint did not follow). (6)
 
 **The same three rows in singleplayer.** Load any singleplayer world, open the menu.
 This checks that the three rows render and behave normally in a world, and nothing
