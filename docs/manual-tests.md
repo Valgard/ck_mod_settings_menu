@@ -1741,11 +1741,11 @@ screen**, where `testServerScoped` is withheld (`Server` scope, no world).
 Two fixtures carry it. `testServerScoped`, in this mod's own section, is the row
 navigation must skip. `0TestFirstWithheldFixtures` is a file of its own holding one
 `Server`-scoped toggle, and its name is its function: discovered sections sort
-case-insensitively by their heading, so the leading digit puts this box above every
-other section and its one row first in `menuOptions` — the only position from which
-`Activate()` hands a withheld row the selection. Nothing else may come to rest on that
-file, a second row above all: that would take the first position from the row that needs
-it.
+case-insensitively by their heading, so the leading digit puts this box above any
+letter-initial section — every section installed here — and its one row first in
+`menuOptions`, which is the one position `Activate()` hands a withheld row the selection
+from. Nothing else may come to rest on that file, a second row least of all: that would
+take the first position from the row that needs it.
 
 **Before this task** (recorded from the previous build, not re-run): at the title
 screen `testServerScoped` took the selection, answered a keypress, and its value
@@ -1760,19 +1760,20 @@ row looked operable, answered input and did nothing.
       holds it: `RadicalMenu.Activate()` hands the selection to the first option
       that is `ACTIVE` *or* `GRAYED_OUT`, which the next step is built to reach.
 - [ ] **A withheld row holding the selection offers no Select.** The one step
-      that reaches `CanBeActivated()`, so read its two preconditions first — miss
-      either and it checks nothing. **(a)** A **keyboard or controller** must be
-      the active input device: `Activate()` calls `DeselectAnyCurrentOption` when
-      `Manager.input.SystemIsUsingMouse()`, so a mouse-driven open selects
-      nothing. Press a direction key before opening, and do not touch the mouse.
-      **(b)** It must be the **first open since launch**, because `Activate()`
-      remembers the last index and prefers it when it is still `ACTIVE`; nothing
-      resets that between opens, so move the selection once and a reopen no
-      longer starts at the top. Now, at the title screen: open Options → Mod
-      settings. The topmost box is `0TestFirstWithheldFixtures (detected)` and
-      its single row `firstWithheldRow` holds the selection — it is the screen's
-      first option, which is the only way a withheld row gets it. Check, in this
-      order:
+  that reaches `SettingWidget.CanBeActivated()`, so read its two preconditions
+  first — miss either and it checks nothing. **(a)** A **keyboard or
+  controller** must be the active input device: `Activate()` calls
+  `DeselectAnyCurrentOption` when `Manager.input.SystemIsUsingMouse()`, so a
+  mouse-driven open selects nothing. Press a direction key before opening, and
+  do not touch the mouse. **(b)** It must be the **first open since launch**,
+  because `Activate()` remembers the last index and prefers it when it is still
+  `ACTIVE`; nothing resets that between opens, so move the selection once and a
+  reopen no longer starts at the top. Now, at the title screen: open Options →
+  Mod settings. The topmost box is `0TestFirstWithheldFixtures (detected)` and
+  its single row `firstWithheldRow` holds the selection — it is the screen's
+  first option, which is the only way `Activate()` gives a withheld row the
+  selection. (A lock arriving *under* the selection mid-session does it too, and
+  that is Task 5's territory, unwalked.) Check, in this order:
       1. **The footer shows two prompts, Navigate and Back, and no Select.** This
          is the check: CK asks the selected row and gets `helpButtonsNoSelect`
          instead of its default three. No Reset prompt either, and that one is
@@ -1990,8 +1991,9 @@ buttons would send. The file lives at
 ~~~
 
 Write one token into it from a shell; the game reads it, deletes the file and acts.
-`<user-id>` below is a literal to replace, not a value to copy: it is the only entry
-under `…/Core Keeper/Steam/`, so `ls` on that directory names it. Getting it wrong
+`<user-id>` below is a literal to replace, not a value to copy: it is the directory
+named for the account under `…/Core Keeper/Steam/`, so `ls` on that directory names
+it — and names only it, unless two accounts have played on this machine. Getting it wrong
 costs more than a typo normally does — the write lands in a directory nothing reads,
 and a poller that sees no file is silent by design, so the step fails as *"the screen
 did not react"*, which is exactly what a broken poll looks like.
