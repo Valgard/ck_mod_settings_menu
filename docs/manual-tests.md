@@ -2035,9 +2035,10 @@ that changes — the screen under observation stays this one.
   menu, which sends `AddOrUpdateAdmin`). Client log: one `permissions changed …
   adminPrivileges=1` line. `testAdminScoped` is editable and its normal colour
   again, and this mod's section note is **gone**, with the fixture hint staying
-  exactly where it was and everything below moving back up. This is the only
-  step covering criterion 12's admin-rights direction — the release of a lock
-  that `AccessLock` answered as `ConditionUnmet`, which no other step reaches.
+  exactly where it was and everything below moving back up. This is the only step
+  covering criterion 12's admin-rights direction; step 4 covers the guest-mode
+  one, and both are releases of a `ConditionUnmet` lock — what is specific here is
+  which of the two values moves, since `AccessLock` reads them separately.
   (Criterion 12, admin-rights direction)
 
 **Not walkable here, and why.**

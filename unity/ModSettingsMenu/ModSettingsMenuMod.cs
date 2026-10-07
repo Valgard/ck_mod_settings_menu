@@ -950,11 +950,11 @@ namespace ModSettingsMenu
         // ChangePvPTeam dropped, that one being answered ahead of the gate — and none of the three
         // tokens below is that one, so revoke-admin is the LAST command this player can send: it
         // goes through while they still hold their rights, and nothing after it does. The gate reads
-        // SourceConnection != Entity.Null, so only a locally-issued command on a client-host
-        // bypasses it, never a dedicated
-        // server. The per-command bodies look only at the target and the world singleton, which is
-        // easy to mistake for "no check" (docs/ck/multiplayer-and-server.md, "Who is allowed to change
-        // things").
+        // SourceConnection != Entity.Null, so a locally-issued command on a client-host bypasses
+        // it; a client on a dedicated server never does. The bodies of these two commands look only
+        // at the target and the world singleton — AddOrUpdateAdmin's does check its sender, which is
+        // what makes reading one body as "no check" so easy
+        // (docs/ck/multiplayer-and-server.md, "Who is allowed to change things").
         //
         // The file is written from a shell: the content is one token, the file is read, acted on and
         // deleted. Tokens: "revoke-admin" (this player loses stage 1), "guest-on", "guest-off".
