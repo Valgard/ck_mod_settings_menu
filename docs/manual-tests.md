@@ -2036,9 +2036,14 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
 - [ ] **0. Before anything: all quiet.** Both `testServerScoped` and `testAdminScoped` are
       editable, no section shows a note, and the log has no `permissions changed` line. Wait
       ten seconds: still none. A line here means the poll fires without a change.
-- [ ] **1. Guest mode while holding rights: nothing moves.** `guest-on`, then `guest-off`.
+- [ ] **1. Guest mode while holding rights: nothing moves.** **Not walked on
+      2026-10-07** — the walk began at step 2, and step 2 then spent the rights this
+      step needs, so it is pending a server restart rather than pending a second
+      account. It is the negative control that the poll reads
+      `PlayerController.guestMode` and not `WorldInfoCD.guestMode`, so leave it
+      unticked until it has actually been run. `guest-on`, then `guest-off`.
       The server log shows `Set guest mode=True` and `=False`; **the client screen does not
-      change at all and writes no `permissions changed` line.** The player's `guestMode` is
+      change and writes no `permissions changed` line.** The player's `guestMode` is
       the world flag *and* `adminPrivileges < 1`, so for an admin it never turns true (§ 0).
       A poll that read the world flag would repaint here.
 - [ ] **2. `revoke-admin`: only the `Admin` row follows.** Server log: `Remove admin
@@ -2057,8 +2062,10 @@ them.** Step 2 took this account's rights, and the gate above drops every
 further command from a caller holding none, so the `guest-on` these steps open
 with never arrives. Reversing step 2 is out of reach for the same reason. Keep them here as
 what to look for when a second account is available, and read their checkboxes
-as unticked rather than failing: on 2026-10-07 steps 0 to 2 were walked and
-these four were not. Sending the guest commands from the second account is all
+as unticked rather than failing: on 2026-10-07 steps 0 and 2 were walked and
+these four were not. Step 1 was not walked either, and is pending for a different
+reason — a server restart reaches it, as its own entry says, where nothing reaches
+these four. Sending the guest commands from the second account is all
 that changes — the screen under observation stays this one.
 
 - [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
@@ -2098,8 +2105,9 @@ that changes — the screen under observation stays this one.
   does give the rights back, and it is how steps 0 to 2 are repeated, but it is not a way
   into step 3: guest mode lives only in the running server's `WorldInfoCD` and is gone with
   the process, and a restart drops the client out of the session, so nothing can be observed
-  under a screen that is still open. Step 1 is the one step a restart recovers, since it
-  runs while this account still holds its rights.
+  under a screen that is still open. Step 1 is the one unwalked step a restart recovers,
+  since it runs while this account still holds its rights — which is why it sits with
+  steps 0 and 2 rather than in the second-account block.
 - *A row relocking while it holds the selection.* A withheld settings row leaves navigation
   by being skipped; whether the selection is moved off a row that is withheld *under* it is
   CK's own behaviour and is not exercised here (step 0 touches nothing, so no row holds the
