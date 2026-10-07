@@ -36,16 +36,10 @@ namespace ModSettingsMenu.UI
             Render();
         }
 
-        // RefreshSection (ModSettingsScreen, after a section-wide reset) calls this on every row
-        // in the section, selected or not — Render() alone always ends by painting the drill arrow
-        // unselected-grey, so a redraw of the currently selected row must also restore its
-        // selected tint, or the arrow would stay grey until the next OnSelected/OnDeselected.
-        public void Refresh()
-        {
-            Render();
-            TintDrill(IsSelected() ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
-            ApplyLockAppearance(); // after the tint above, which would otherwise leave a locked row's arrow blue
-        }
+        // RefreshSection (ModSettingsScreen, after a section-wide reset) and FollowPermissionChange
+        // call this on every row in the section, selected or not. Render() ends with the selection-aware
+        // drill tint, so a redraw of the currently selected row keeps its arrow in the selected tint.
+        public void Refresh() => Render();
 
         public override OptionActiveState GetActiveStateInCurrentScene() => _def != null ? OptionActiveState.ACTIVE : OptionActiveState.INACTIVE;
 
@@ -118,7 +112,10 @@ namespace ModSettingsMenu.UI
                 ReleaseLockAppearance();
             _box.label.RenderPlain(_def.Label());
             _box.preview.RenderPlain(Preview());
-            TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR); // start in the unselected grey
+            // Selection-aware, not a blanket grey: for a selected row that is not withheld,
+            // ApplyLockAppearance takes its release branch and paints nothing, so a grey tint here
+            // would stay. A withheld row is repainted over this by ApplyLockAppearance.
+            TintDrill(IsSelected() ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
             ApplyLockAppearance();
         }
 
