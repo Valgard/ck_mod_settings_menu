@@ -15,5 +15,12 @@ namespace ModSettingsMenu.UI
 
         /// <summary>Re-read the underlying value(s) and redraw this row's texts.</summary>
         void Refresh();
+
+        /// <summary>
+        /// Unsubscribe this row from its config entry. Called on a row about to be detached, because
+        /// destruction is deferred to end of frame and the row would otherwise still react to a write
+        /// in between (see ModSettingsScreen.Populate).
+        /// </summary>
+        void StopWatching();
     }
 }

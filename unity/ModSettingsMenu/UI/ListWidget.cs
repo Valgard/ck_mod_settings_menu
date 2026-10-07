@@ -66,6 +66,8 @@ namespace ModSettingsMenu.UI
             }
         }
 
+        public void StopWatching() => _watch?.Stop();
+
         // Pairs with Bind's subscription; see SettingWidget.OnDestroy.
         private void OnDestroy()
         {

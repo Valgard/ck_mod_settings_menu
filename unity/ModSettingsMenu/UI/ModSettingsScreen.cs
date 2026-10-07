@@ -289,6 +289,13 @@ namespace ModSettingsMenu.UI
                 // instead of naming each type's text fields.
                 foreach (var text in old.GetComponentsInChildren<PugText>(includeInactive: true))
                     text.Clear();
+                // Stop each row's watch here too, before the detach. Destroy is deferred, so until end of
+                // frame the detached root is still active and a live object: neither of OnEntryChanged's
+                // guards (activeInHierarchy, this == null) would stop a config write arriving in that
+                // window from re-rendering the row, and the glyphs it took would be stranded by the
+                // pending Destroy. Stop() is idempotent, so the later OnDestroy stays harmless.
+                foreach (var row in old.GetComponentsInChildren<ISectionRow>(includeInactive: true))
+                    row.StopWatching();
                 old.transform.SetParent(null, worldPositionStays: false);
                 Object.Destroy(old);
             }

@@ -218,6 +218,8 @@ namespace ModSettingsMenu.UI
             }
         }
 
+        public void StopWatching() => _watch?.Stop();
+
         // The matching end of Bind's subscription. Populate destroys every row on every open, including
         // the Activate that resumes the screen after a drill-in, so destruction is the lifecycle that
         // pairs with it. Deactivate(pop: false) needs nothing: the rows survive it and stay subscribed.
