@@ -531,8 +531,39 @@ namespace ModSettingsMenu
                     new ConfigDescription("The only row of its section: Server-scoped and Info, so never withheld; the section must carry no note."),
                     new ConfigScope(ConfigAccessLevel.Server)
                 );
+
+                // The witness for ModSettingsScreen.RemeasureRow (MSM-10 task 6): one row whose value
+                // changes its own wrapped height when something other than the row writes the entry.
+                // A Choice, because it is editable and its value is shown whole — an Info row would
+                // do too, but truncates at 40 characters, which narrows the range. The value column
+                // wraps at 11 units; "Short" fits on one line and the long token needs several.
+                //
+                // A file of its own, and a name that sorts LAST among the sections, on purpose. Rows
+                // sit above and below the Choice so an overhang has a neighbour to land on, and the
+                // section is the bottom of the screen so that shrinking it can leave the scroll
+                // position past the end of the content — the one thing reading the code could not
+                // settle. The keys are numbered because discovered rows sort by key. The Choice
+                // token carries no comma and no quote, which the list heuristic and the escaping
+                // would otherwise act on. Driven by PollRemeasureTrigger.
+                var remeasureFile = new ConfigFile("TestZRemeasureFixtures/config.cfg", saveOnInit: true, info);
+                remeasureFile.Bind("Settings", "1Above", true, new ConfigDescription("A row above the one that changes height."), clientScope);
+                _remeasureEntry = remeasureFile.Bind(
+                    "Settings",
+                    "2Wrap",
+                    RemeasureShort,
+                    new ConfigDescription(
+                        "Flips between one line and several; written from outside by remeasure-trigger.",
+                        new AcceptableValueList<string>(RemeasureShort, RemeasureLong)
+                    ),
+                    clientScope
+                );
+                remeasureFile.Bind("Settings", "3Below", true, new ConfigDescription("A row below the one that changes height."), clientScope);
             }
         }
+
+        private const string RemeasureShort = "Short";
+        private const string RemeasureLong = "A deliberately long option that has to wrap over several lines of the value column";
+        private static ConfigEntry<string> _remeasureEntry;
 
         /// <summary>Dev-only. Binds one fixture whose constraint refuses to describe itself, into a
         /// <see cref="ConfigFile"/> of its own.
@@ -1010,10 +1041,62 @@ namespace ModSettingsMenu
             }
         }
 
+        // MSM-10 task 6, drivable from outside the game for the reason the permission trigger is: the
+        // row has to be changed by something other than itself while its screen stays open. Same
+        // shape — one token in a file, read, acted on and deleted — and the same gate. The write is
+        // the entry's own Value setter, which is what a mod's gameplay code does to its own setting.
+        // Tokens: "short" and "long" set the TestZRemeasureFixtures Choice to its one-line and its
+        // wrapped value, "toggle" to whichever it is not showing.
+        private const string RemeasureTriggerPath = "ModSettingsMenu/remeasure-trigger";
+        private static bool _remeasureTriggerBroken;
+
+        private static void PollRemeasureTrigger()
+        {
+            if (_remeasureTriggerBroken || _remeasureEntry == null)
+                return;
+            try
+            {
+                if (!API.ConfigFilesystem.FileExists(RemeasureTriggerPath))
+                    return;
+                var token = System.Text.Encoding.UTF8.GetString(API.ConfigFilesystem.Read(RemeasureTriggerPath)).Trim().ToLowerInvariant();
+                if (token.Length == 0)
+                    return; // caught mid-write: the content has not landed yet
+                API.ConfigFilesystem.Delete(RemeasureTriggerPath);
+                string next;
+                switch (token)
+                {
+                    case "short":
+                        next = RemeasureShort;
+                        break;
+                    case "long":
+                        next = RemeasureLong;
+                        break;
+                    case "toggle":
+                        next = _remeasureEntry.Value == RemeasureShort ? RemeasureLong : RemeasureShort;
+                        break;
+                    default:
+                        Debug.LogWarning($"[ModSettingsMenu] remeasure trigger: unknown token '{token}' (short | long | toggle).");
+                        return;
+                }
+                _remeasureEntry.Value = next;
+                Debug.Log($"[ModSettingsMenu] remeasure trigger: wrote the {(next == RemeasureShort ? "short" : "long")} value for '{token}'.");
+            }
+            catch (System.Exception ex)
+            {
+                // Stop for the session rather than retry, as the permission trigger does: a file that
+                // cannot be read or deleted would otherwise write every frame.
+                _remeasureTriggerBroken = true;
+                Debug.LogWarning($"[ModSettingsMenu] remeasure trigger disabled for this session: {ex.Message}");
+            }
+        }
+
         public void Update()
         {
             if (DevFlags.Is("TestFixtures"))
+            {
                 PollPermissionTrigger();
+                PollRemeasureTrigger();
+            }
 
             if (_restartPromptCountdown >= 0 && _restartPromptCountdown-- == 0)
                 ModSettingsScreen.ShowRestartPrompt();
