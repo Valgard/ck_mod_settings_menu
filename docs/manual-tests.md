@@ -1990,6 +1990,15 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
       `TestViewOnlyFixtures` row, `ServerList` and `ServerInfo` in `TestLockedFixtures`
       (no note appears there), the fixture hint (still its own line, above the note),
       and the scroll position. (Criterion 11, first half)
+**Steps 3 to 5 need a second, admin-holding player — one account cannot walk
+them.** Step 2 took this account's rights, and the server refuses every command
+from a caller holding none, so the `guest-on` these steps open with never
+arrives. Reversing step 2 is out of reach for the same reason. Keep them here as
+what to look for when a second account is available, and read their checkboxes
+as unticked rather than failing: on 2026-10-07 steps 0 to 2 were walked and
+these three were not. Sending the guest commands from the second account is all
+that changes — the screen under observation stays this one.
+
 - [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
   `guestMode=True`. Changed: `testServerScoped` and `ServerList` turn red;
   `TestLockedFixtures` gains the same *permissions* note (and grows), while this
@@ -2013,10 +2022,12 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
 
 **Not walkable here, and why.**
 
-- *The admin-rights direction of criterion 12.* Nothing can give the rights back from the
-  client; step 2 is a one-way door. Walking it needs a second admin account (the spec's
-  original choreography), or a restart, which loses guest mode and so also loses what the
-  walk set up.
+- *Everything after step 2, from one account* — the block above says why. A server restart
+  does give the rights back, and it is how steps 0 to 2 are repeated, but it is not a way
+  into step 3: guest mode lives only in the running server's `WorldInfoCD` and is gone with
+  the process, and a restart drops the client out of the session, so nothing can be observed
+  under a screen that is still open. Step 1 is the one step a restart recovers, since it
+  runs while this account still holds its rights.
 - *A row relocking while it holds the selection.* A withheld settings row leaves navigation
   by being skipped; whether the selection is moved off a row that is withheld *under* it is
   CK's own behaviour and is not exercised here (step 0 touches nothing, so no row holds the
