@@ -149,9 +149,11 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning("[ModSettingsMenu] ListWidget has no ListWidgetBox — row renders blank.");
                 return;
             }
-            // Release before the render and paint after it, for the same reasons as SettingWidget.Refresh:
-            // a lifted lock must be undone first so the render's ResetEffects colours the row, and the
-            // first render must run unsuppressed because it sizes the label effect's glyph list.
+            // Release before the render and paint after it, for the reasons SettingWidget.Refresh gives
+            // in full: a lifted lock must be undone first so the render's ResetEffects colours the row,
+            // and the render must run unsuppressed because it is what sizes the label effect's glyph
+            // list. Of the two, only the first is load-bearing in this prefab — see there for why the
+            // second is kept anyway.
             if (!_def.WithheldNow)
                 ReleaseLockAppearance();
             _box.label.RenderPlain(_def.Label());

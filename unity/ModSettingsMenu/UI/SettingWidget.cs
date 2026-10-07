@@ -25,11 +25,19 @@ namespace ModSettingsMenu.UI
         /// <summary>What a withheld row's text looked like before MSM painted it, so lifting the lock
         /// can hand back the row it found rather than a guess at it.
         ///
-        /// Invariant: a text may be painted only if its memo is <see cref="Restorable"/>. Capture is
-        /// one-shot while painting is not, so a precondition guarded only at capture would let a row be
-        /// painted that can never be handed back. Callers therefore refuse to paint, rather than retry
-        /// the capture, and "painted" and "restorable" cannot come apart. A missing text is restorable:
-        /// there is nothing to paint and nothing to give back.</summary>
+        /// Invariant, and the one thing both users owe this type: a text may be painted only if its
+        /// memo is <see cref="Restorable"/>. The check therefore sits at the PAINT, not at the capture
+        /// — a precondition guarded only where the memo is taken would let a row be painted that can
+        /// never be handed back, since painting repeats and the capture need not. Callers refuse to
+        /// paint rather than retry the capture, so "painted" and "restorable" cannot come apart. A
+        /// missing text is restorable: there is nothing to paint and nothing to give back.
+        ///
+        /// How often a memo is taken is each user's own business, and the two differ.
+        /// <see cref="SettingWidget.CapturePaint"/> is one-shot on <c>_paintCaptured</c>, because it
+        /// also captures the value effects' enabled states and must hand back the prefab's.
+        /// <see cref="ListWidget"/> captures while <c>!_lockPainted</c> instead, so it re-takes the memo
+        /// on every unpainted call. Same guarantee either way — an unpainted row's texts are whatever
+        /// the last render left, so a re-capture reads the same state a one-shot one kept.</summary>
         internal struct TextPaintMemo
         {
             private Color _color;
@@ -527,10 +535,27 @@ namespace ModSettingsMenu.UI
         {
             if (_def == null)
                 return;
-            // Release first and paint last: a lifted lock must be undone BEFORE the render, so its
-            // ResetEffects colours the row; and a lock must be painted AFTER the first render, which is
-            // what sizes the label effect's glyph list — painting first would leave it empty, and the
-            // effect's selected-state dance indexes it every frame.
+            // Release first and paint last. The two halves are load-bearing to different degrees, and
+            // saying so is the point of this comment.
+            //
+            // RELEASE BEFORE THE RENDER is load-bearing today: it restores dontResetEffectsOnRender, so
+            // the render's ResetEffects is the thing that colours a row whose lock just lifted. Paint
+            // after it and MSM's own white would stand.
+            //
+            // PAINT AFTER THE RENDER keeps glyphJumps in step with glyphs, and in THIS prefab that is
+            // insurance rather than a live need. Painting sets dontResetEffectsOnRender, which
+            // suppresses the ResetEffect that sizes glyphJumps (Pug.Other:366067) — so paint-first
+            // leaves the array short for as long as the row stays painted. Nothing reachable here
+            // reads it: the only UNGUARDED read is PugTextEffectLateUpdate's isDanceWhenSelected branch
+            // (:366131), and all six PugTextEffectMenuOptions across this mod's two prefabs carry
+            // isDanceWhenSelected: 0; the guarded read logs and returns on a count mismatch (:366177),
+            // and the three routes to it from outside the effect all run over menuOptionEffects
+            // (:358793, :358866, :359731), which the paint has emptied. Its one internal route is
+            // ResetEffect's own EndEffectImmediate, where the counts agree because ResetEffect has
+            // just sized the array. It also self-heals, since the render
+            // after a release re-sizes. So the ordering costs nothing and forecloses the per-frame
+            // IndexOutOfRange that flipping that one Editor flag would otherwise make reachable —
+            // which is also the real reason task 3's concern 1 never materialised.
             if (!_def.WithheldNow)
                 ReleaseLockAppearance();
             SetText(labelText, _def.Label()); // localized; falls back to the raw key
