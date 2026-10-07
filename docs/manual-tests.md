@@ -1962,10 +1962,14 @@ shows in full; the `guest-on` sent after it is refused.
 
 What one account cannot do is move the two values **independently**, which is what
 steps 3 to 6 are for. `PlayerController.guestMode` is true only while
-`adminPrivileges < 1`, yet sending `SetGuestMode` needs it above zero — so the one
-order that reaches a felt guest mode is `guest-on` first and `revoke-admin` after,
-and that flips both values in the same instant. Separating them needs a second,
-admin-holding player, and so does reversing a revoke.
+`adminPrivileges < 1`, yet sending `SetGuestMode` needs it above zero. The only
+order that could reach a felt guest mode from one account is therefore `guest-on`
+first and `revoke-admin` after — and that would flip both values in the same
+instant, so it still cannot show them acting separately. That order has not been
+walked and is derived from the two conditions rather than measured; the handbook
+(`../../docs/ck/multiplayer-and-server.md`, "Who is allowed to change things")
+marks it the same way. Separating the two values needs a second, admin-holding
+player, and so does reversing a revoke.
 
 **Setup.** As round 3 of § "Server and Admin, checked against a live world": the
 dedicated server's `Admins.json` lists this account at `privileges: 1` (stage 2
@@ -2003,7 +2007,7 @@ further command from a caller holding none, so the `guest-on` these steps open
 with never arrives. Reversing step 2 is out of reach for the same reason. Keep them here as
 what to look for when a second account is available, and read their checkboxes
 as unticked rather than failing: on 2026-10-07 steps 0 to 2 were walked and
-these three were not. Sending the guest commands from the second account is all
+these four were not. Sending the guest commands from the second account is all
 that changes — the screen under observation stays this one.
 
 - [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
@@ -2026,14 +2030,15 @@ that changes — the screen under observation stays this one.
       two value texts behave identically, in particular neither pops in on change
       (`JuicyAppear` is disabled in the prefab, and the cycle must not have switched it
       on). Failure looks like a value that pops, or stays red-grey while selected.
-- [ ] **6. The rights come back: the `Admin` row follows too.** The second account grants
-      this one stage 1 again (`AddAdmin`, the game's own admin list in the pause menu).
-      Client log: one `permissions changed … adminPrivileges=1` line. `testAdminScoped` is
-      editable and its normal colour again, and this mod's section note is **gone**, with
-      the fixture hint staying exactly where it was and everything below moving back up.
-      This is the only step covering criterion 12's admin-rights direction — the release of
-      a lock that `AccessLock` answered as `ConditionUnmet`, which no other step reaches.
-      (Criterion 12, admin-rights direction)
+- [ ] **6. The rights come back: the `Admin` row follows too.** The second
+  account grants this one stage 1 again (the game's own admin list in the pause
+  menu, which sends `AddOrUpdateAdmin`). Client log: one `permissions changed …
+  adminPrivileges=1` line. `testAdminScoped` is editable and its normal colour
+  again, and this mod's section note is **gone**, with the fixture hint staying
+  exactly where it was and everything below moving back up. This is the only
+  step covering criterion 12's admin-rights direction — the release of a lock
+  that `AccessLock` answered as `ConditionUnmet`, which no other step reaches.
+  (Criterion 12, admin-rights direction)
 
 **Not walkable here, and why.**
 
