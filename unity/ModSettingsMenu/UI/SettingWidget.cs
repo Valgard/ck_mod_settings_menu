@@ -183,9 +183,8 @@ namespace ModSettingsMenu.UI
         // the order its contract needs, so no tint or lock pass here.
         //
         // A row whose screen is not the active one is skipped, not rendered: the list drill-in keeps this
-        // screen's rows alive but inactive, and rendering a PugText on an inactive hierarchy takes glyphs
-        // from the pool that nothing frees (docs/ck/ui-framework.md, "Only two paths give glyphs back").
-        // Nothing is lost: the screen's Activate rebuilds every row on return.
+        // screen's rows alive but inactive, and rendering them would be wasted work, since the screen's
+        // Activate rebuilds every row from the live values on return.
         //
         // The row's height is measured once, in Populate, so a value that now wraps differently (a
         // Kind == Info row showing a foreign string) is re-measured here; ModSettingsScreen.RemeasureRow
