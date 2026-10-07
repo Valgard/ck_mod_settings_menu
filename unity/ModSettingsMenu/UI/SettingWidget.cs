@@ -183,8 +183,10 @@ namespace ModSettingsMenu.UI
         // the order its contract needs, so no tint or lock pass here.
         //
         // A row whose screen is not the active one is skipped, not rendered: the list drill-in keeps this
-        // screen's rows alive but inactive, and rendering them would be wasted work, since the screen's
-        // Activate rebuilds every row from the live values on return.
+        // screen's rows alive but inactive. Two reasons. Rendering them would be wasted work, since the
+        // screen's Activate rebuilds every row from the live values on return. And the re-measure below
+        // could not work: LinearLayout counts inactive children as zero height, so a layout pass over an
+        // inactive hierarchy would size the rows against zero-height siblings.
         //
         // The row's height is measured once, in Populate, so a value that now wraps differently (a
         // Kind == Info row showing a foreign string) is re-measured here; ModSettingsScreen.RemeasureRow
