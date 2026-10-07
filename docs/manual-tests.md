@@ -2068,10 +2068,11 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   entry (§ "A setting that cannot be bound"). Flip one; the **other** shows the
   new value in the same frame, without leaving the screen. Flip the second one
   back and the first follows. (Criterion 14)
-- [ ] **2. A drill-in row is read-only on entry, not on return.** At the **title
-  screen**, open the drill-in of `ServerList` (`TestLockedFixtures`). It is
-  read-only the moment it opens, with no editing affordance appearing after you
-  step out and back in. (Review focus 4)
+- [ ] **2. A list that is locked before entry opens read-only.** At the **title
+  screen**, open the drill-in of `ServerList` (`TestLockedFixtures`): no add row, no
+  row buttons, and a row does not respond to activation. This covers a list that is
+  already locked when the drill-in opens, which is the `NoWorld` case; it is not a lock
+  arriving while the drill-in is open (see below).
 
 Not walked: a mod writing its own entry from gameplay code while the screen is open. No
 fixture does that; step 1 exercises the same path, because a second row's `Adjust` is an
@@ -2079,6 +2080,13 @@ outside writer to the first.
 
 Not walkable, and therefore unverified by this walk:
 
+- *A lock arriving while a list drill-in is open* (review focus 4). Step 2 does
+  not reach it, and no step here does: the drill-in is out of scope for this work
+  (spec § 6), the permission poll is dormant while it is open, and `_editing` is
+  captured once on entry. The case is live, not safe: `WriteValueFromRows`
+  writes without re-checking `_editing`, so an editable drill-in that gets
+  locked mid-session stays editable and its next write goes through. A known
+  gap, left as it is.
 - *That a destroyed row stops listening.* The handler that a destroyed row leaves behind
   ends itself silently (`this == null`, then `Stop()`), and a second subscription on a live
   row only renders twice. Neither leaves a log line or a visible difference, so a walk that
