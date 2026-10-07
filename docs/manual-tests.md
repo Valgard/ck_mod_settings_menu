@@ -1989,10 +1989,15 @@ buttons would send. The file lives at
 <LocalLow>/Pugstorm/Core Keeper/Steam/<user-id>/mods/ModSettingsMenu/permission-trigger
 ~~~
 
-Write one token into it from a shell; the game reads it, deletes the file and acts:
+Write one token into it from a shell; the game reads it, deletes the file and acts.
+`<user-id>` below is a literal to replace, not a value to copy: it is the only entry
+under `…/Core Keeper/Steam/`, so `ls` on that directory names it. Getting it wrong
+costs more than a typo normally does — the write lands in a directory nothing reads,
+and a poller that sees no file is silent by design, so the step fails as *"the screen
+did not react"*, which is exactly what a broken poll looks like.
 
 ~~~bash
-D="$HOME/Library/Application Support/CrossOver/Bottles/Core Keeper/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/10510784/mods/ModSettingsMenu"
+D="$HOME/Library/Application Support/CrossOver/Bottles/Core Keeper/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/ModSettingsMenu"
 printf 'revoke-admin' > "$D/permission-trigger"   # this player loses stage 1
 printf 'guest-on'     > "$D/permission-trigger"   # SetGuestMode(true)
 printf 'guest-off'    > "$D/permission-trigger"   # SetGuestMode(false)
@@ -2126,10 +2131,11 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   sorts after the other fixture sections, so it is the last box on the screen
   unless an installed mod sorts later; if one does, scroll to it. The outside
   writer is a file, read the way the permission trigger's is (see below). Open
-  the screen, leave it open, and from a shell:
+  the screen, leave it open, and from a shell — `<user-id>` as in Task 5's trigger,
+  a literal to replace with the only entry under `…/Core Keeper/Steam/`:
 
   ~~~bash
-  D="$HOME/Library/Application Support/CrossOver/Bottles/Core Keeper/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/10510784/mods/ModSettingsMenu"
+  D="$HOME/Library/Application Support/CrossOver/Bottles/Core Keeper/drive_c/users/crossover/AppData/LocalLow/Pugstorm/Core Keeper/Steam/<user-id>/mods/ModSettingsMenu"
   printf 'long'   > "$D/remeasure-trigger"   # wrapped value
   printf 'short'  > "$D/remeasure-trigger"   # one-line value
   printf 'toggle' > "$D/remeasure-trigger"   # whichever it is not showing
