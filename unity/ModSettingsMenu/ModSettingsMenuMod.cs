@@ -579,9 +579,11 @@ namespace ModSettingsMenu
                 //
                 // A file of its own, and a name that sorts LAST among the sections, on purpose. Rows
                 // sit above and below the Choice so an overhang has a neighbour to land on, and the
-                // section is the bottom of the screen so that shrinking it can leave the scroll
-                // position past the end of the content — the one thing reading the code could not
-                // settle. The keys are numbered because discovered rows sort by key. The Choice
+                // section is the bottom of the screen so that shrinking it leaves the scroll position
+                // past the end of the content — which UIScrollWindow.LateUpdate re-clamps on the next
+                // frame (Pug.Other:375015 → MoveScroll, :375178), so what the walk adds there is the
+                // one frame and the rounding, not the outcome. The keys are numbered because
+                // discovered rows sort by key. The Choice
                 // token carries no comma and no quote, which the list heuristic and the escaping
                 // would otherwise act on. Driven by PollRemeasureTrigger.
                 var remeasureFile = new ConfigFile("TestZRemeasureFixtures/config.cfg", saveOnInit: true, info);

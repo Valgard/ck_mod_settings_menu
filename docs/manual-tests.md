@@ -2164,11 +2164,18 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
      a normal gap under this one. *Failure:* the next section's heading sits on
      top of this box.
   5. **The scroll position.** Scroll to the very bottom first, then write
-     `short`. The content is now shorter than the view's offset assumed. What to
-     watch is whether the view comes back to the new end or leaves empty space
-     below the last box. This is an observation rather than a pass condition: it
-     settles how the scroll window behaves after a height change, which reading
-     the code did not.
+     `short`. The content is now shorter than the view's offset assumed.
+     **Expected: the view comes back to the new end within a frame**, leaving no
+     empty band below the last box. That is `UIScrollWindow.LateUpdate`
+     (`Pug.Other:375015`), which recomputes `ScrollHeight` from the live content
+     height and then reaches `MoveScroll` with no input, whose clamp into
+     `[minScrollPos, ScrollHeight]` (`:375178`) is what pulls the view back; the
+     exception is a content that now fits the window, where `UpdateScroll`
+     returns earlier (`:375048`) having pinned the position instead. So this is an
+     observation of a known expectation, not an open question — what it adds over
+     reading is the single frame at the old offset and the 1/16-unit rounding
+     `dontForcePixelPerfect: 0` applies, neither of which the code says is
+     invisible. *Failure:* the band stays.
 
   Then write `short` (from the top of the screen as well as from the bottom) and look at
   the same five: the row shrinks, `3Below` moves back up with no gap left in the box, the
