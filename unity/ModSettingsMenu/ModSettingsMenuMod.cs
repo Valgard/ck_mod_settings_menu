@@ -946,8 +946,9 @@ namespace ModSettingsMenu
         // rights, nor flip guest mode, without leaving the settings screen, and leaving it is what the
         // criteria forbid — so the RPCs the game's own buttons send are sent from here instead, on a
         // file's say-so. The server does check the sender, once, in front of its whole command switch
-        // (NetworkCommandServerSystem): a client holding no admin rights has every command dropped, so
-        // revoke-admin is the LAST command this player can send. The gate reads SourceConnection !=
+        // (NetworkCommandServerSystem): a client holding no admin rights has every command but
+        // ChangePvPTeam dropped, that one being answered ahead of the gate, so none of the three
+        // tokens below survives it and revoke-admin is the LAST command this player can send. The gate reads SourceConnection !=
         // Entity.Null, so only a locally-issued command on a client-host bypasses it, never a dedicated
         // server. The per-command bodies look only at the target and the world singleton, which is
         // easy to mistake for "no check" (docs/ck/multiplayer-and-server.md, "Who is allowed to change

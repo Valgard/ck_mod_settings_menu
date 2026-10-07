@@ -1930,9 +1930,11 @@ own section (holds `testServerScoped`), and `TestListFixtures` (`Client` rows, p
 
 The rows, the notes and the section heights are computed when the screen opens; this task
 makes them follow a change that happens while it is open (criteria 11 and 12). Build with
-`MOD_DEV_FLAGS=TestFixtures`. The check needs a live dedicated-server session and one
-account, because a player cannot lose their own rights without leaving the settings
-screen, which is exactly what the criterion forbids.
+`MOD_DEV_FLAGS=TestFixtures`. The check needs a live dedicated-server session, because the
+rights it changes do not exist in singleplayer — and a trigger inside the mod rather than
+the game's own buttons, because reaching those means leaving the settings screen, which is
+exactly what the criteria forbid. Steps 0 to 2 run from one account; steps 3 to 6 need a
+second one holding admin rights, for the reason the next paragraph gives.
 
 **The trigger.** A `TestFixtures` build polls a file and sends the RPC the game's own
 buttons would send. The file lives at
@@ -1951,15 +1953,19 @@ printf 'guest-off'    > "$D/permission-trigger"   # SetGuestMode(false)
 ~~~
 
 `Player.log` answers each one with `permission trigger: sent '<token>'`, and the
-file is gone within a frame. Nothing grants rights back, and the server drops
-every command from a caller holding none ("Ignoring admin command from non-admin
-player"), so `revoke-admin` is the last command this account can send. Walked in-game
-against a 1.3.0.5 dedicated server on 2026-10-07: `revoke-admin` works and the lock
-direction shows in full; the `guest-on` sent after it is refused. Guest mode cannot
-be demonstrated by one player at all, because `PlayerController.guestMode` is true
-only while `adminPrivileges < 1`, yet sending `SetGuestMode` needs it above zero.
-Steps 3 to 5 below therefore need a second, admin-holding player to send the guest
-commands, and so does reversing a revoke.
+file is gone within a frame. Nothing grants rights back, and one gate in front of
+the server's whole command switch drops every command but `ChangePvPTeam` from a
+caller holding none ("Ignoring admin command from non-admin player"), so
+`revoke-admin` is the last command this account can send. Walked in-game against a
+1.3.0.5 dedicated server on 2026-10-07: `revoke-admin` works and the lock direction
+shows in full; the `guest-on` sent after it is refused.
+
+What one account cannot do is move the two values **independently**, which is what
+steps 3 to 6 are for. `PlayerController.guestMode` is true only while
+`adminPrivileges < 1`, yet sending `SetGuestMode` needs it above zero — so the one
+order that reaches a felt guest mode is `guest-on` first and `revoke-admin` after,
+and that flips both values in the same instant. Separating them needs a second,
+admin-holding player, and so does reversing a revoke.
 
 **Setup.** As round 3 of § "Server and Admin, checked against a live world": the
 dedicated server's `Admins.json` lists this account at `privileges: 1` (stage 2
@@ -1990,10 +1996,11 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
       `TestViewOnlyFixtures` row, `ServerList` and `ServerInfo` in `TestLockedFixtures`
       (no note appears there), the fixture hint (still its own line, above the note),
       and the scroll position. (Criterion 11, first half)
-**Steps 3 to 5 need a second, admin-holding player — one account cannot walk
-them.** Step 2 took this account's rights, and the server refuses every command
-from a caller holding none, so the `guest-on` these steps open with never
-arrives. Reversing step 2 is out of reach for the same reason. Keep them here as
+
+**Steps 3 to 6 need a second, admin-holding player — one account cannot walk
+them.** Step 2 took this account's rights, and the gate above drops every
+further command from a caller holding none, so the `guest-on` these steps open
+with never arrives. Reversing step 2 is out of reach for the same reason. Keep them here as
 what to look for when a second account is available, and read their checkboxes
 as unticked rather than failing: on 2026-10-07 steps 0 to 2 were walked and
 these three were not. Sending the guest commands from the second account is all
@@ -2019,6 +2026,14 @@ that changes — the screen under observation stays this one.
       two value texts behave identically, in particular neither pops in on change
       (`JuicyAppear` is disabled in the prefab, and the cycle must not have switched it
       on). Failure looks like a value that pops, or stays red-grey while selected.
+- [ ] **6. The rights come back: the `Admin` row follows too.** The second account grants
+      this one stage 1 again (`AddAdmin`, the game's own admin list in the pause menu).
+      Client log: one `permissions changed … adminPrivileges=1` line. `testAdminScoped` is
+      editable and its normal colour again, and this mod's section note is **gone**, with
+      the fixture hint staying exactly where it was and everything below moving back up.
+      This is the only step covering criterion 12's admin-rights direction — the release of
+      a lock that `AccessLock` answered as `ConditionUnmet`, which no other step reaches.
+      (Criterion 12, admin-rights direction)
 
 **Not walkable here, and why.**
 
