@@ -43,7 +43,8 @@ namespace ModSettingsMenu.UI
 
         // See SettingWidget.OnEntryChanged: the same three decisions — Refresh() is the whole cycle
         // including the drill tint and the lock appearance, a row on an inactive screen is left for
-        // the rebuild on return, and a throwing render is logged against this row.
+        // the rebuild on return, a throwing render is logged against this row, and the height is
+        // re-measured because the preview can still wrap (see Preview).
         private void OnEntryChanged()
         {
             if (this == null)
@@ -54,7 +55,10 @@ namespace ModSettingsMenu.UI
             try
             {
                 if (gameObject.activeInHierarchy)
+                {
                     Refresh();
+                    GetComponentInParent<ModSettingsScreen>()?.RemeasureRow(gameObject, ModSettingsScreen.RowHeightPx(PreviewHeight()));
+                }
             }
             catch (Exception e)
             {
@@ -87,6 +91,11 @@ namespace ModSettingsMenu.UI
         public float RenderAndMeasure()
         {
             Render();
+            return PreviewHeight();
+        }
+
+        private float PreviewHeight()
+        {
             return _box != null && _box.preview != null && _box.preview.dimensions.height > 0f ? _box.preview.dimensions.height : 1f;
         }
 

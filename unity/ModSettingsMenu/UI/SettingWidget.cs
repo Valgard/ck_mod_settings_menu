@@ -187,6 +187,10 @@ namespace ModSettingsMenu.UI
         // from the pool that nothing frees (docs/ck/ui-framework.md, "Only two paths give glyphs back").
         // Nothing is lost: the screen's Activate rebuilds every row on return.
         //
+        // The row's height is measured once, in Populate, so a value that now wraps differently (a
+        // Kind == Info row showing a foreign string) is re-measured here; ModSettingsScreen.RemeasureRow
+        // relays out only when the height moved.
+        //
         // Guarded like FollowPermissionChange's stages: ValueString's unboxing casts throw on a foreign
         // entry whose runtime type does not match its inferred Kind, and ConfigFile would log that
         // without saying whose row it was. Unlike a permission transition nothing is consumed here, so
@@ -203,7 +207,10 @@ namespace ModSettingsMenu.UI
             try
             {
                 if (gameObject.activeInHierarchy)
+                {
                     Refresh();
+                    GetComponentInParent<ModSettingsScreen>()?.RemeasureRow(gameObject, ModSettingsScreen.SettingRowHeightPx(this));
+                }
             }
             catch (Exception e)
             {

@@ -46,7 +46,7 @@ namespace ModSettingsMenu.UI
 
         // Same convention for a pre-measured content height (units): list rows feed the item
         // container's rendered height here, so they share RowPaddingPx with the text-based rows.
-        private static int RowHeightPx(float unitsHigh) => Mathf.RoundToInt(16f * unitsHigh) + RowPaddingPx;
+        internal static int RowHeightPx(float unitsHigh) => Mathf.RoundToInt(16f * unitsHigh) + RowPaddingPx;
 
         // A drill-in row measured from its FRAME instead of its text — the same 16-px-per-unit
         // convention, deliberately WITHOUT RowPaddingPx. The padding exists to give text-measured
@@ -369,7 +369,7 @@ namespace ModSettingsMenu.UI
                     // generated value), which is why it stayed hidden: until the list-detection
                     // heuristic was sharpened, prose with a comma was misread as a list and drawn as
                     // a compact preview instead.
-                    SetRowHeight(wGo, Mathf.Max(RowHeightPx(widget.labelText), RowHeightPx(widget.valueText)));
+                    SetRowHeight(wGo, SettingRowHeightPx(widget));
                     menuOptions.Add(widget);
                 }
             }
@@ -398,15 +398,45 @@ namespace ModSettingsMenu.UI
             {
                 if (sGo == null)
                     continue;
-                // Inner layouts first (box, and the heading sub-group if the prefab has one), so the
-                // section-root layout measures their real heights; then the section root, then the top.
-                ContainerOf(sGo).GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
-                sGo.transform.Find("Heading")?.GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
-                sGo.GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
+                RenderSectionLayout(sGo);
             }
             _layout?.RenderUIComponent(force: true);
             // contentRoot's position is owned by UIScrollWindow (LateUpdate → SetScrollablePosition),
             // so no manual anchoring here — an anchor set now is overwritten the same frame.
+        }
+
+        // Inner layouts first (box, and the heading sub-group if the prefab has one), so the
+        // section-root layout measures their real heights; then the section root. The top layout
+        // is the caller's, because RenderContent runs it once after every section.
+        private static void RenderSectionLayout(GameObject sGo)
+        {
+            ContainerOf(sGo).GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
+            sGo.transform.Find("Heading")?.GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
+            sGo.GetComponent<LinearLayoutUIComponent>()?.RenderUIComponent(force: true);
+        }
+
+        // Both columns, because the value is whatever a foreign mod stored and may wrap (see Populate).
+        internal static int SettingRowHeightPx(SettingWidget widget) => Mathf.Max(RowHeightPx(widget.labelText), RowHeightPx(widget.valueText));
+
+        // A row's text changed after Populate sized it (SettingWidget/ListWidget.OnEntryChanged), so its
+        // height may no longer fit — and a row taller than its slot overhangs the one below. Re-measuring
+        // is a comparison, and the layout runs only when the height actually moved: that is the narrow
+        // path (this row's section, then the stack of sections), not RenderContent, which would also
+        // re-render every list preview on what can be a gameplay write. Nothing here re-measures a
+        // SettingWidget row except this and Populate, so RenderContent alone would not fix it.
+        internal void RemeasureRow(GameObject row, int px)
+        {
+            var wrap = row.GetComponent<WrapperUIComponent>();
+            if (wrap == null || wrap.renderHeightPixels == px)
+                return;
+            SetRowHeight(row, px);
+            var section = row.transform;
+            while (section != null && section.parent != contentRoot)
+                section = section.parent;
+            if (section == null)
+                return;
+            RenderSectionLayout(section.gameObject);
+            _layout?.RenderUIComponent(force: true);
         }
 
         // Keyboard / controller navigation moves the selection through menuOptions, but the base
