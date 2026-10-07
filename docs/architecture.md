@@ -220,9 +220,8 @@ Mounts the settings of mods that use CoreLib config but never called `ModSetting
 (ADR-001). It reads each foreign `ConfigFile`'s entries and maps every one to a `SettingDef` marked
 `Foreign = true` via a first-match cascade:
 
-- a read-only/server-locked entry → Info
 - bool → Toggle
-- enum → Choice
+- enum → Choice over the enum names
 - ranged int/float → Stepper/Slider
 - a closed set of acceptable values → Choice. The values are read off the constraint itself for
   every type CoreLib can convert — `ReadExactValues` names each one in an `is
@@ -232,14 +231,23 @@ Mounts the settings of mods that use CoreLib config but never called `ModSetting
   parent repo's `docs/ck/sandbox.md` has the measurement). What the cascade cannot
   name is a type registered through `TomlTypeConverter.AddConverter`; for that alone the set is
   reconstructed by parsing `ToDescriptionString()` and kept only if every token converts back to a
-  value the constraint calls valid (`TryTokens`) — otherwise the entry falls through to Info below
-- a bare numeric → unbounded Stepper
+  value the constraint calls valid (`TryTokens`) — otherwise the entry becomes Info **here**, not
+  further down: an `int` carrying a constraint nobody can read is not a bare numeric and must not
+  be offered as an unbounded Stepper
+- a bare numeric, with no constraint at all → unbounded Stepper
 - a raw string → `List`, when a heuristic judges it a genuine comma-list (≥2 tokens, none
   containing a `.` and none more than two words — ADR-006 replaced an underived 32-character cap
   with the word count, because length let prose through and refused long identifiers)
 - otherwise → Info
 
 The routing decision lives here so the widgets stay dumb — only genuine lists reach `ListWidget`.
+
+**The cascade is about shapes, never about permissions.** `Info` here means "there is no editable
+widget for this shape at all" — a constraint MSM cannot read, or a type it does not handle — and it
+is reached regardless of the entry's scope. Whether a player may change a row *right now* is a
+different question with a different answer: `SettingDef.Locked`, via `AccessLock`. An earlier
+version of this list opened with "a read-only/server-locked entry → Info", which was wrong twice
+over: that is not the cascade's first step, and a permission lock never changes an entry's `Kind`.
 
 It also fills in every loc term a discovered entry can be read under, since this is the only place
 that knows the config file's path and section: MSM's own schema (`<Owner>-Config/<key>`), so an

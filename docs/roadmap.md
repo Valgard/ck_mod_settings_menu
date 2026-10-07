@@ -645,9 +645,13 @@ polls `adminPrivileges` and `guestMode` every frame for exactly this reason.
 writing its own entry from gameplay code is possible — `SettingHandle.Value` has
 a setter — though no example is at hand in the installed set. It is cheap to fix
 because `SettingDef.Entry` is a live handle: the data is already right, only the
-rendered text is stale, so a `Refresh()` is enough and CoreLib supplies the
-trigger ready-made in `ConfigEntryBase.SettingChanged`, subscribable per entry
-for as long as the row lives.
+rendered text is stale, so a `Refresh()` is enough. CoreLib supplies the trigger
+too, but not on the type MSM holds: `SettingChanged` is declared inside the
+generic `ConfigEntry<T>`, not on the `ConfigEntryBase` that `SettingDef.Entry`
+is typed as — so a row cannot subscribe to its own entry, and an earlier version
+of this paragraph promising exactly that would not have compiled. The event
+belongs to the file, and `ConfigEntryBase.ConfigFile` is public, so a row
+reaches it in one hop and filters on the handler's `ChangedSetting`.
 
 **The two halves are not equally cheap.** There is no `SettingChanged` for a lock:
 `adminPrivileges` is a property over a component and `guestMode` a field in a
