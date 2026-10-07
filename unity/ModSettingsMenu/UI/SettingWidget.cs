@@ -198,7 +198,8 @@ namespace ModSettingsMenu.UI
         private void OnEntryChanged()
         {
             // A destroyed row whose OnDestroy never ran (Unity skips it for an object that was never
-            // active) is the one way a handler outlives its row; this ends it at the first write.
+            // active) is the one way a handler outlives its row. This ends it at the first write to this
+            // row's entry; on an entry nothing writes again it never fires, and the handler stays.
             if (this == null)
             {
                 _watch.Stop();
