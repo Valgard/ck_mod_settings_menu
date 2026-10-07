@@ -1,3 +1,4 @@
+using System;
 using CoreLib.Data.Configuration;
 using ModSettingsMenu.Settings;
 using UnityEngine;
@@ -75,8 +76,54 @@ namespace ModSettingsMenu.UI
             t.SetTempColor(c);
         }
 
+        /// <summary>One row's subscription to its entry's file, so an outside write reaches the row.
+        /// <c>ConfigFile.SettingChanged</c> is the only event reachable over the <c>ConfigEntryBase</c>
+        /// MSM holds (the per-entry one lives on <c>ConfigEntry&lt;T&gt;</c>), and it fires for every entry
+        /// in the file, so the handler filters on the one entry watched.
+        ///
+        /// Lifetime: the file outlives every row (rows are rebuilt on each open, the file is cached by
+        /// ConfigStore), so a handler left behind keeps a destroyed row alive and fires on it. The
+        /// subscribe and the unsubscribe therefore sit in one place and cannot drift apart: <see cref="Watch"/>
+        /// first <see cref="Stop"/>s whatever was watched, which makes a second Bind of the same row replace
+        /// its subscription rather than add one, and <see cref="Stop"/> removes the one delegate instance
+        /// from the file it was added to — not from wherever the entry points now.</summary>
+        internal sealed class EntryWatch
+        {
+            private readonly EventHandler<SettingChangedEventArgs> _handler;
+            private ConfigFile _file;
+            private ConfigEntryBase _entry;
+
+            public EntryWatch(Action onChanged)
+            {
+                _handler = (sender, args) =>
+                {
+                    if (args.ChangedSetting == _entry)
+                        onChanged();
+                };
+            }
+
+            public void Watch(ConfigEntryBase entry)
+            {
+                Stop();
+                if (entry == null || entry.ConfigFile == null)
+                    return;
+                _entry = entry;
+                _file = entry.ConfigFile;
+                _file.SettingChanged += _handler;
+            }
+
+            public void Stop()
+            {
+                if (_file != null)
+                    _file.SettingChanged -= _handler;
+                _file = null;
+                _entry = null;
+            }
+        }
+
         private SettingDef _def;
         private ModSection _section;
+        private EntryWatch _watch;
 
         // What this row looked like before MSM first touched it. Per-widget fields on purpose: Populate
         // destroys and rebuilds every row, so nothing here can outlive the row it describes — PreWarm's
@@ -125,7 +172,52 @@ namespace ModSettingsMenu.UI
             // while navigating.
             if (!def.IsEditable && valueText != null)
                 MakeValueReadOnly();
+            if (_watch == null)
+                _watch = new EntryWatch(OnEntryChanged);
+            _watch.Watch(def.Entry);
             Refresh();
+        }
+
+        // Another writer changed this row's entry — a mod's own gameplay code, or a second row over the
+        // same entry (testDupKeyAccess). Goes through Refresh, which already runs the lock appearance in
+        // the order its contract needs, so no tint or lock pass here.
+        //
+        // A row whose screen is not the active one is skipped, not rendered: the list drill-in keeps this
+        // screen's rows alive but inactive, and rendering a PugText on an inactive hierarchy takes glyphs
+        // from the pool that nothing frees (docs/ck/ui-framework.md, "Only two paths give glyphs back").
+        // Nothing is lost: the screen's Activate rebuilds every row on return.
+        //
+        // Guarded like FollowPermissionChange's stages: ValueString's unboxing casts throw on a foreign
+        // entry whose runtime type does not match its inferred Kind, and ConfigFile would log that
+        // without saying whose row it was. Unlike a permission transition nothing is consumed here, so
+        // the next write to the entry simply tries again.
+        private void OnEntryChanged()
+        {
+            // A destroyed row whose OnDestroy never ran (Unity skips it for an object that was never
+            // active) is the one way a handler outlives its row; this ends it at the first write.
+            if (this == null)
+            {
+                _watch.Stop();
+                return;
+            }
+            try
+            {
+                if (gameObject.activeInHierarchy)
+                    Refresh();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ModSettingsMenu] refreshing '{_def?.Key}' after an outside change failed: {e}");
+            }
+        }
+
+        // The matching end of Bind's subscription. Populate destroys every row on every open, including
+        // the Activate that resumes the screen after a drill-in, so destruction is the lifecycle that
+        // pairs with it. Deactivate(pop: false) needs nothing: the rows survive it and stay subscribed.
+        private void OnDestroy()
+        {
+            if (_watch != null)
+                _watch.Stop();
         }
 
         // Make the value render as a static read-only string. CK drives its PugTextEffects through

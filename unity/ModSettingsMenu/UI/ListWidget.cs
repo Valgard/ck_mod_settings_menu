@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using ModSettingsMenu.Settings;
 using UnityEngine;
@@ -17,6 +18,7 @@ namespace ModSettingsMenu.UI
         private SettingDef _def;
         private ModSection _section;
         private ListWidgetBox _box;
+        private SettingWidget.EntryWatch _watch;
 
         // What the row looked like before MSM first painted it locked. Per-widget fields: Populate
         // destroys and rebuilds every row, so a capture cannot outlive the row it describes.
@@ -33,7 +35,38 @@ namespace ModSettingsMenu.UI
             _def = def;
             _section = section;
             _box = GetComponent<ListWidgetBox>();
+            if (_watch == null)
+                _watch = new SettingWidget.EntryWatch(OnEntryChanged);
+            _watch.Watch(def?.Entry);
             Render();
+        }
+
+        // See SettingWidget.OnEntryChanged: the same three decisions — Refresh() is the whole cycle
+        // including the drill tint and the lock appearance, a row on an inactive screen is left for
+        // the rebuild on return, and a throwing render is logged against this row.
+        private void OnEntryChanged()
+        {
+            if (this == null)
+            {
+                _watch.Stop();
+                return;
+            }
+            try
+            {
+                if (gameObject.activeInHierarchy)
+                    Refresh();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ModSettingsMenu] refreshing '{_def?.Key}' after an outside change failed: {e}");
+            }
+        }
+
+        // Pairs with Bind's subscription; see SettingWidget.OnDestroy.
+        private void OnDestroy()
+        {
+            if (_watch != null)
+                _watch.Stop();
         }
 
         // RefreshSection (ModSettingsScreen, after a section-wide reset) and FollowPermissionChange

@@ -2056,6 +2056,37 @@ that changes — the screen under observation stays this one.
 - *A change while the list drill-in is open.* The poll is dormant there (another menu is on
   top) and returning rebuilds every row, so the screen is correct again without it.
 
+## MSM-10 Task 6 — the screen follows a value change
+
+Task 5 made the screen follow a change of *permission*; this one makes it follow a change of
+*value*, when something other than the row being pressed writes the entry while a row for it
+is on screen (criterion 14). Build with `MOD_DEV_FLAGS=TestFixtures`. Each row subscribes to
+its entry's file when it is bound and unsubscribes when it is destroyed.
+
+- [ ] **1. Two rows over one entry.** Open Options → Mod settings with
+  `testDupKeyAccess` on screen: it appears twice, both rows bound to the one
+  entry (§ "A setting that cannot be bound"). Flip one; the **other** shows the
+  new value in the same frame, without leaving the screen. Flip the second one
+  back and the first follows. (Criterion 14)
+- [ ] **2. A drill-in row is read-only on entry, not on return.** At the **title
+  screen**, open the drill-in of `ServerList` (`TestLockedFixtures`). It is
+  read-only the moment it opens, with no editing affordance appearing after you
+  step out and back in. (Review focus 4)
+- [ ] **3. The subscription does not pile up.** Open and close Options → Mod settings about
+      ten times, going through the `ServerList` drill-in on some of the visits, then repeat
+      step 1. `Player.log` holds no `MissingReferenceException` and no `refreshing '…' after
+      an outside change failed` line. A handler left behind by a destroyed row would fire on
+      every flip in step 1 and be logged here.
+- [ ] **4. Rows behind the drill-in are not touched while it is open.** In the `ServerList`
+      drill-in nothing on the parent screen can be seen, so this is checked by what follows:
+      leave the drill-in and the parent rows show the current values (the screen rebuilds
+      them on return), with no text missing anywhere in the game afterwards — the symptom
+      of glyphs taken from the pool by a render on an inactive row.
+
+Not walked: a mod writing its own entry from gameplay code while the screen is open. No
+fixture does that; step 1 exercises the same path, because a second row's `Adjust` is an
+outside writer to the first.
+
 ## After the walk
 
 - [ ] `TestListFixtures/config.cfg` carries, for every fixture touched, exactly
