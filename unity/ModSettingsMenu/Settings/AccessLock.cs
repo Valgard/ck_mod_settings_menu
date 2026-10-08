@@ -47,5 +47,18 @@ namespace ModSettingsMenu.Settings
                 return LockReason.NoWorld;
             return scope.Changeable() ? LockReason.None : LockReason.ConditionUnmet;
         }
+
+        /// <summary>A lock the player could come to be rid of — no world yet, or a condition the scope
+        /// names — as opposed to <see cref="LockReason.ViewOnly"/>, which is permanent, and
+        /// <see cref="LockReason.None"/>, which is no lock.
+        ///
+        /// Named rather than written out, for the reason <c>ListAccess</c> in SettingModel.cs gives at
+        /// length: the question is "transient?", not "is it one of these two values", and spelled out
+        /// at a call site it reads as the latter. The practical difference is where a FIFTH reason gets
+        /// classified. Added to the enum, it is silently permanent either way — nothing withholds a row
+        /// for it, no section note mentions it — but with the disjunction inline that decision is made
+        /// by whichever expressions happen to exist, and here it is made in one place a new member's
+        /// author has to walk past.</summary>
+        internal static bool IsTransient(LockReason reason) => reason == LockReason.NoWorld || reason == LockReason.ConditionUnmet;
     }
 }

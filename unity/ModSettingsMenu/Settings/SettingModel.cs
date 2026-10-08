@@ -202,21 +202,44 @@ namespace ModSettingsMenu.Settings
         /// It no longer carries the second meaning the old ReadOnly field did — "no editable
         /// widget exists for this value's shape". That is Kind == SettingKind.Info and needs no
         /// field of its own; the two were only ever conflated because discovery set both at once.
-        /// A row can be both, and only now can a caller tell which.</summary>
+        /// A row can be both, and only now can a caller tell which.
+        ///
+        /// So this is the permission answer alone, and it is not the question a widget guard should
+        /// ask — <see cref="IsEditable"/> is. Asking here is what 83e559b did.</summary>
         public bool Locked => Reason != LockReason.None;
 
         /// <summary>Why <see cref="Locked"/> is true, or None. The one place the permission question
         /// is asked; <see cref="Locked"/> and <see cref="WithheldNow"/> are both read off it.</summary>
         internal LockReason Reason => Entry == null ? LockReason.None : AccessLock.Reason(Entry.Scope);
 
+        /// <summary>This row has a widget that could be operated at all, lock aside: it holds a value
+        /// (an <see cref="Entry"/>) and its shape has an editable widget (<c>Kind != Info</c>).
+        ///
+        /// Stated once, because <see cref="IsEditable"/>'s own documentation forbids callers to
+        /// re-derive exactly this conjunction and the type then wrote it out twice in its own body.
+        /// 83e559b is what that costs: three guards asked <see cref="Locked"/> alone and a discovered
+        /// Client-scoped Info row rendered as interactive. A fourth predicate added here now has one
+        /// term to reach for rather than a pattern to copy.</summary>
+        private bool HasOperableWidget => Entry != null && Kind != SettingKind.Info;
+
         /// <summary>True when this row is locked by a condition that may change — no world yet, or
         /// the scope's condition unmet — as opposed to ViewOnly, which is permanent.
         ///
-        /// <c>Kind != Info</c> is deliberate and must not be simplified away: a structurally inert
-        /// row (no editable widget for its shape) is not being withheld from anyone, whatever its
-        /// scope says, so it must never take the withheld treatment. This is the seam MSM-16
-        /// attaches to.</summary>
-        internal bool WithheldNow => Entry != null && Kind != SettingKind.Info && (Reason == LockReason.NoWorld || Reason == LockReason.ConditionUnmet);
+        /// <see cref="HasOperableWidget"/> is deliberate and must not be simplified away: a
+        /// structurally inert row (no editable widget for its shape) is not being withheld from
+        /// anyone, whatever its scope says, so it must never take the withheld treatment. This is the
+        /// seam MSM-16 attaches to.
+        ///
+        /// It decides APPEARANCE for every row that reads it, and navigation and input only where a
+        /// widget's own overrides say so: a SettingWidget reports GRAYED_OUT and refuses activation,
+        /// while a ListWidget stays ACTIVE and activatable on purpose, because its drill-in has to
+        /// remain reachable to show the list at all.
+        ///
+        /// Asking <see cref="AccessLock.IsTransient"/> rather than naming the two reasons also reads
+        /// <see cref="Reason"/> once instead of twice, which matters a little: Reason goes through
+        /// Manager.main.player and CoreLib's Changeable(), and a render reaches this property more than
+        /// once.</summary>
+        internal bool WithheldNow => HasOperableWidget && AccessLock.IsTransient(Reason);
 
         /// <summary>Whether this row can be operated at all — the question every widget and the
         /// section reset actually ask, as opposed to WHY it cannot be.
@@ -236,7 +259,7 @@ namespace ModSettingsMenu.Settings
         /// it would only withhold the correct way to combine what is already handed out. That is
         /// the re-derivation the paragraph above forbids, and it is how three guards went
         /// wrong.</summary>
-        public bool IsEditable => Entry != null && !Locked && Kind != SettingKind.Info;
+        public bool IsEditable => HasOperableWidget && !Locked;
 
         /// <summary>List only: the level the CONSUMER asked for, before any permission lock.
         /// Read <see cref="EffectiveEditing"/> instead — this one is only half the answer.

@@ -866,8 +866,19 @@ namespace ModSettingsMenu.UI
         }
 
         // The first match decides, and it cannot be arbitrary: AccessLock.Reason answers NoWorld only
-        // when there is no player and ConditionUnmet only when there is one, so one section never
-        // holds rows with both reasons at once.
+        // when there is no player and ConditionUnmet only when there is one, so one section does not
+        // hold rows with both reasons at once. With one exception, and it is in AccessLock rather than
+        // here: the scope == null branch answers ConditionUnmet without consulting a player at all. It
+        // is unreachable through an Entry — CoreLib normalises every scope on construction, which is
+        // why that branch is kept as fail-shut rather than deleted (see AccessLock) — so the invariant
+        // rests on CoreLib, not on this method's own reasoning. Were it reachable, a title-screen
+        // section holding one Server-scoped and one null-scope row would carry both reasons and this
+        // loop would decide by section.Settings order. Benign, and not what the sentence above claims.
+        //
+        // The else-branch reads "withheld and not NoWorld ⇒ a session lock". That holds while
+        // AccessLock.IsTransient admits exactly those two reasons: it is the one place a new
+        // LockReason gets classified, and WithheldNow is built on it, so a reason it does not admit
+        // never reaches this loop at all.
         private static string LockNoteText(ModSection section)
         {
             bool session = false;
