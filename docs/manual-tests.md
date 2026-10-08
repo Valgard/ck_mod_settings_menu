@@ -1680,8 +1680,16 @@ group fixtures were bound with no scope, so CoreLib gave them `Server` and they 
 locked at the title screen; they now carry a Client scope and are editable. Build
 with `MOD_DEV_FLAGS=TestFixtures`; inspect at the **title screen**.
 
-- [ ] `testServerScoped` is **unchanged**: still looks editable at the title
-      screen. Making it look withheld is Task 2's change, not this one.
+**`testServerScoped` is where a step used to stand, and it is not walkable from
+HEAD.** At the Task 1 commit the row still looked editable at the title screen,
+which was the refactor's own evidence that it had moved nothing. Task 2 made it
+leave navigation and Task 3 painted it, so against HEAD the opposite holds — and
+since an unticked box in this document is the instruction to go and walk it, that
+item could only ever report a failure. It is recorded here the way Task 2's and
+Task 3's own "before this task" paragraphs are: as the state at that commit, not as
+a step. What the row does now is checked in Task 2 (navigation and input) and
+Task 3 (the paint).
+
 - [ ] The `ViewOnly` fixtures (`LongReadOnly`, `ChoiceReadOnly`) are unchanged —
       read-only exactly as before.
 - [ ] The new `ViewOnlyInfo` row (under the list fixtures, `ViewOnly` **and** a
@@ -1752,9 +1760,14 @@ screen `testServerScoped` took the selection, answered a keypress, and its value
 did not change, because `Adjust()` already returned early on `!IsEditable`. So the
 row looked operable, answered input and did nothing.
 
-- [ ] **Navigation skips it.** Select the row directly above `testServerScoped`
-      and press down: the selection lands on the row directly below, never on
-      `testServerScoped`. Press up from there: it lands on the row above again.
+- [ ] **Navigation skips it.** Select `testAfterGroupIsClient`, the row directly
+      above `testServerScoped`, and press down. The selection does **not** land on
+      the row below `testServerScoped`: that row is `testAdminScoped`, withheld at
+      the title screen for the same reason (`Admin` falls past `ViewOnly` and
+      `Client` into the same no-player guard), so both are stepped over and the
+      selection lands on `testListReadOnlyAndLocked` — a list row, which stays
+      `ACTIVE` even when locked. Never on either of the two. Press up from there:
+      it skips both again and lands on `testAfterGroupIsClient`.
       This is the keyboard and controller path. What it shows is that the
       selection cannot be **moved onto** a grayed row — not that such a row never
       holds it: `RadicalMenu.Activate()` hands the selection to the first option
