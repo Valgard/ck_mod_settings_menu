@@ -1028,8 +1028,9 @@ namespace ModSettingsMenu
         // ChangePvPTeam dropped, that one being answered ahead of the gate — and none of the three
         // tokens below is that one, so revoke-admin is the LAST command this player can send: it
         // goes through while they still hold their rights, and nothing after it does. The gate reads
-        // SourceConnection != Entity.Null, so a locally-issued command on a client-host bypasses
-        // it; a client on a dedicated server never does. The bodies of these two commands look only
+        // SourceConnection != Entity.Null, so only a command entity created in the server world itself
+        // skips it — and these are sent as RPCs from the client world, on a host as much as against a
+        // dedicated server, so they always meet it. The bodies of these two commands look only
         // at the target and the world singleton — and so does AddOrUpdateAdmin's, whose own privilege
         // check reads the TARGET's connection ("don't re-promote an existing admin",
         // DedicatedServer/Pug.Other:137191, the same shape as PlayerBan's at :137147), not the sender.
