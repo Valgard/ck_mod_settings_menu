@@ -187,9 +187,19 @@ namespace ModSettingsMenu.UI
             Refresh();
         }
 
-        // Another writer changed this row's entry — a mod's own gameplay code, or a second row over the
-        // same entry (testDupKeyAccess). Goes through Refresh, which already runs the lock appearance in
-        // the order its contract needs, so no tint or lock pass here.
+        // This row's entry was written — and most often by this row itself, which is the part that was
+        // worth getting right here. Adjust writes BoxedValue and CoreLib raises the file event
+        // synchronously (ConfigEntryBase.cs:42 → :134 → ConfigFile.cs:504, invoked at :517), so this
+        // runs INSIDE Apply, before Adjust's own finally { Refresh(); }. A section reset arrives the
+        // same way (SectionReset.cs:56 writes BoxedValue per entry, and RefreshSection then redraws
+        // the same rows a second time). The other writers are a second row over the same entry
+        // (testDupKeyAccess) and a mod's own gameplay code. All of them land here, which is why this
+        // body has to be idempotent rather than transition-shaped. The exception is a write that
+        // changes nothing: CoreLib's setter returns before the event when the new value equals the old
+        // (ConfigEntryBase.cs:38), so a step that clamps back to where it already was is silent.
+        //
+        // Goes through Refresh, which already runs the lock appearance in the order its contract
+        // needs, so no tint or lock pass here.
         //
         // A row whose screen is not the active one is skipped, not rendered: the list drill-in keeps this
         // screen's rows alive but inactive. Two reasons. Rendering them would be wasted work, since the
@@ -201,8 +211,15 @@ namespace ModSettingsMenu.UI
         // Kind == Info row showing a foreign string) is re-measured here; ModSettingsScreen.RemeasureRow
         // relays out only when the height moved.
         //
-        // Guarded like FollowPermissionChange's stages: ValueString's unboxing casts throw on a foreign
-        // entry whose runtime type does not match its inferred Kind, and ConfigFile would log that
+        // Guarded like FollowPermissionChange's stages, and worth naming what can actually throw,
+        // because the case this clause used to name was looked for and not reproduced: a Kind whose
+        // unboxing cast disagrees with its entry's runtime type would need a producer that does not
+        // pin the two together, and both pin them per Kind (ForeignConfigDiscovery.BuildDef's type
+        // tests, SectionBuilder's typed overloads). What is reachable is the foreign material this
+        // path handles — Label()/ValueLabel() → Loc.TFirstOf → API.Localization, called with term
+        // strings composed from a foreign config's file path and keys; PugText.Render on arbitrary
+        // foreign text; and RemeasureRow's layout pass below, which runs inside this same try. The
+        // casts stay guarded all the same: this costs one row, and ConfigFile would log any of these
         // without saying whose row it was. Unlike a permission transition nothing is consumed here, so
         // the next write to the entry simply tries again.
         private void OnEntryChanged()
@@ -412,9 +429,15 @@ namespace ModSettingsMenu.UI
         // Not redundant beside GetActiveStateInCurrentScene, and the reason is worth stating because it
         // was read the other way once: GRAYED_OUT keeps navigation off this row, but RadicalMenu.Activate
         // still hands the selection to the first option that is ACTIVE *or* GRAYED_OUT (Pug.Other:359134
-        // → SelectOptionIndex, :359260, which has no state gate). So a withheld row DOES hold the
-        // selection whenever it is the screen's first option, and this override is the only thing CK
-        // then asks. It drives two observables, both through RadicalMenu.CanActivateCurrentOption:
+        // → SelectOptionIndex, :359260, which has no state gate). So a withheld row CAN hold the
+        // selection while being the screen's first option — necessary but not sufficient, and both
+        // exceptions sit in that same method: a mouse-last open deselects everything instead (:359145),
+        // and from the second open on, rememberSelectedIndex (set in this prefab) prefers the remembered
+        // index while it is in range and its option is ACTIVE (:359149-359158; nothing clears it between
+        // opens, CleanupAndReset at :359183-359189 never touches selectedIndex). The reliable case is a
+        // keyboard-driven first open, where selectedIndex is still its initial -1 (:358972) and the scan's
+        // first hit wins. When the row does hold the selection, this override is what CK asks before
+        // activating it. It drives two observables, both through RadicalMenu.CanActivateCurrentOption:
         // MenuManager suppresses the menu-select SFX (:278869) and the footer drops its Select prompt,
         // because GetHelpButtonsToShow returns helpButtonsNoSelect — [NAVIGATE, BACK] — instead of
         // defaultHelpButtons (:359480, :358966, :278117). The value is safe either way: Adjust() refuses

@@ -542,8 +542,14 @@ namespace ModSettingsMenu
                 // What CAN is RadicalMenu.Activate(), whose scan accepts
                 // ACTIVE *or* GRAYED_OUT (:359134) and hands the first such index to SelectOptionIndex
                 // (:359153/:359161/:359166) — and that method gates on CanChangeIndex() alone, with no
-                // state check (:359260). So on an OPEN, a withheld row holds the selection exactly when
-                // it is the screen's FIRST option — the live poll relocking a row under the selection
+                // state check (:359260). So on an OPEN a withheld row CAN hold the selection while being
+                // the screen's FIRST option: necessary, not sufficient, and both exceptions sit in that
+                // same method. A mouse-last open deselects everything instead (:359145), and from the
+                // second open on, rememberSelectedIndex — which this prefab sets — prefers the remembered
+                // index while it is in range and its option is ACTIVE (:359149-359158). What this fixture
+                // needs is therefore a keyboard-driven FIRST open, where selectedIndex is still its
+                // initial -1 (:358972) and the scan's first hit wins; the walk states both preconditions.
+                // The live poll relocking a row under the selection
                 // reaches the same state by another road, and is task 5's. Which is why this fixture
                 // exists rather than a reuse of
                 // testServerScoped or TestLockedFixtures: neither is first, and nothing may be reordered
@@ -1024,8 +1030,13 @@ namespace ModSettingsMenu
         // goes through while they still hold their rights, and nothing after it does. The gate reads
         // SourceConnection != Entity.Null, so a locally-issued command on a client-host bypasses
         // it; a client on a dedicated server never does. The bodies of these two commands look only
-        // at the target and the world singleton — AddOrUpdateAdmin's does check its sender, which is
-        // what makes reading one body as "no check" so easy
+        // at the target and the world singleton — and so does AddOrUpdateAdmin's, whose own privilege
+        // check reads the TARGET's connection ("don't re-promote an existing admin",
+        // DedicatedServer/Pug.Other:137191, the same shape as PlayerBan's at :137147), not the sender.
+        // Reading a per-command check as the gate is the available mistake here, and that is why: the
+        // real one sits in front of the whole switch (:137132 → switch at :137137), dozens of lines
+        // above whichever branch is being read. Line numbers from the SERVER assembly, because that is
+        // the process this paragraph is about; the client carries the same system at its own offsets
         // (docs/ck/multiplayer-and-server.md, "Who is allowed to change things").
         //
         // The file is written from a shell: the content is one token, the file is read, acted on and
