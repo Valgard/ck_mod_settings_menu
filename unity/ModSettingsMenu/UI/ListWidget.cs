@@ -28,6 +28,14 @@ namespace ModSettingsMenu.UI
         private PugTextEffectMenuOption[] _origMenuOptionEffects;
         private bool _lockPainted;
 
+        // Both texts' PugTextEffects and the enabled state each had before the lock was painted.
+        // Captured and handed back rather than switched back on, because the prefab does not carry
+        // them uniformly: the PugTextEffectMenuOption on the Label and on the Value is enabled, the
+        // second effect beside each is not — so re-enabling the lot on release would start an
+        // animation the prefab never asked for.
+        private PugTextEffect[] _textEffects;
+        private bool[] _textEffectsEnabled;
+
         public ModSection Section => _section;
 
         public void Bind(SettingDef def, ModSection section)
@@ -155,13 +163,13 @@ namespace ModSettingsMenu.UI
             // list. Of the two, only the first is load-bearing in this prefab — see there for why the
             // second is kept anyway.
             if (!_def.WithheldNow)
-                ReleaseLockAppearance();
+                ReleaseLockAppearance(IsSelected());
             _box.label.RenderPlain(_def.Label());
             _box.preview.RenderPlain(Preview());
             // Selection-aware, not a blanket grey: for a selected row that is not withheld,
             // ApplyLockAppearance takes its release branch and paints nothing, so a grey tint here
             // would stay. A withheld row is repainted over this by ApplyLockAppearance.
-            TintDrill(IsSelected() ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+            TintDrillForSelection(IsSelected());
             ApplyLockAppearance();
         }
 
@@ -169,7 +177,8 @@ namespace ModSettingsMenu.UI
         /// row stays ACTIVE (it must remain reachable and open its drill-in), so CK would write the
         /// ordinary grey at every render; spec § 4.4's second step is what makes it red at all. Reads
         /// WithheldNow and the selection itself; the overrides below pass the selection explicitly
-        /// because IsSelected() still answers true for the row being left during OnDeselected.</summary>
+        /// because IsSelected() still answers true for the row being left during OnDeselected — and
+        /// so does the release, which tints the drill arrow from the same answer.</summary>
         internal void ApplyLockAppearance() => ApplyLockAppearance(IsSelected());
 
         private void ApplyLockAppearance(bool selected)
@@ -178,13 +187,14 @@ namespace ModSettingsMenu.UI
                 return;
             if (!_def.WithheldNow)
             {
-                ReleaseLockAppearance();
+                ReleaseLockAppearance(selected);
                 return;
             }
             if (!_lockPainted)
             {
                 _labelMemo = SettingWidget.TextPaintMemo.Of(_box.label);
                 _previewMemo = SettingWidget.TextPaintMemo.Of(_box.preview);
+                CaptureTextEffects();
             }
             if (!_labelMemo.Restorable || !_previewMemo.Restorable)
                 return; // refuse to paint what cannot be handed back (see SettingWidget.TextPaintMemo)
@@ -197,6 +207,7 @@ namespace ModSettingsMenu.UI
             }
             if (_effectsCaptured)
                 menuOptionEffects = new PugTextEffectMenuOption[0];
+            DisableTextEffects();
             var c = selected ? SettingWidget.LockedSelectedColor : PugTextEffectMenuOption.UNSELECTABLE_TEXT_COLOR;
             SettingWidget.PaintLocked(_box.label, c);
             SettingWidget.PaintLocked(_box.preview, c);
@@ -204,7 +215,10 @@ namespace ModSettingsMenu.UI
             _lockPainted = true;
         }
 
-        private void ReleaseLockAppearance()
+        // Takes the selection rather than asking, because both callers know it and IsSelected() does
+        // not: during OnDeselected it still reports the row being left (see ApplyLockAppearance), so
+        // asking here would hand a row losing the selection the selected blue on the way out.
+        private void ReleaseLockAppearance(bool selected)
         {
             if (!_lockPainted)
                 return;
@@ -214,7 +228,64 @@ namespace ModSettingsMenu.UI
             _effectsCaptured = false;
             _labelMemo.RestoreTo(_box.label);
             _previewMemo.RestoreTo(_box.preview);
-            TintDrill(IsSelected() ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+            RestoreTextEffects();
+            TintDrillForSelection(selected);
+        }
+
+        // The effects on both texts, in one array with the enabled state each had on entry.
+        private void CaptureTextEffects()
+        {
+            var labelEffects = _box.label != null ? _box.label.GetComponents<PugTextEffect>() : new PugTextEffect[0];
+            var previewEffects = _box.preview != null ? _box.preview.GetComponents<PugTextEffect>() : new PugTextEffect[0];
+            _textEffects = new PugTextEffect[labelEffects.Length + previewEffects.Length];
+            labelEffects.CopyTo(_textEffects, 0);
+            previewEffects.CopyTo(_textEffects, labelEffects.Length);
+            _textEffectsEnabled = Array.ConvertAll(_textEffects, fx => fx.enabled);
+        }
+
+        // Mirrors SettingWidget.DisableValueEffects, and the asymmetry between the two is worth
+        // stating so it does not read as an oversight in either direction.
+        //
+        // Emptying menuOptionEffects above stops CK from CALLING these effects
+        // (OnSelected/OnDeselected/EndEffectImmediate); it does not stop them running. The per-frame
+        // tick walks the PugText's OWN effect list and asks nothing but `enabled`
+        // (PugText.ManagedLateUpdate, Pug.Other:367985, the filter at :368000), and
+        // PugTextEffectMenuOption writes the text colour from there while its colorCooloff runs
+        // (:366121, the writes at :366153 and :366167), settling on
+        // `IsSelectionEnabled(visualOnly: true) ? unselectedTextColor : UNSELECTABLE_TEXT_COLOR`.
+        //
+        // For a withheld LIST row that predicate holds: on an enabled, active option IsSelectionEnabled
+        // answers !ShouldBeGrayedOut (:359566-359568 → :359573-359576), and this row stays ACTIVE on
+        // purpose (see GetActiveStateInCurrentScene). So the effect settles on the ordinary grey, over MSM's red, and
+        // nothing paints over it again: the three call sites that repaint (Render, OnSelected,
+        // OnDeselected) each need a render or a selection change, and the frame alone brings neither.
+        //
+        // The window is narrow rather than absent, which is why a walk will rarely produce it:
+        // colorCooloff is a TimerSimple(1f/12f) ≈ 83 ms (:366033), started by the effect's own
+        // OnDeselected (:366101), which CK reaches only while menuOptionEffects is non-empty — i.e.
+        // while the row is NOT withheld. The lock therefore has to land within ~83 ms of the selection
+        // leaving this row.
+        //
+        // SettingWidget leaves its LABEL effect running and needs nothing here: a withheld settings
+        // row is GRAYED_OUT, so the same settle picks UNSELECTABLE_TEXT_COLOR — the colour MSM paints
+        // — and while the row is selected the effect returns before writing anything
+        // (:366123-366134). Do not "fix" that one to match this.
+        private void DisableTextEffects()
+        {
+            if (_textEffects == null)
+                return;
+            foreach (var fx in _textEffects)
+                if (fx != null)
+                    fx.enabled = false;
+        }
+
+        private void RestoreTextEffects()
+        {
+            if (_textEffects == null)
+                return;
+            for (int i = 0; i < _textEffects.Length; i++)
+                if (_textEffects[i] != null)
+                    _textEffects[i].enabled = _textEffectsEnabled[i];
         }
 
         // A row whose drill-in would be refused must not present itself as activatable: CK gates the
@@ -237,16 +308,21 @@ namespace ModSettingsMenu.UI
         public override void OnSelected()
         {
             base.OnSelected();
-            TintDrill(PugTextEffectMenuOption.SELECTED_VALUE_COLOR);
+            TintDrillForSelection(selected: true);
             ApplyLockAppearance(selected: true); // after the base and the tint, so both are overwritten, not raced
         }
 
         public override void OnDeselected(bool playEffect = true)
         {
             base.OnDeselected(playEffect);
-            TintDrill(PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
+            TintDrillForSelection(selected: false);
             ApplyLockAppearance(selected: false);
         }
+
+        // CK's two tones for an unlocked row, in one place: the four call sites that used to spell the
+        // pair out are what hid a release tinting from IsSelected() while its caller knew better.
+        private void TintDrillForSelection(bool selected) =>
+            TintDrill(selected ? PugTextEffectMenuOption.SELECTED_VALUE_COLOR : PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR);
 
         private void TintDrill(Color c)
         {
