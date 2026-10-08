@@ -609,7 +609,14 @@ namespace ModSettingsMenu.UI
                 }
                 catch (System.Exception e)
                 {
-                    Debug.LogError($"[ModSettingsMenu] refreshing a row after a permission change failed: {e}");
+                    // Named, because the stack trace does not narrow it: it points into the row class,
+                    // which every row of that kind shares, and this screen carries dozens of them
+                    // across a dozen sections. The section is what ISectionRow already exposes, and it
+                    // turns "somewhere on screen" into "this mod" — the identification the note stage
+                    // below already makes, ten lines down.
+                    Debug.LogError(
+                        $"[ModSettingsMenu] refreshing a row of '{row.Section?.DisplayName}' after a permission change failed; it keeps its pre-change appearance until the screen is reopened: {e}"
+                    );
                 }
             }
             for (int i = 0; i < _sectionRoots.Count; i++)
@@ -823,13 +830,33 @@ namespace ModSettingsMenu.UI
 
         // One line per section saying why some of its rows are withheld, so the reason is not
         // repeated per row. Same shape as the hint: resolve the text, SetActive on whether there
-        // is one, RenderPlain when there is. A null field means the section template carries no
-        // such object (yet): no note, no error. WithheldNow is false for Info and ViewOnly rows,
+        // is one, RenderPlain when there is. WithheldNow is false for Info and ViewOnly rows,
         // so neither can put the note on screen. The consumer's own Hint is left alone.
+        //
+        // An unwired lockNote warns, where this used to treat it as a template that simply has no
+        // such object. That reading does not hold here: the prefab and this code ship in one
+        // AssetBundle built from one commit, so there is no version skew to be tolerant of — and the
+        // failure with a documented history in this repo is the Editor reserializing a prefab and
+        // deleting objects (see CLAUDE.md). Silence there loses the whole visible half of MSM-10 with
+        // a clean log: every withheld row still goes red and no section ever says why. Latched to one
+        // line per process rather than per section, which on this install would be a dozen.
+        private static bool _lockNoteMissingWarned;
+
         private static void RenderLockNote(ModSection section, SectionBox box)
         {
-            if (box == null || box.lockNote == null)
+            if (box == null)
                 return;
+            if (box.lockNote == null)
+            {
+                if (!_lockNoteMissingWarned)
+                {
+                    _lockNoteMissingWarned = true;
+                    Debug.LogWarning(
+                        $"[ModSettingsMenu] the section template has no SectionBox.lockNote wired — no section can say why it withholds a setting (first seen on '{section.DisplayName}')."
+                    );
+                }
+                return;
+            }
 
             string note = LockNoteText(section);
             bool hasNote = note != null;

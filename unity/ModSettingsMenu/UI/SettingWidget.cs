@@ -144,6 +144,7 @@ namespace ModSettingsMenu.UI
         private bool _effectsCaptured;
         private PugTextEffectMenuOption[] _origMenuOptionEffects;
         private bool _lockPainted; // we hold a mutation that has to be handed back when the lock lifts
+        private bool _paintRefusalWarned; // latched: ApplyLockAppearance is reached per selection change
 
         public ModSection Section => _section;
 
@@ -224,7 +225,9 @@ namespace ModSettingsMenu.UI
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ModSettingsMenu] refreshing '{_def?.Key}' after an outside change failed: {e}");
+                // The owner, not the key alone: on the discovery path a key is a foreign mod's bare
+                // field name, and the fixture set alone has several that repeat across files.
+                Debug.LogError($"[ModSettingsMenu] refreshing '{_section?.ModId}/{_def?.Key}' after an outside change failed: {e}");
             }
         }
 
@@ -324,7 +327,29 @@ namespace ModSettingsMenu.UI
             }
             CapturePaint();
             if (!_labelMemo.Restorable || !_valueMemo.Restorable)
-                return; // refuse to paint what cannot be handed back (see TextPaintMemo)
+            {
+                // Refuse to paint what cannot be handed back (see TextPaintMemo) — and say so, since
+                // this is the one branch in this widget where a withheld row comes out unmarked.
+                // Restorable is false exactly when a PugText is present with no style, so the
+                // condition reports a prefab that is not wired as expected, which is what the
+                // template guards in ModSettingsScreen warn about.
+                //
+                // How such a row then LOOKS is deliberately not predicted here, because CK's own
+                // colouring reaches the very same field: PugText.SetTempColor dereferences style
+                // (Pug.Other:368127), and that is the path this text's own PugTextEffectMenuOption
+                // takes on every render (ResetEffect → EndEffectImmediate, :366078 → :366114). An
+                // unstyled text is therefore a fault for the game as much as for MSM. What is certain
+                // is the part worth logging: nothing MSM owns marks this row as withheld. Latched per
+                // row, because this is reached on every selection change.
+                if (!_paintRefusalWarned)
+                {
+                    _paintRefusalWarned = true;
+                    Debug.LogWarning(
+                        $"[ModSettingsMenu] '{_section?.ModId}/{_def.Key}' is withheld but nothing marks it as such — its label or value PugText has no style, so the paint is refused rather than left unrestorable. Check the prefab wiring."
+                    );
+                }
+                return;
+            }
             CaptureEffects();
             if (_effectsCaptured)
                 menuOptionEffects = new PugTextEffectMenuOption[0];

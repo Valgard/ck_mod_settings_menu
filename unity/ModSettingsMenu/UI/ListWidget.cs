@@ -27,6 +27,7 @@ namespace ModSettingsMenu.UI
         private bool _effectsCaptured;
         private PugTextEffectMenuOption[] _origMenuOptionEffects;
         private bool _lockPainted;
+        private bool _paintRefusalWarned; // latched: ApplyLockAppearance is reached per selection change
 
         // Both texts' PugTextEffects and the enabled state each had before the lock was painted.
         // Captured and handed back rather than switched back on, because the prefab does not carry
@@ -70,7 +71,9 @@ namespace ModSettingsMenu.UI
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ModSettingsMenu] refreshing '{_def?.Key}' after an outside change failed: {e}");
+                // The owner, not the key alone: on the discovery path a key is a foreign mod's bare
+                // field name, and the fixture set alone has several that repeat across files.
+                Debug.LogError($"[ModSettingsMenu] refreshing '{_section?.ModId}/{_def?.Key}' after an outside change failed: {e}");
             }
         }
 
@@ -197,7 +200,24 @@ namespace ModSettingsMenu.UI
                 CaptureTextEffects();
             }
             if (!_labelMemo.Restorable || !_previewMemo.Restorable)
-                return; // refuse to paint what cannot be handed back (see SettingWidget.TextPaintMemo)
+            {
+                // Refuse to paint what cannot be handed back (see SettingWidget.TextPaintMemo) — but
+                // say so, because the consequence here is worse than on a settings row, and for a
+                // reason that has nothing to do with the paint. This row keeps the ACTIVE state its
+                // drill-in needs, and neither GetActiveStateInCurrentScene nor CanBeActivated consults
+                // the memo: so an unmarked withheld list still takes the selection, still plays the
+                // select sound and still opens a drill-in that refuses every edit it offers — while
+                // the section note, which reads WithheldNow rather than this paint, says settings are
+                // being withheld. Latched per row, because this is reached on every selection change.
+                if (!_paintRefusalWarned)
+                {
+                    _paintRefusalWarned = true;
+                    Debug.LogWarning(
+                        $"[ModSettingsMenu] '{_section?.ModId}/{_def.Key}' is withheld but nothing marks it as such — its label or preview PugText has no style, so the paint is refused while the row stays active and opens a drill-in that refuses every edit. Check the prefab wiring."
+                    );
+                }
+                return;
+            }
             // Capture at the point of mutation, never in Bind: base.Awake fills menuOptionEffects AFTER
             // Bind runs, so a capture there would save a null. Until it exists there is nothing to empty.
             if (!_effectsCaptured && menuOptionEffects != null)
