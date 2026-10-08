@@ -2184,11 +2184,11 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   is gone within a frame. **Walked 2026-10-08:** `2Wrap` grew to three lines, the
   box frame grew with it and kept `3Below` inside with no overprint, the scroll
   thumb shortened as the content got taller, and `short` restored every one of
-  those with no empty band and the same scroll extent as before. Two things this
-  fixture cannot show, by its own construction: the sections *below*, since
-  `TestZRemeasureFixtures` is deliberately the last one, and `toggle`, which was
-  not used — it writes the same two values through the same path as `long` and
-  `short`, so it is a convenience of the trigger rather than a case of its own.
+  those with no empty band and the same scroll extent as before. `toggle` was
+  walked too, and alternated correctly across three writes. One thing this
+  fixture cannot show, by its own construction: the sections *below* it, since
+  `TestZRemeasureFixtures` is deliberately the last one — which is the price of
+  having it sit where the scroll extent is visible.
   Write `long`, then look at, in this order:
   1. **The row itself.** `2Wrap` grows to hold every line of its value, with the
      label staying on the first line. *Failure:* the row keeps its one-line
