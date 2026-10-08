@@ -521,21 +521,6 @@ options menu** rather than a screen of its own —
 `AddOptionFromPath`. Menu id `19901` is one of the two ids MSM's own 29314/29315
 were deliberately chosen to avoid.
 
-## MSM-10 — Locked settings — CK's `GRAYED_OUT` convention
-
-Core Keeper has a **shipped convention for a setting that exists but cannot be
-changed right now**: the whole row (label *and* value) renders in a dull red,
-navigation skips it, and the mouse cannot click it — while the row stays
-visible and in the layout. Vanilla uses it for "Frame rate target" while V-Sync
-is on, and for the title-menu-only settings ("Season override",
-"Multiplayer connectivity") when opened from an in-game pause menu. The
-framework currently has **no way for a consumer to express this** — every
-declared setting is always editable.
-
-Surfaced 2026-08-13 from the user's own in-game observation; the mechanism was
-then verified against the decompiled `Pug.Other` (game 1.2.1.5 — class and
-member names are stable, the line numbers are not).
-
 ### What CK gives for free — locked settings
 
 `OptionActiveState { INACTIVE, ACTIVE, GRAYED_OUT }`, returned per row by the
@@ -623,43 +608,6 @@ the other way on purpose — `ListDetailItem` keeps a read-only list's rows
   of at the next selection change. A dependency-driven lock in this framework
   needs the same nudge on whatever row just became locked.
 
-### MSM-11 — Nothing reaches a row that the player did not touch
-
-The lock has to appear **while the screen is open**, and today nothing can make
-that happen. A row is refreshed at exactly four places — on bind
-(`SettingWidget.cs`), on `OnParentMenuActivation`, after the player's *own*
-change, and after a section reset (`ModSettingsScreen.RefreshSection`) — and
-nothing polls: `ModSettingsScreen.Update` tests the reset key and returns. All
-four have one thing in common: they originate with the player or with the
-screen. Anything arriving from outside never reaches the row.
-
-**The load-bearing case is a permission change mid-session, not a value change.**
-Core Keeper's admin system runs independently of this mod — `NetworkCommand`
-carries `AddOrUpdateAdmin`, `RemoveAdmin` and `SetGuestMode` — so a player can be
-made an admin, or guest mode can be switched, while the options screen is open.
-`IsReadOnly` is evaluated once per `Discover()`, i.e. once per menu open, so rows
-stay locked that no longer are until the screen is closed and reopened. GMCM
-polls `adminPrivileges` and `guestMode` every frame for exactly this reason.
-
-**A value changing underneath is the same defect and the cheaper half.** A mod
-writing its own entry from gameplay code is possible — `SettingHandle.Value` has
-a setter — though no example is at hand in the installed set. It is cheap to fix
-because `SettingDef.Entry` is a live handle: the data is already right, only the
-rendered text is stale, so a `Refresh()` is enough. CoreLib supplies the trigger
-too, but not on the type MSM holds: `SettingChanged` is declared inside the
-generic `ConfigEntry<T>`, not on the `ConfigEntryBase` that `SettingDef.Entry`
-is typed as — so a row cannot subscribe to its own entry, and an earlier version
-of this paragraph promising exactly that would not have compiled. The event
-belongs to the file, and `ConfigEntryBase.ConfigFile` is public, so a row
-reaches it in one hop and filters on the handler's `ChangedSetting`.
-
-**The two halves are not equally cheap.** There is no `SettingChanged` for a lock:
-`adminPrivileges` is a property over a component and `guestMode` a field in a
-singleton, and nothing announces a write to either — which is why GMCM polls.
-Whether MSM must poll as well, or whether CK offers an event nobody has looked
-for, is unverified. *To check:* search `PugMod.SDK.Runtime` and `Pug.Other` for
-connect/permission events before assuming a poll is the only option.
-
 ## MSM-16 — A master switch with sub-values
 
 GMCM's `CombindConfigPage` is a public API a consuming mod registers against: a
@@ -669,8 +617,8 @@ group the switch collapses. MSM has no equivalent.
 - **What vanilla offers, and what it does not.**
   `RadicalMenuOption_Toggle.relatedOption` is exactly the API shape — a
   serialized reference rather than a callback — but propagates only `INACTIVE`,
-  so the dependent row *disappears*. The shape transfers, the behaviour must not;
-  see MSM-10.
+  so the dependent row *disappears*. The shape transfers, the behaviour must not —
+  a withheld row stays visible and in the layout ([ADR-013](adrs/013-a-lock-describes-the-moment-not-the-row.md)).
 - **Open:** is this a `SectionBuilder` declaration (`.EnabledWhen(...)`, already
   an open question there) or a group API like GMCM's? The difference is that
   GMCM's can also *bind* the sub-values, not merely lock them.
@@ -797,7 +745,8 @@ caller.
 - **Open:** a value the server accepts is then in memory but not on the player's
   disk, so it is gone at the next singleplayer start. That is consistent, but it
   should surprise nobody.
-- **The refusal itself is MSM-10** — the same feedback, a different trigger.
+- **The refusal itself is the withheld-row rendering** ([ADR-013](adrs/013-a-lock-describes-the-moment-not-the-row.md)) — the same
+  feedback, a different trigger.
 - **Collision rule: an incoming value beats your pending one.** If another player
   changes the same entry while you wait, the server wins. GMCM decides it the
   same way (`OnReceiveSync` drops the pending change) but does it **silently** —
@@ -854,9 +803,9 @@ and that case is the ordinary one, not the exotic one.
   utility. If one exists it is preferable to a hand-rolled `FNV1A64`. *To check:*
   grep for `FNV1A64`, `Hash128`, `StableTypeHash` and their string overloads.
 
-**Delivery to an open row is the subscription from MSM-11, not the id space.**
-GMCM needs a detour there because its menu is a singleton whose rows live
-permanently: a received value lands in a list, is drained in the menu's own
+**Delivery to an open row is the per-row `SettingChanged` subscription, not the
+id space.** GMCM needs a detour there because its menu is a singleton whose rows
+live permanently: a received value lands in a list, is drained in the menu's own
 `Update`, and is mapped to a row through a `Dictionary<ConfigEntryBase, …>`. MSM
 rebuilds its rows **per open**, so there is no row to update while the screen is
 closed, and on opening the current value is there anyway. Delivery is needed
