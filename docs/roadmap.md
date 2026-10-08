@@ -1035,3 +1035,40 @@ Three ways for MSM to own the need, to be compared before any is chosen:
 Opened 2026-10-02 after the proxy's author got in touch, asking whether MSM
 would take this on. Asked the same day, he agreed to the approach going into
 2.0 and offered to help work out the details.
+
+## MSM-39 — The two widgets do not share the lock cycle
+
+A withheld row is painted, and painted back, by about a hundred lines that exist
+twice — once in `SettingWidget`, once in `ListWidget` — with four real
+differences between the copies. MSM-10's pre-merge review found this across
+three independent lanes, which is why it is written down rather than left as a
+note in a report.
+
+**What is actually duplicated.** The apply/release pair, the paint memo, the
+locked-tone constant and the effect capture all live on `SettingWidget` while
+belonging to neither widget. `OnEntryChanged` is word-for-word identical except
+for one sub-expression, and so are `OnDestroy` and `StopWatching` beside it. The
+two dev triggers are one shell with four variables — path, label, readiness,
+dispatch — eleven lines of scaffolding line-for-line alike.
+
+**Why it is not a tidy-up.** The duplication already produced two defects that
+the review caught separately: `ListWidget` was missing the `DisableValueEffects`
+step its twin takes, so a running `colorCooloff` repainted a withheld list row
+grey; and its release re-asked `IsSelected()` instead of taking the answer its
+caller had just passed. Both are fixed. The next divergence will be found the
+same way — by someone reading both copies and noticing one is short.
+
+**Also in scope, from the same review.** `ReadPermissions` hands back three
+`out` parameters with two adjacent `bool`s, which is the shape `FieldRect` was
+introduced here to abolish; a `readonly struct` removes the transposition
+hazard. `TextPaintMemo` documents an invariant it does not enforce and is a
+mutable struct where its neighbours in the same folder are `internal readonly
+struct`. And `EntryWatch` could own the `this == null` backstop that both owners
+currently spell out identically.
+
+**Deliberately deferred rather than forgotten.** Doing it inside MSM-10 would
+have ended 53 reviewed commits with an unreviewed refactor. The shapes that look
+redundant and are not are listed in ADR-013 and in the comments at each site —
+release-before-render, consume-before-work, per-stage guarding, and the four
+predicates on `SettingModel`, of which `WithheldNow` is deliberately narrower
+than `Locked`.
