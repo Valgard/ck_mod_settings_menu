@@ -32,6 +32,9 @@ namespace ModSettingsMenu.UI
         // this open session's own copy of _activeDef.EffectiveEditing — set in Populate from _pending
         // (which Activate() nulls right after). Effective, not declared: a permission lock has
         // already been folded in, so nothing on this screen consults SettingDef.Locked separately.
+        // A snapshot, and only the ROWS are built from it: a lock landing while the drill-in is open
+        // never reaches it, which is why WriteValueFromRows asks the live property before writing
+        // instead of trusting this.
         // Defaults to the most restrictive level, so a session that never reaches Populate shows an
         // inert list rather than an editable one.
         private ListEditing _editing = ListEditing.ReadOnly;
@@ -980,6 +983,32 @@ namespace ModSettingsMenu.UI
                 Debug.LogWarning(
                     "[ModSettingsMenu] WriteValueFromRows has no active entry to write to — the on-screen rows and the stored value have diverged."
                 );
+                return false;
+            }
+            // Asked again here, not taken from the _editing this session captured when it opened. A
+            // list that was editable at the open and locked since — the host dropping admin rights,
+            // the world being left — stays writable through this drill-in otherwise: the rest of the
+            // screen follows a permission change, and this is the one surface that both does not and
+            // writes. One guard at the convergence point rather than at MoveRow, DeleteRow and the
+            // commit each, for the reason this method was extracted at all.
+            //
+            // The rows are re-seeded rather than left standing: MoveRow and DeleteRow mutate _rows
+            // BEFORE calling this and redraw from it afterwards, so a bare refusal would show a move
+            // or a deletion the config file never took — the divergence the branch above exists to be
+            // loud about, arrived at from the other side.
+            //
+            // A list the CONSUMER declared ReadOnly reaches this too, and harmlessly: it offers no
+            // control that could call any of the three write paths (ListAccess.CanType/CanReorder/
+            // CanDelete all answer no), so the guard is dead weight there rather than a behaviour
+            // change.
+            if (_activeDef.EffectiveEditing == ListEditing.ReadOnly)
+            {
+                Debug.LogWarning(
+                    $"[ModSettingsMenu] '{_activeDef.Key}' is read-only now, so the edit is discarded and the rows are redrawn from the stored value — a lock landing while its drill-in was open is the way here."
+                );
+                _rows.Clear();
+                _rows.AddRange(ListTokenizer.Tokenize(Value()));
+                RequestRebuild();
                 return false;
             }
             // Join through ListTokenizer, not by hand: dropping the empties is the same rule
