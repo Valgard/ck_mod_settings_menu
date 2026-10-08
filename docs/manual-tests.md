@@ -1873,8 +1873,11 @@ the row look broken rather than withheld. The value stayed the static grey
 `MakeValueReadOnly` writes; a list row stays `ACTIVE`, and CK's red is chosen only for a
 row that does not, so nothing there went red at all.
 
-**What is checked is a difference between two rows, never one row on its own**, because a
-colour that "looks red" is not an outcome. At the title screen, in the same box:
+**What is checked is a difference, never a single reading of a single row**, because a
+colour that "looks red" is not an outcome. Mostly that is two rows beside each other;
+where there is no second row to compare against, it is the same row in its two selection
+states, or two elements of the one row that have to match. The selected-row items below
+do all three. At the title screen, in the same box:
 
 - [ ] **Toggle: label and value are the same dull red.** `testServerScoped` is
       deselected (put the selection elsewhere first). Label *and* value read as the same
@@ -1885,10 +1888,21 @@ colour that "looks red" is not an outcome. At the title screen, in the same box:
       label, its `Alpha, Beta, Gamma` preview and its drill arrow in that same red, and
       is redder than `Short` in `TestListFixtures`, which is `Client`-scoped and must
       stay grey. Arrow red while the text is grey, or the reverse, is a miss. (5)
-- [ ] **List: still reachable, still opens read-only.** Select `ServerList` with the
-      keyboard — it takes the selection, unlike the toggle — and confirm: its drill-in
-      opens and, like `LongReadOnly`, shows no ↑/↓/✕ buttons and no Add button; an
-      editable list such as `Short` shows all of them. (5)
+- [ ] **List: selectable where the withheld toggle is not.** Select `ServerList` with
+      the keyboard: it takes the selection, while navigation cannot reach
+      `testServerScoped` in the box above. The contrast is the check, and it is the design
+      decision § 6 weighed and settled — a list row stays `ACTIVE` while locked so it can
+      still be read and opened, where the toggle leaves navigation. Delete Task 2's
+      `GRAYED_OUT` branch and the two stop differing. (5)
+- [ ] **Its drill-in opens read-only** — confirm on `ServerList`: like `LongReadOnly`,
+      no ↑/↓/✕ buttons and no Add button, where an editable list such as `Short` shows
+      all of them. **A non-regression, not coverage:** what produces it is
+      `SettingDef.EffectiveEditing` demoting a locked list to `ReadOnly`, which predates
+      this branch, so the step passes with everything MSM-10 added deleted. It is here
+      because `ServerList` is the only list in this walk whose read-only state comes from
+      a permission **alone**: `testListReadOnlyAndLocked` is permission-locked too, but it
+      declares `ReadOnly` as well, so it cannot tell which of the two produced the
+      outcome.
 - [ ] **Info: not red.** `ServerInfo` renders in the ordinary grey of `ViewOnlyInfo`
       (`TestListFixtures`), not in red. It is the one `Server`-scoped row that must
       look like the rows around it. (4)
@@ -1898,6 +1912,24 @@ colour that "looks red" is not an outcome. At the title screen, in the same box:
       read as a lighter red than the deselected locked rows beside it, and must show no
       blue anywhere on the row, arrow included. The exact triple is not readable off a
       screen and is not what this checks. (6)
+- [ ] **A selected editable list row's arrow stays with its preview.** The `Short`
+      screenshot above carries a requirement of its own, and it needs one more move to be
+      falsifiable: select `Short`, press confirm to open its drill-in, then the back key
+      to return — **all of it on the keyboard, with the mouse untouched**, because
+      `Activate()` deselects everything when the mouse was the last device and then there
+      is no selected row to read (the failure mode Task 2's footer step describes).
+      Now read the row — label, preview **and drill arrow** all in CK's
+      selection blue, the arrow the same blue as the preview beside it (both take
+      `SELECTED_VALUE_COLOR`). *Failure:* a grey arrow on a row whose preview is blue.
+      **Why the detour through the drill-in:** on arrival the arrow is painted by
+      `OnSelected`, so a row navigated onto looks right whatever the render does. The
+      return runs the screen's `Activate()` again with `Short` still selected, and
+      `OnSelected` does **not** fire a second time — `SelectOptionIndex` returns early
+      when the index is unchanged (`Pug.Other:359266`) — while the texts recolour from
+      the render itself (`PugTextEffectMenuOption.ResetEffect` asks `IsSelected()`). So
+      the arrow's blue can only come from the render, which is the one thing a blanket
+      grey at the end of `Render` would undo. Leaving the screen and reopening it on the
+      keyboard is the same path, one menu further out.
 - [ ] **Leaving it returns to the dull red.** Move off `ServerList` and back: after
       leaving, it is the same dull red as before the first selection, not the grey of the
       editable rows. This is the deselect path, which CK would otherwise repaint with the
@@ -2011,7 +2043,14 @@ own section (holds `testServerScoped`), and `TestListFixtures` (`Client` rows, p
       require permissions you do not have here* and not the *world* text. (Criterion 8,
       second half.) The reverse, a *permissions* line at the title screen or a *world*
       line in a session, is not walked: `AccessLock.Reason` answers `NoWorld` only without
-      a player and `ConditionUnmet` only with one, so the two cannot meet.
+      a player and `ConditionUnmet` only with one, so for anything the menu can reach the
+      two cannot meet. **The exception, named rather than left out:** `Reason`'s
+      `scope == null` branch answers `ConditionUnmet` without consulting a player at all,
+      which would put both reasons in one section. No `Entry` can take it — CoreLib
+      normalises every entry's scope on construction — and it is kept as fail-shut rather
+      than deleted, for the reason `AccessLock` gives. Anyone who makes it reachable makes
+      this case reachable with it, and then `LockNoteText`'s first match decides the
+      wording by declaration order.
 
 ## MSM-10 Task 5 — the screen follows a permission change
 
@@ -2020,8 +2059,8 @@ makes them follow a change that happens while it is open (criteria 11 and 12). B
 `MOD_DEV_FLAGS=TestFixtures`. The check needs a live dedicated-server session, because the
 rights it changes do not exist in singleplayer — and a trigger inside the mod rather than
 the game's own buttons, because reaching those means leaving the settings screen, which is
-exactly what the criteria forbid. Steps 0 to 2 run from one account; steps 3 to 6 need a
-second one holding admin rights, for the reason the next paragraph gives.
+exactly what the criteria forbid. Steps 0 to 2 and 2b run from one account; steps 3 to 6
+need a second one holding admin rights, for the reason the next paragraph gives.
 
 **The trigger.** A `TestFixtures` build polls a file and sends the RPC the game's own
 buttons would send. The file lives at
@@ -2057,12 +2096,16 @@ What one account cannot do is move the two values **independently**, which is wh
 steps 3 to 6 are for. `PlayerController.guestMode` is true only while
 `adminPrivileges < 1`, yet sending `SetGuestMode` needs it above zero. The only
 order that could reach a felt guest mode from one account is therefore `guest-on`
-first and `revoke-admin` after — and that would flip both values in the same
-instant, so it still cannot show them acting separately. That order has not been
-walked and is derived from the two conditions rather than measured; the handbook
+first and `revoke-admin` after, and it flips both values in the same instant — so
+it cannot show them acting separately, which is criterion 11's whole point.
+**It is still worth walking, and step 2b does:** the combined transition is the
+only one-account route to two things no walked step reaches, and "not
+independent" was read for too long as "not reachable". That order is derived from the two
+conditions rather than measured; the handbook
 (`../../docs/ck/multiplayer-and-server.md`, "Who is allowed to change things")
-marks it the same way. Separating the two values needs a second, admin-holding
-player, and so does reversing a revoke.
+marks it the same way, and step 2b is where the derivation gets tested.
+Separating the two values needs a second, admin-holding player, and so does
+reversing a revoke.
 
 **Setup.** As round 3 of § "Server and Admin, checked against a live world": the
 dedicated server's `Admins.json` lists this account at `privileges: 1` (stage 2
@@ -2073,7 +2116,12 @@ open screen: player=… guestMode=… adminPrivileges=…`.
 
 Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
 `testAfterGroupIsClient`, the fixture hint), `TestLockedFixtures` (`ServerList` withheld,
-`ServerInfo` an `Info` row), `TestViewOnlyFixtures`, `TestListFixtures`.
+`ServerInfo` an `Info` row), `0TestFirstWithheldFixtures` (one `Server` row,
+`firstWithheldRow` — editable in this session, and the screen's first option, so also the
+selected one after a keyboard-driven approach), `TestEmptySectionFixtures` (whose
+`afterHeader` declares no scope and is therefore `Server` too),
+`TestLockedInfoFixtures` (`Server` and `Info`, so it follows nothing),
+`TestViewOnlyFixtures`, `TestListFixtures`.
 
 - [x] **0. Before anything: all quiet.** Walked 2026-10-07. Both `testServerScoped` and
       `testAdminScoped` are editable, no section shows a note, and the log has no
@@ -2100,11 +2148,64 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
       `TestViewOnlyFixtures` row, `ServerList` and `ServerInfo` in `TestLockedFixtures`
       (no note appears there), the fixture hint (still its own line, above the note),
       and the scroll position. (Criterion 11, first half)
+- [ ] **2b. Both values at once, from this one account — `guest-on`, then
+      `revoke-admin`.** The combined transition, in the one order that reaches a felt
+      guest mode without a second player.
+
+      **Precondition: it is one-way, so it comes last in a session, and it replaces
+      step 2 rather than following it.** `revoke-admin` spends this account's rights
+      and the gate above then drops every further command but `ChangePvPTeam`, so none
+      of these three tokens can be sent after it — and step 2 spends the same rights, so
+      the two cannot share a session.
+      Walk steps 0 and 1 first, then this instead of step 2; a server restart (which is
+      how step 2 is repeated) is what returns the rights for the other one. Guest mode
+      itself does not survive that restart: it lives in the running server's
+      `WorldInfoCD`.
+
+      Send `guest-on` while still an admin — no reaction, which is step 1's first half
+      over again — and then `revoke-admin`. Expect **one** `permissions changed` line
+      carrying both values moved, `guestMode=True adminPrivileges=0`: the player's own
+      `guestMode` is the world flag **and** `adminPrivileges < 1`, so it turns true in
+      the same instant the rights go.
+
+      **What turns red is every non-`Info` row the server now withholds, which is more
+      fixtures than the three this section talks about** — write the set down before
+      walking it, because a row left off the list reads as "nothing changed there" and
+      passes. Guest mode locks every `Server` row and the lost rights lock every `Admin`
+      row, so: `testServerScoped` and `testAdminScoped` (this mod's own section),
+      `ServerList` (`TestLockedFixtures`), `firstWithheldRow`
+      (`0TestFirstWithheldFixtures`) and `afterHeader` (`TestEmptySectionFixtures`) —
+      that last one declares **no** scope at all and is `Server` by CoreLib's default,
+      which is exactly why it exists. Those four sections carry the *permissions* note
+      afterwards and grow by its line; this mod's own already had it from the revoke.
+      Any discovered third-party mod's rows follow the same rule, and most foreign
+      settings are `Server`-scoped — so read the installed sections as part of the set
+      rather than as rows that must not change.
+
+      **Must not change:** `ServerInfo` and `ServerInfoOnly` (`Server`-scoped but `Info`,
+      so not withheld, and `TestLockedInfoFixtures` stays note-free), every `ViewOnly`
+      and `Client` row, the fixture hint's own line, the scroll position.
+
+      `firstWithheldRow` is also where this step relocks a row **under the selection**,
+      if the approach to the menu was on the keyboard — see the last block of this
+      section for what to read there and what it deliberately does not claim.
+
+      **What it covers, and what it does not.** Two things no walked step reaches: that
+      a `guestMode` change drives the poll **at all** — step 1 is a negative control on
+      where the value is read from and step 2 moves only `adminPrivileges`, so neither
+      has ever seen guest mode cause a transition — and `ListWidget`'s
+      relock-from-editable path, where a list row that was built **unlocked**, with live
+      effects and memos holding the unlocked state, is painted for the first time under
+      the poll. Task 3 only ever paints a list row that was already locked when it was
+      built; for `SettingWidget` step 2 covers the same path through `testAdminScoped`.
+      What it does **not** cover is criterion 11, whose point is the two values acting
+      **separately**: both move in one instant here, so nothing tells which row followed
+      which value. That stays steps 3 and 4.
 
 **Steps 3 to 6 need a second, admin-holding player — one account cannot walk
-them.** Step 2 took this account's rights, and the gate above drops every
+them.** Step 2 (or 2b) took this account's rights, and the gate above drops every
 further command from a caller holding none, so the `guest-on` these steps open
-with never arrives. Reversing step 2 is out of reach for the same reason. Keep them here as
+with never arrives. Reversing it is out of reach for the same reason. Keep them here as
 what to look for when a second account is available, and read their checkboxes
 as unticked rather than failing: on 2026-10-07 steps 0 and 2 were walked and
 these four were not. Step 1, which that walk could not reach either, was walked
@@ -2113,15 +2214,18 @@ account. Sending the guest commands from the second account is all
 that changes — the screen under observation stays this one.
 
 - [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
-  `guestMode=True`. Changed: `testServerScoped` and `ServerList` turn red;
-  `TestLockedFixtures` gains the same *permissions* note (and grows), while this
-  mod's section keeps the note it already had. **Must not change:**
-  `testAdminScoped` (already red, still the same red), `ServerInfo` (an `Info`
-  row is not painted), the `ViewOnly` and `Client` rows. (Criterion 11, second
-  half)
+  `guestMode=True`. Changed: every `Server` row — the same set step 2b writes
+  out, `testServerScoped`, `ServerList`, `firstWithheldRow` and `afterHeader`,
+  plus any installed foreign mod's — turns red, and each of their sections gains
+  the *permissions* note (and grows), while this mod's section keeps the note it
+  already had. **Must not change:** `testAdminScoped` (already red, still the same
+  red), the two `Server`-scoped `Info` rows, the `ViewOnly` and `Client` rows. On
+  a keyboard-driven approach `firstWithheldRow` is also the selected row, which is
+  the relock-under-the-selection case the last block of this section describes.
+  (Criterion 11, second half)
 - [ ] **4. `guest-off`: the `Server` rows come back, the `Admin` row does not.**
-  Client log: one line, `guestMode=False`. `testServerScoped` and `ServerList`
-  are editable again and the `TestLockedFixtures` note is gone, with the section
+  Client log: one line, `guestMode=False`. Every row step 3 locked is editable
+  again and every note step 3 raised is gone, with those sections
   shrinking back. **Must not change:** `testAdminScoped` stays red and this
   mod's section keeps its note, because the rights are still gone. (Criterion
   12, guest-mode direction)
@@ -2145,17 +2249,28 @@ that changes — the screen under observation stays this one.
 
 **Not walkable here, and why.**
 
-- *Everything after step 2, from one account* — the block above says why. A server restart
-  does give the rights back, and it is how steps 0 to 2 are repeated, but it is not a way
-  into step 3: guest mode lives only in the running server's `WorldInfoCD` and is gone with
-  the process, and a restart drops the client out of the session, so nothing can be observed
+- *Everything after the revoke, from one account* — the block above says why, and step 2b
+  is the one thing that block used to rule out too. A server restart does give the rights
+  back, and it is how steps 0 to 2 and 2b are repeated, but it is not a way into step 3:
+  guest mode lives only in the running server's `WorldInfoCD` and is gone with the
+  process, and a restart drops the client out of the session, so nothing can be observed
   under a screen that is still open. Step 1 is the step a restart did recover (walked
   2026-10-08), since it runs while this account still holds its rights — which is why
-  it sits with steps 0 and 2 rather than in the second-account block.
-- *A row relocking while it holds the selection.* A withheld settings row leaves navigation
-  by being skipped; whether the selection is moved off a row that is withheld *under* it is
-  CK's own behaviour and is not exercised here (step 0 touches nothing, so no row holds the
-  selection when the transitions arrive).
+  it sits with steps 0, 2 and 2b rather than in the second-account block.
+- *A row relocking while it holds the selection* — **this one is reached after all, by
+  steps 2b and 3, and the note it replaces said it was not.** Step 0 touches nothing, so
+  the selection stays wherever `Activate()` put it: nothing at all after a mouse-driven
+  approach, otherwise the screen's first option, `0TestFirstWithheldFixtures`'s
+  `firstWithheldRow`. That row is `Server`-scoped, and in this session — admin held,
+  guest mode off — it is editable, so it is not the inert first row it is at the title
+  screen. Any step that turns guest mode on therefore relocks it **under the selection**.
+  So after a keyboard-driven approach, read it as part of step 2b (or 3); after a
+  mouse-driven one the case is simply not reached, and that is worth noting rather than
+  reporting as a pass. What the step requires is the paint and the input: the row reads as
+  locked in the *lighter* red of a selected locked row, with no blue anywhere, and the
+  arrow keys still move the selection and never land back on it. Whether CK *keeps* the
+  selection there or drops it is CK's own behaviour, which this document does not claim in
+  either direction — record which it does.
 - *A change while the list drill-in is open.* The poll is dormant there (another menu is on
   top) and returning rebuilds every row, so the screen is correct again without it.
 
@@ -2171,11 +2286,19 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   entry (§ "A setting that cannot be bound"). Flip one; the **other** shows the
   new value in the same frame, without leaving the screen. Flip the second one
   back and the first follows. (Criterion 14)
-- [ ] **2. A list that is locked before entry opens read-only.** At the **title
-  screen**, open the drill-in of `ServerList` (`TestLockedFixtures`): no add row, no
-  row buttons, and a row does not respond to activation. This covers a list that is
-  already locked when the drill-in opens, which is the `NoWorld` case; it is not a lock
-  arriving while the drill-in is open (see below).
+
+**There is no step 2 any more, and the gap in the numbering is deliberate.** It
+asked for `ServerList`'s drill-in to open read-only at the title screen — which
+is `SettingDef.EffectiveEditing` demoting a locked list, behaviour that predates
+this branch, so it passed with everything Task 6 added deleted. It was also the
+same observation Task 3's list items already make, and that is where it now
+sits, labelled there as the non-regression it is. The number stays vacant rather
+than being reused: step 3 is referred to by number from the paragraphs under it
+and from this branch's walk record, and renumbering would repoint those
+silently. What this removal costs is nothing — the lock arriving *while* a
+drill-in is open was never covered by that step either, and is declared as a gap
+at the end of this section.
+
 - [x] **3. A row whose value changes its own height.** The section
   `TestZRemeasureFixtures (detected)` holds three rows: `1Above`, `2Wrap` and
   `3Below`. `2Wrap` is a Choice over two values, `Short` (one line) and a
@@ -2253,13 +2376,13 @@ a game system.
 
 Not walkable, and therefore unverified by this walk:
 
-- *A lock arriving while a list drill-in is open* (review focus 4). Step 2 does
-  not reach it, and no step here does: the drill-in is out of scope for this work
-  (spec § 6), the permission poll is dormant while it is open, and `_editing` is
-  captured once on entry. The case is live, not safe: `WriteValueFromRows`
-  writes without re-checking `_editing`, so an editable drill-in that gets
-  locked mid-session stays editable and its next write goes through. A known
-  gap, left as it is.
+- *A lock arriving while a list drill-in is open* (review focus 4). No step here
+  reaches it, and the retired step 2 did not either: the drill-in is out of
+  scope for this work (spec § 6), the permission poll is dormant while it is
+  open, and `_editing` is captured once on entry. The case is live, not safe:
+  `WriteValueFromRows` writes without re-checking `_editing`, so an editable
+  drill-in that gets locked mid-session stays editable and its next write goes
+  through. A known gap, left as it is.
 - *That a destroyed row stops listening.* The handler that a destroyed row leaves behind
   ends itself silently (`this == null`, then `Stop()`), and a second subscription on a live
   row only renders twice. Neither leaves a log line or a visible difference, so a walk that
