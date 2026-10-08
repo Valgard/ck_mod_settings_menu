@@ -2062,9 +2062,10 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
 `testAfterGroupIsClient`, the fixture hint), `TestLockedFixtures` (`ServerList` withheld,
 `ServerInfo` an `Info` row), `TestViewOnlyFixtures`, `TestListFixtures`.
 
-- [ ] **0. Before anything: all quiet.** Both `testServerScoped` and `testAdminScoped` are
-      editable, no section shows a note, and the log has no `permissions changed` line. Wait
-      ten seconds: still none. A line here means the poll fires without a change.
+- [x] **0. Before anything: all quiet.** Walked 2026-10-07. Both `testServerScoped` and
+      `testAdminScoped` are editable, no section shows a note, and the log has no
+      `permissions changed` line. Wait ten seconds: still none. A line here means the poll
+      fires without a change.
 - [x] **1. Guest mode while holding rights: nothing moves.** Walked 2026-10-08,
       after a server restart: `guest-on` then `guest-off` produced no `permissions
       changed` line. (It could not run on 2026-10-07: that walk began at step 2, which
@@ -2075,8 +2076,9 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
       change and writes no `permissions changed` line.** The player's `guestMode` is
       the world flag *and* `adminPrivileges < 1`, so for an admin it never turns true (§ 0).
       A poll that read the world flag would repaint here.
-- [ ] **2. `revoke-admin`: only the `Admin` row follows.** Server log: `Remove admin
-      index=<n>`; client log: one `permissions changed … adminPrivileges=0` line. Changed:
+- [x] **2. `revoke-admin`: only the `Admin` row follows.** Walked 2026-10-07. Server log:
+      `Remove admin index=<n>`; client log: one `permissions changed … adminPrivileges=0`
+      line. Changed:
       `testAdminScoped` turns red and is skipped by navigation; this mod's section gains
       the line *Some settings require permissions you do not have here* between the fixture
       hint and the box, and everything below it moves down by one line. **Must not
