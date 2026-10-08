@@ -2098,21 +2098,31 @@ steps 3 to 6 are for. `PlayerController.guestMode` is true only while
 order that could reach a felt guest mode from one account is therefore `guest-on`
 first and `revoke-admin` after, and it flips both values in the same instant — so
 it cannot show them acting separately, which is criterion 11's whole point.
-**It is still worth walking, and step 2b does:** the combined transition is the
-only one-account route to two things no walked step reaches, and "not
-independent" was read for too long as "not reachable". That order is derived from the two
-conditions rather than measured; the handbook
+**It was still worth walking, and step 2b has been:** "not independent" had been
+read for too long as "not reachable", and the combined transition is the only
+single-account route to two things nothing else here reaches. That order used to
+be derived from the two conditions rather than measured — the handbook
 (`../../docs/ck/multiplayer-and-server.md`, "Who is allowed to change things")
-marks it the same way, and step 2b is where the derivation gets tested.
-Separating the two values needs a second, admin-holding player, and so does
-reversing a revoke.
+still marks it that way — and step 2b is where the derivation was tested: it
+holds. Separating the two values needs a second, admin-holding player, and so
+does reversing a revoke.
 
 **Setup.** As round 3 of § "Server and Admin, checked against a live world": the
-dedicated server's `Admins.json` lists this account at `privileges: 1` (stage 2
-cannot be revoked), guest mode off. Join, open Options → Mod settings, and
-**touch nothing until the last step**. Keep `Player.log` open: each transition
-the screen reacts to writes exactly one line, `permissions changed under the
-open screen: player=… guestMode=… adminPrivileges=…`.
+dedicated server's `Admins.json` lists this account at `privileges: 1`, guest mode
+off. Join, open Options → Mod settings, and **touch nothing until the last step**.
+Keep `Player.log` open: each transition the screen reacts to writes exactly one
+line, `permissions changed under the open screen: player=… guestMode=…
+adminPrivileges=…`.
+
+**`privileges: 1` is not a detail, and getting it wrong looks like a broken
+poll.** Both `RemoveAdminInternal` overloads only match an entry at
+`privileges <= 1` (`DedicatedServer/Pug.Other:290920`, `:290949`), so at stage 2
+the list is left as it is, the handler's `if (num > 0)` never runs (`:137223`),
+and there is **no** `Remove admin index=` line in the server log either — nothing
+changes and nothing says why, which is exactly what a `revoke-admin` that never
+arrived would look like. The server reads `Admins.json` once at startup, so
+correcting it costs a stop, an edit and a restart; it cost one on 2026-10-08,
+where the account was found at `2`.
 
 Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
 `testAfterGroupIsClient`, the fixture hint), `TestLockedFixtures` (`ServerList` withheld,
@@ -2148,9 +2158,33 @@ selected one after a keyboard-driven approach), `TestEmptySectionFixtures` (whos
       `TestViewOnlyFixtures` row, `ServerList` and `ServerInfo` in `TestLockedFixtures`
       (no note appears there), the fixture hint (still its own line, above the note),
       and the scroll position. (Criterion 11, first half)
-- [ ] **2b. Both values at once, from this one account — `guest-on`, then
+- [x] **2b. Both values at once, from this one account — `guest-on`, then
       `revoke-admin`.** The combined transition, in the one order that reaches a felt
-      guest mode without a second player.
+      guest mode without a second player. **Walked 2026-10-08** against a 1.3.0.5
+      dedicated server, screen open and untouched throughout:
+
+      1. `guest-on` while still holding stage 1 — nothing changed on screen and **no**
+         `permissions changed` line, which is step 1's first half over again: the world
+         flag is set, but the player's own `guestMode` stays false for an admin.
+      2. `revoke-admin` — **one** line, carrying both values at once:
+
+         ~~~text
+         permissions changed under the open screen: player=True guestMode=True adminPrivileges=0
+         ~~~
+
+         The first `guestMode=True` ever to appear in this log. The player's own
+         `guestMode` is the world flag **and** `adminPrivileges < 1`, so it turns true
+         in the same instant the rights go.
+      3. A second `revoke-admin` afterwards produced **no further** line. The one-way
+         property below is therefore observed now, not inferred.
+
+      The screen was confirmed as expected, `ServerList` (`TestLockedFixtures`)
+      included — the list row that was editable until that moment, and the one row here
+      CK does not paint at all, since a list row stays `ACTIVE`, so its red is entirely
+      MSM's. That is the relock-from-editable path this step exists for, and it is now
+      observed. `firstWithheldRow` and `afterHeader` were not reported row by row, so
+      read the wider set below as confirmed in the whole and unconfirmed in those two
+      parts.
 
       **Precondition: it is one-way, so it comes last in a session, and it replaces
       step 2 rather than following it.** `revoke-admin` spends this account's rights
@@ -2160,17 +2194,13 @@ selected one after a keyboard-driven approach), `TestEmptySectionFixtures` (whos
       Walk steps 0 and 1 first, then this instead of step 2; a server restart (which is
       how step 2 is repeated) is what returns the rights for the other one. Guest mode
       itself does not survive that restart: it lives in the running server's
-      `WorldInfoCD`.
-
-      Send `guest-on` while still an admin — no reaction, which is step 1's first half
-      over again — and then `revoke-admin`. Expect **one** `permissions changed` line
-      carrying both values moved, `guestMode=True adminPrivileges=0`: the player's own
-      `guestMode` is the world flag **and** `adminPrivileges < 1`, so it turns true in
-      the same instant the rights go.
+      `WorldInfoCD`. And read § "Setup" on `privileges: 1` before sending anything: at
+      stage 2 the revoke is a silent no-op on both sides of the wire.
 
       **What turns red is every non-`Info` row the server now withholds, which is more
-      fixtures than the three this section talks about** — write the set down before
-      walking it, because a row left off the list reads as "nothing changed there" and
+      fixtures than the three this section talks about** — have the set written down
+      before sending anything, because a row left off it reads as "nothing changed
+      there" and
       passes. Guest mode locks every `Server` row and the lost rights lock every `Admin`
       row, so: `testServerScoped` and `testAdminScoped` (this mod's own section),
       `ServerList` (`TestLockedFixtures`), `firstWithheldRow`
@@ -2188,30 +2218,36 @@ selected one after a keyboard-driven approach), `TestEmptySectionFixtures` (whos
 
       `firstWithheldRow` is also where this step relocks a row **under the selection**,
       if the approach to the menu was on the keyboard — see the last block of this
-      section for what to read there and what it deliberately does not claim.
+      section for what to read there and what it deliberately does not claim. The
+      2026-10-08 walk did not record that reading, so it stays open — alongside the two
+      rows named above as unconfirmed.
 
-      **What it covers, and what it does not.** Two things no walked step reaches: that
-      a `guestMode` change drives the poll **at all** — step 1 is a negative control on
-      where the value is read from and step 2 moves only `adminPrivileges`, so neither
-      has ever seen guest mode cause a transition — and `ListWidget`'s
+      **What it covers, and what it does not.** Two things nothing else here reached:
+      that a `guestMode` change drives the poll **at all** — step 1 is a negative
+      control on where the value is read from and step 2 moves only `adminPrivileges`,
+      so before this neither had seen guest mode cause a transition — and `ListWidget`'s
       relock-from-editable path, where a list row that was built **unlocked**, with live
       effects and memos holding the unlocked state, is painted for the first time under
       the poll. Task 3 only ever paints a list row that was already locked when it was
       built; for `SettingWidget` step 2 covers the same path through `testAdminScoped`.
-      What it does **not** cover is criterion 11, whose point is the two values acting
-      **separately**: both move in one instant here, so nothing tells which row followed
-      which value. That stays steps 3 and 4.
+      **This is the only *single-account* route to that path, not the only one:** step 3
+      proper reaches it too, with a second admin-holding account. What this step does
+      **not** cover is criterion 11, whose point is the two values acting
+      **separately**: both moved in one instant here, so it shows that each value is
+      read and acted on, never that they act independently. That stays steps 3 and 4.
 
 **Steps 3 to 6 need a second, admin-holding player — one account cannot walk
-them.** Step 2 (or 2b) took this account's rights, and the gate above drops every
-further command from a caller holding none, so the `guest-on` these steps open
-with never arrives. Reversing it is out of reach for the same reason. Keep them here as
-what to look for when a second account is available, and read their checkboxes
-as unticked rather than failing: on 2026-10-07 steps 0 and 2 were walked and
-these four were not. Step 1, which that walk could not reach either, was walked
-on 2026-10-08 after a server restart; nothing reaches these four short of a second
-account. Sending the guest commands from the second account is all
-that changes — the screen under observation stays this one.
+them.** Step 2 (or 2b) took this account's rights, and the gate above drops
+every further command from a caller holding none, so the `guest-on` these steps
+open with never arrives. Reversing it is out of reach for the same reason. Keep
+them here as what to look for when a second account is available, and read their
+checkboxes as unticked rather than failing: steps 0 and 2 were walked on
+2026-10-07, step 1 and step 2b on 2026-10-08 after server restarts, and these
+four not at all. Step 2b is as far as one account goes — it reached the
+`guestMode` direction and the list row's relock, which is why the four below are
+now parked for what only a second account adds: the two values moving
+**separately**, and the releases. Sending the guest commands from the second
+account is all that changes — the screen under observation stays this one.
 
 - [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
   `guestMode=True`. Changed: every `Server` row — the same set step 2b writes
@@ -2249,28 +2285,34 @@ that changes — the screen under observation stays this one.
 
 **Not walkable here, and why.**
 
-- *Everything after the revoke, from one account* — the block above says why, and step 2b
-  is the one thing that block used to rule out too. A server restart does give the rights
-  back, and it is how steps 0 to 2 and 2b are repeated, but it is not a way into step 3:
+- *Everything after the revoke, from one account* — the block above says why, and
+  step 2b is the one thing that block used to rule out too, which a second
+  `revoke-admin` then confirmed: no further `permissions changed` line. A server
+  restart does give the rights back, and it is how steps 0 to 2 and 2b are repeated,
+  but it is not a way into step 3:
   guest mode lives only in the running server's `WorldInfoCD` and is gone with the
   process, and a restart drops the client out of the session, so nothing can be observed
-  under a screen that is still open. Step 1 is the step a restart did recover (walked
-  2026-10-08), since it runs while this account still holds its rights — which is why
-  it sits with steps 0, 2 and 2b rather than in the second-account block.
-- *A row relocking while it holds the selection* — **this one is reached after all, by
-  steps 2b and 3, and the note it replaces said it was not.** Step 0 touches nothing, so
-  the selection stays wherever `Activate()` put it: nothing at all after a mouse-driven
-  approach, otherwise the screen's first option, `0TestFirstWithheldFixtures`'s
-  `firstWithheldRow`. That row is `Server`-scoped, and in this session — admin held,
-  guest mode off — it is editable, so it is not the inert first row it is at the title
-  screen. Any step that turns guest mode on therefore relocks it **under the selection**.
-  So after a keyboard-driven approach, read it as part of step 2b (or 3); after a
-  mouse-driven one the case is simply not reached, and that is worth noting rather than
-  reporting as a pass. What the step requires is the paint and the input: the row reads as
-  locked in the *lighter* red of a selected locked row, with no blue anywhere, and the
-  arrow keys still move the selection and never land back on it. Whether CK *keeps* the
-  selection there or drops it is CK's own behaviour, which this document does not claim in
-  either direction — record which it does.
+  under a screen that is still open. Steps 1 and 2b are the ones a restart did
+  recover (walked 2026-10-08), since each runs while this account still holds its
+  rights — which is why they sit with steps 0 and 2 rather than in the
+  second-account block.
+- *A row relocking while it holds the selection* — **reachable after all, where
+  the note this replaces said it was not, and still unrecorded.** Step 0 touches
+  nothing, so the selection stays wherever `Activate()` put it: nothing at all
+  after a mouse-driven approach, otherwise the screen's first option,
+  `0TestFirstWithheldFixtures`'s `firstWithheldRow`. That row is
+  `Server`-scoped, and in this session — admin held, guest mode off — it is
+  editable, so it is not the inert first row it is at the title screen. Any step
+  that turns guest mode on therefore relocks it **under the selection**. So
+  after a keyboard-driven approach, read it as part of step 2b (or 3); after a
+  mouse-driven one the case is simply not reached, and that is worth noting
+  rather than reporting as a pass. The 2026-10-08 walk of 2b did not record it
+  either way, so this stays open while the step above it is ticked. What to read
+  is the paint and the input: the row reads as locked in the *lighter* red of a
+  selected locked row, with no blue anywhere, and the arrow keys still move the
+  selection and never land back on it. Whether CK *keeps* the selection there or
+  drops it is CK's own behaviour, which this document does not claim in either
+  direction — record which it does.
 - *A change while the list drill-in is open.* The poll is dormant there (another menu is on
   top) and returning rebuilds every row, so the screen is correct again without it.
 
