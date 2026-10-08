@@ -1952,6 +1952,12 @@ do all three. At the title screen, in the same box:
   selection override never fired) or any blue (it fired and MSM's paint did not
   follow). (6)
 
+  Later the same day, Task 5 step 2c measured the identical pair on the identical
+  row through the **opposite** route — the lock arriving under a selection the row
+  already held, rather than the row receiving the selection already locked. Two
+  routes into one state giving the same two numbers is what says the paint reads the
+  selection rather than the history.
+
 **The same three rows in singleplayer.** Load any singleplayer world, open the menu.
 This checks that the three rows render and behave normally in a world, and nothing
 more: `Populate` rebuilds every row on each open, and in a world it builds them
@@ -1968,10 +1974,13 @@ unlocked, so a row is never painted here and therefore never handed back.
 and the `RestoreTo` calls under it, run only when a row that was painted while locked
 becomes unlocked while it is still alive. Rows are rebuilt on every open, so that never
 happens from the keyboard; it first happens in Task 5's live poll, and that is where the
-restore is checked. Until then it is reviewed by reading, not walked. Recorded with it,
-for the same reason: relocking a row that was **editable** when built leaves its value
-effects enabled, because only a row bound locked had them disabled by
-`MakeValueReadOnly`; also Task 5's.
+restore is checked. It is still reviewed by reading rather than walked — Task 5's release
+steps need a second account. Recorded with it, for the same reason: relocking a row that
+was **editable** when built leaves its value effects enabled, because only a row bound
+locked had them disabled by `MakeValueReadOnly`. That **relock** half is no longer only
+read: Task 5's steps 2b and 2c walked it on 2026-10-08, the second of them with the row
+holding the selection, and 2c reproduced the two tones measured below through the
+opposite direction.
 
 **What would go wrong, and how it shows.** A capture taken in `Bind` saves an empty
 effect array (`base.Awake` fills it afterwards), so the failure appears when a lock
@@ -2059,8 +2068,8 @@ makes them follow a change that happens while it is open (criteria 11 and 12). B
 `MOD_DEV_FLAGS=TestFixtures`. The check needs a live dedicated-server session, because the
 rights it changes do not exist in singleplayer — and a trigger inside the mod rather than
 the game's own buttons, because reaching those means leaving the settings screen, which is
-exactly what the criteria forbid. Steps 0 to 2 and 2b run from one account; steps 3 to 6
-need a second one holding admin rights, for the reason the next paragraph gives.
+exactly what the criteria forbid. Steps 0 to 2, 2b and 2c run from one account; steps 3
+to 6 need a second one holding admin rights, for the reason the next paragraph gives.
 
 **The trigger.** A `TestFixtures` build polls a file and sends the RPC the game's own
 buttons would send. The file lives at
@@ -2217,10 +2226,10 @@ selected one after a keyboard-driven approach), `TestEmptySectionFixtures` (whos
       and `Client` row, the fixture hint's own line, the scroll position.
 
       `firstWithheldRow` is also where this step relocks a row **under the selection**,
-      if the approach to the menu was on the keyboard — see the last block of this
-      section for what to read there and what it deliberately does not claim. The
-      2026-10-08 walk did not record that reading, so it stays open — alongside the two
-      rows named above as unconfirmed.
+      if the approach to the menu was on the keyboard. That is step 2c below, walked
+      separately, and it is what confirms this row's half of the set above;
+      `afterHeader` was never reported row by row and stays unconfirmed, as do the rows
+      of any installed foreign mod.
 
       **What it covers, and what it does not.** Two things nothing else here reached:
       that a `guestMode` change drives the poll **at all** — step 1 is a negative
@@ -2235,6 +2244,63 @@ selected one after a keyboard-driven approach), `TestEmptySectionFixtures` (whos
       **not** cover is criterion 11, whose point is the two values acting
       **separately**: both moved in one instant here, so it shows that each value is
       read and acted on, never that they act independently. That stays steps 3 and 4.
+- [x] **2c. The lock arrives under the selection.** Step 2b's sequence again, with the
+      one precondition that decides whether this case is reached at all: **approach the
+      menu on the keyboard**, so that `Activate()` hands the selection to the screen's
+      first option and `firstWithheldRow` holds it from the first frame. After a
+      mouse-driven approach nothing is selected (`DeselectAnyCurrentOption`) and the
+      case is simply not reached — note that rather than reading it as a pass.
+
+      **Walked 2026-10-08**, same server and the same `guest-on` then `revoke-admin`.
+      Three screenshots, each measured against the same grey reference (142,142,142), so
+      the numbers are directly comparable:
+
+      - **before**, editable and selected: blue RGB(94,115,162) — CK's ordinary
+        selection colour.
+      - **after `revoke-admin`**, withheld and *still* selected: light red
+        RGB(144,65,63) — `ApplyLockAppearance(selected: true)`.
+      - **after navigating away**, withheld and deselected: dark red RGB(91,45,41) —
+        `ApplyLockAppearance(selected: false)`.
+
+      144/91 = 1.58 against the code's `LockedSelectedColor` 164 over
+      `UNSELECTABLE_TEXT_COLOR` 108 = 1.52. The row went from blue **straight** to the
+      light red — no intermediate frame and not by way of the dark tone, which is the
+      part that says the paint read the selection state it actually found rather than
+      assuming a deselected row. The two tones themselves are not new: the same pair was
+      measured this morning in Task 3, where a withheld row *received* the selection on
+      open. **What is new is the direction** — the lock arriving under a selection the
+      row already held, which is the path Task 5 built and which until today had only
+      been read. That the tones come out identical either way is the cross-check that the
+      paint does not depend on how the row got into that state.
+
+      **It also answers the question this document used to leave open: CK keeps the
+      selection there.** A row that becomes `GRAYED_OUT` under the selection is not
+      deselected by the game; it holds it until something moves it. That it is then
+      never landed on again rests on reading, not on this walk —
+      `SelectNextIndex`/`SelectPrevIndex` skip every index whose `IsSelectionEnabled()`
+      is false (`Pug.Other:359231`, `:359253`, `:359564`).
+
+      **The footer gives a second observation, and it is two mechanisms rather than
+      one.** While the row was withheld *and* selected it showed only *navigieren* and
+      *ESC zurück*; both *LEERTASTE Auswählen* and *R Zurücksetzen* were gone.
+      - **Select** is `SettingWidget.CanBeActivated()` answering false, so the base hands
+        back `helpButtonsNoSelect`. This is criterion 10 again, reached through the
+        **relock** instead of through an open as in Task 2 — and it is the only step in
+        this document where the footer follows a row that *stops* being activatable
+        while the selection stays put, which is what the fresh-list contract in
+        `GetHelpButtonsToShow` exists for.
+      - **Reset** is a different mechanism that happens to fire in the same frame:
+        `SectionReset.CanReset(SelectedSection())` goes false because this section's only
+        row has stopped being editable, so the screen's own override never appends
+        `RESET_DEFAULTS`. Nothing about activation is involved.
+      Both prompts are back in the before shot and in the after shot, and in the latter
+      that is **not** evidence about this row: by then the selection sits on another
+      section's editable row, so the footer is answering about that row. It is the
+      control that the bar is live, not a reading of the withheld one.
+
+      Not shown here, as in 2b: the two permission values still moved in the same
+      instant, so this separates nothing. And the release direction — a row painted while
+      locked becoming unlocked again — is still unwalked; that is step 4.
 
 **Steps 3 to 6 need a second, admin-holding player — one account cannot walk
 them.** Step 2 (or 2b) took this account's rights, and the gate above drops
@@ -2242,12 +2308,13 @@ every further command from a caller holding none, so the `guest-on` these steps
 open with never arrives. Reversing it is out of reach for the same reason. Keep
 them here as what to look for when a second account is available, and read their
 checkboxes as unticked rather than failing: steps 0 and 2 were walked on
-2026-10-07, step 1 and step 2b on 2026-10-08 after server restarts, and these
-four not at all. Step 2b is as far as one account goes — it reached the
-`guestMode` direction and the list row's relock, which is why the four below are
-now parked for what only a second account adds: the two values moving
-**separately**, and the releases. Sending the guest commands from the second
-account is all that changes — the screen under observation stays this one.
+2026-10-07, steps 1, 2b and 2c on 2026-10-08 after server restarts, and these
+four not at all. 2b and 2c together are as far as one account goes — they reached
+the `guestMode` direction, the list row's relock and the lock arriving under the
+selection, which is why the four below are now parked for just what a second
+account adds: the two values moving **separately**, and the releases. Sending the
+guest commands from the second account is all that changes — the screen under
+observation stays this one.
 
 - [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
   `guestMode=True`. Changed: every `Server` row — the same set step 2b writes
@@ -2256,8 +2323,8 @@ account is all that changes — the screen under observation stays this one.
   the *permissions* note (and grows), while this mod's section keeps the note it
   already had. **Must not change:** `testAdminScoped` (already red, still the same
   red), the two `Server`-scoped `Info` rows, the `ViewOnly` and `Client` rows. On
-  a keyboard-driven approach `firstWithheldRow` is also the selected row, which is
-  the relock-under-the-selection case the last block of this section describes.
+  a keyboard-driven approach `firstWithheldRow` is also the selected row, so step
+  2c's readings apply here too.
   (Criterion 11, second half)
 - [ ] **4. `guest-off`: the `Server` rows come back, the `Admin` row does not.**
   Client log: one line, `guestMode=False`. Every row step 3 locked is editable
@@ -2292,27 +2359,18 @@ account is all that changes — the screen under observation stays this one.
   but it is not a way into step 3:
   guest mode lives only in the running server's `WorldInfoCD` and is gone with the
   process, and a restart drops the client out of the session, so nothing can be observed
-  under a screen that is still open. Steps 1 and 2b are the ones a restart did
+  under a screen that is still open. Steps 1, 2b and 2c are the ones a restart did
   recover (walked 2026-10-08), since each runs while this account still holds its
   rights — which is why they sit with steps 0 and 2 rather than in the
   second-account block.
-- *A row relocking while it holds the selection* — **reachable after all, where
-  the note this replaces said it was not, and still unrecorded.** Step 0 touches
-  nothing, so the selection stays wherever `Activate()` put it: nothing at all
-  after a mouse-driven approach, otherwise the screen's first option,
-  `0TestFirstWithheldFixtures`'s `firstWithheldRow`. That row is
-  `Server`-scoped, and in this session — admin held, guest mode off — it is
-  editable, so it is not the inert first row it is at the title screen. Any step
-  that turns guest mode on therefore relocks it **under the selection**. So
-  after a keyboard-driven approach, read it as part of step 2b (or 3); after a
-  mouse-driven one the case is simply not reached, and that is worth noting
-  rather than reporting as a pass. The 2026-10-08 walk of 2b did not record it
-  either way, so this stays open while the step above it is ticked. What to read
-  is the paint and the input: the row reads as locked in the *lighter* red of a
-  selected locked row, with no blue anywhere, and the arrow keys still move the
-  selection and never land back on it. Whether CK *keeps* the selection there or
-  drops it is CK's own behaviour, which this document does not claim in either
-  direction — record which it does.
+- *A row relocking while it holds the selection* — **this entry is gone, and the
+  deletion is the point.** It stood here as unreachable, then as reachable but
+  unrecorded, and it is now step **2c**, walked and measured. `firstWithheldRow` is
+  `Server`-scoped and the screen's first option, so in this session it is editable and
+  holds the selection after a keyboard-driven approach — which makes every step that
+  turns guest mode on relock a row under the selection. Kept as a line rather than
+  silently dropped, because a note claiming a case cannot be reached is what stops
+  anyone looking for it.
 - *A change while the list drill-in is open.* The poll is dormant there (another menu is on
   top) and returning rebuilds every row, so the screen is correct again without it.
 
