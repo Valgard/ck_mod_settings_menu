@@ -1759,21 +1759,36 @@ row looked operable, answered input and did nothing.
       selection cannot be **moved onto** a grayed row — not that such a row never
       holds it: `RadicalMenu.Activate()` hands the selection to the first option
       that is `ACTIVE` *or* `GRAYED_OUT`, which the next step is built to reach.
-- [ ] **A withheld row holding the selection offers no Select.** The one step
-  that reaches `SettingWidget.CanBeActivated()`, so read its two preconditions
-  first — miss either and it checks nothing. **(a)** A **keyboard or
-  controller** must be the active input device: `Activate()` calls
-  `DeselectAnyCurrentOption` when `Manager.input.SystemIsUsingMouse()`, so a
-  mouse-driven open selects nothing. Press a direction key before opening, and
-  do not touch the mouse. **(b)** It must be the **first open since launch**,
-  because `Activate()` remembers the last index and prefers it when it is still
-  `ACTIVE`; nothing resets that between opens, so move the selection once and a
-  reopen no longer starts at the top. Now, at the title screen: open Options →
-  Mod settings. The topmost box is `0TestFirstWithheldFixtures (detected)` and
-  its single row `firstWithheldRow` holds the selection — it is the screen's
-  first option, which is the only way `Activate()` gives a withheld row the
-  selection. (A lock arriving *under* the selection mid-session does it too, and
-  that is Task 5's territory, unwalked.) Check, in this order:
+- [x] **A withheld row holding the selection offers no Select.** Walked
+  2026-10-08: the footer showed Navigate and Back and no Select, while
+  `firstWithheldRow` held the selection (point 1; point 2, the sound, was not
+  recorded separately). The one step that reaches
+  `SettingWidget.CanBeActivated()`, so read its two preconditions first — miss
+  either and it checks nothing. **(a)** The **last active input device must not
+  be the mouse**, and a mouse-driven open is not the only way to break that: the
+  **whole approach to the menu** has to happen on the keyboard — arrow keys and
+  Enter from the title screen into Options and on into Mod settings, without
+  touching or moving the mouse at any point on the way, not merely once this
+  screen is open. `Activate()` hands out a starting selection only when
+  `Manager.input.SystemIsUsingMouse()` is false, and that asks whether
+  `GetLastActiveController().type` is `Mouse` (`Pug.Other:276332`); with the
+  mouse last it calls `DeselectAnyCurrentOption`. *What that failure looks
+  like:* **nothing is selected at all** — no highlight on any row — so the
+  footer check below observes nothing, and a reader who is not looking for that
+  can take the step as passed. The arrow keys cannot repair it afterwards:
+  `SelectNextIndex` and `SelectPrevIndex` skip every index whose
+  `IsSelectionEnabled()` is false (`Pug.Other:359231`, `:359253`), which returns
+  `!ShouldBeGrayedOut()` (`:359564`), so the withheld row is stepped over and
+  pressing down lands on the row below it. **(b)** It must be the **first open
+  since launch**, because `Activate()` remembers the last index and prefers it
+  when it is still `ACTIVE`; nothing resets that between opens, so move the
+  selection once and a reopen no longer starts at the top. Now, at the title
+  screen: open Options → Mod settings. The topmost box is
+  `0TestFirstWithheldFixtures (detected)` and its single row `firstWithheldRow`
+  holds the selection — it is the screen's first option, which is the only way
+  `Activate()` gives a withheld row the selection. (A lock arriving *under* the
+  selection mid-session does it too, and that is Task 5's territory, unwalked.)
+  Check, in this order:
       1. **The footer shows two prompts, Navigate and Back, and no Select.** This
          is the check: CK asks the selected row and gets `helpButtonsNoSelect`
          instead of its default three. No Reset prompt either, and that one is
@@ -1788,6 +1803,11 @@ row looked operable, answered input and did nothing.
       which, and read this step as unwalked rather than passed; scrolling to the
       box will not do, since the point is which row `Activate()` picked.
       (Criterion 10)
+- [x] **Section order.** Walked 2026-10-08: `0TestFirstWithheldFixtures` rendered
+      first, ahead of every installed consumer section, and `TestZRemeasureFixtures`
+      rendered last. The same walk showed the section's note at the title screen as
+      the **world** variant, and in a world as an admin the row was free and the
+      note gone.
 - [ ] **A mouse click does nothing.** Click `testServerScoped`: no selection
       highlight appears on it and no sound plays. The click collider is only
       enabled for an `ACTIVE` row, so the click never arrives; the value staying
@@ -1869,16 +1889,23 @@ colour that "looks red" is not an outcome. At the title screen, in the same box:
       leaving, it is the same dull red as before the first selection, not the grey of the
       editable rows. This is the deselect path, which CK would otherwise repaint with the
       ordinary grey the first time the selection moves.
-- [ ] **A locked settings row holding the selection reads the lighter red.** The
-      list-row half above uses `ServerList`; this is the settings-row half, and it needs
-      the row to hold the selection, which navigation cannot arrange (Task 2 says why).
-      Use the same open as Task 2's `CanBeActivated()` step — same two preconditions,
-      keyboard or controller and the first open since launch — where
-      `0TestFirstWithheldFixtures`'s `firstWithheldRow` has the selection from the first
-      frame. Its label *and* value read the lighter red, with no blue on either, and are
-      distinguishable from the dull red of the deselected `testServerScoped` further
-      down. *Failure:* the dull red (the selection override never fired) or any blue (it
-      fired and MSM's paint did not follow). (6)
+- [x] **A locked settings row holding the selection reads the lighter red.**
+  Walked 2026-10-08: the row is measurably lighter when selected than when not —
+  the selection moved away and the same row went dark. Both screenshots were
+  measured against the same grey reference (142,142,142): selected
+  RGB(144,65,63), deselected RGB(91,45,41), a ratio of 1.58 against the code's
+  164/108 = 1.52. That establishes the two tones differ as the code intends; it
+  does not establish that either matches an exact target value. The list-row
+  half above uses `ServerList`; this is the settings-row half, and it needs the
+  row to hold the selection, which navigation cannot arrange (Task 2 says why).
+  Use the same open as Task 2's `CanBeActivated()` step — same two
+  preconditions, the whole approach to the menu on the keyboard and the first
+  open since launch — where `0TestFirstWithheldFixtures`'s `firstWithheldRow`
+  has the selection from the first frame. Its label *and* value read the lighter
+  red, with no blue on either, and are distinguishable from the dull red of the
+  deselected `testServerScoped` further down. *Failure:* the dull red (the
+  selection override never fired) or any blue (it fired and MSM's paint did not
+  follow). (6)
 
 **The same three rows in singleplayer.** Load any singleplayer world, open the menu.
 This checks that the three rows render and behave normally in a world, and nothing
@@ -2038,12 +2065,12 @@ Fixtures: this mod's own section (`testServerScoped`, `testAdminScoped`,
 - [ ] **0. Before anything: all quiet.** Both `testServerScoped` and `testAdminScoped` are
       editable, no section shows a note, and the log has no `permissions changed` line. Wait
       ten seconds: still none. A line here means the poll fires without a change.
-- [ ] **1. Guest mode while holding rights: nothing moves.** **Not walked on
-      2026-10-07** — the walk began at step 2, and step 2 then spent the rights this
-      step needs, so it is pending a server restart rather than pending a second
-      account. It is the negative control that the poll reads
-      `PlayerController.guestMode` and not `WorldInfoCD.guestMode`, so leave it
-      unticked until it has actually been run. `guest-on`, then `guest-off`.
+- [x] **1. Guest mode while holding rights: nothing moves.** Walked 2026-10-08,
+      after a server restart: `guest-on` then `guest-off` produced no `permissions
+      changed` line. (It could not run on 2026-10-07: that walk began at step 2, which
+      spent the rights this step needs.) It is the negative control that the poll reads
+      `PlayerController.guestMode` and not `WorldInfoCD.guestMode`. `guest-on`, then
+      `guest-off`.
       The server log shows `Set guest mode=True` and `=False`; **the client screen does not
       change and writes no `permissions changed` line.** The player's `guestMode` is
       the world flag *and* `adminPrivileges < 1`, so for an admin it never turns true (§ 0).
@@ -2065,9 +2092,9 @@ further command from a caller holding none, so the `guest-on` these steps open
 with never arrives. Reversing step 2 is out of reach for the same reason. Keep them here as
 what to look for when a second account is available, and read their checkboxes
 as unticked rather than failing: on 2026-10-07 steps 0 and 2 were walked and
-these four were not. Step 1 was not walked either, and is pending for a different
-reason — a server restart reaches it, as its own entry says, where nothing reaches
-these four. Sending the guest commands from the second account is all
+these four were not. Step 1, which that walk could not reach either, was walked
+on 2026-10-08 after a server restart; nothing reaches these four short of a second
+account. Sending the guest commands from the second account is all
 that changes — the screen under observation stays this one.
 
 - [ ] **3. `guest-on`: now the `Server` rows follow.** Client log: one line,
@@ -2107,9 +2134,9 @@ that changes — the screen under observation stays this one.
   does give the rights back, and it is how steps 0 to 2 are repeated, but it is not a way
   into step 3: guest mode lives only in the running server's `WorldInfoCD` and is gone with
   the process, and a restart drops the client out of the session, so nothing can be observed
-  under a screen that is still open. Step 1 is the one unwalked step a restart recovers,
-  since it runs while this account still holds its rights — which is why it sits with
-  steps 0 and 2 rather than in the second-account block.
+  under a screen that is still open. Step 1 is the step a restart did recover (walked
+  2026-10-08), since it runs while this account still holds its rights — which is why
+  it sits with steps 0 and 2 rather than in the second-account block.
 - *A row relocking while it holds the selection.* A withheld settings row leaves navigation
   by being skipped; whether the selection is moved off a row that is withheld *under* it is
   CK's own behaviour and is not exercised here (step 0 touches nothing, so no row holds the
@@ -2152,7 +2179,10 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   ~~~
 
   `Player.log` answers each with `remeasure trigger: wrote the … value`, and the file
-  is gone within a frame. Write `long`, then look at, in this order:
+  is gone within a frame. **Partly walked 2026-10-08, so left unticked:** `2Wrap`
+  grew to three lines, `3Below` moved down with no overprint, and `short`
+  restored the row with no empty band. The frame, the sections below, the scroll
+  position and `toggle` were not recorded. Write `long`, then look at, in this order:
   1. **The row itself.** `2Wrap` grows to hold every line of its value, with the
      label staying on the first line. *Failure:* the row keeps its one-line
      height and the extra lines run out of it.
