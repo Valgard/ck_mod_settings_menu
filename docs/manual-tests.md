@@ -2163,7 +2163,7 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   row buttons, and a row does not respond to activation. This covers a list that is
   already locked when the drill-in opens, which is the `NoWorld` case; it is not a lock
   arriving while the drill-in is open (see below).
-- [ ] **3. A row whose value changes its own height.** The section
+- [x] **3. A row whose value changes its own height.** The section
   `TestZRemeasureFixtures (detected)` holds three rows: `1Above`, `2Wrap` and
   `3Below`. `2Wrap` is a Choice over two values, `Short` (one line) and a
   sentence that wraps over several lines of the value column. Its section name
@@ -2181,10 +2181,15 @@ its entry's file when it is bound and unsubscribes when it is destroyed.
   ~~~
 
   `Player.log` answers each with `remeasure trigger: wrote the … value`, and the file
-  is gone within a frame. **Partly walked 2026-10-08, so left unticked:** `2Wrap`
-  grew to three lines, `3Below` moved down with no overprint, and `short`
-  restored the row with no empty band. The frame, the sections below, the scroll
-  position and `toggle` were not recorded. Write `long`, then look at, in this order:
+  is gone within a frame. **Walked 2026-10-08:** `2Wrap` grew to three lines, the
+  box frame grew with it and kept `3Below` inside with no overprint, the scroll
+  thumb shortened as the content got taller, and `short` restored every one of
+  those with no empty band and the same scroll extent as before. Two things this
+  fixture cannot show, by its own construction: the sections *below*, since
+  `TestZRemeasureFixtures` is deliberately the last one, and `toggle`, which was
+  not used — it writes the same two values through the same path as `long` and
+  `short`, so it is a convenience of the trigger rather than a case of its own.
+  Write `long`, then look at, in this order:
   1. **The row itself.** `2Wrap` grows to hold every line of its value, with the
      label staying on the first line. *Failure:* the row keeps its one-line
      height and the extra lines run out of it.
