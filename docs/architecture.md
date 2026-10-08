@@ -353,10 +353,17 @@ action 223) while this screen is CK's top menu and, on press, opens a
 
 ### `SectionBox`
 
-A tiny `MonoBehaviour` on the section-template prefab exposing `header`, `hint`, and
+A tiny `MonoBehaviour` on the section-template prefab exposing `header`, `hint`, `lockNote` and
 `widgetContainer` as **serialized references** (the screen wires by reference, not by fragile
 `Find()` paths). The `widgetContainer` is a `LinearLayout` with a 9-slice border background that
 auto-sizes to its rows — the visible box.
+
+`lockNote` is the line between the hint and the box naming why a section withholds settings. All
+four references are null-guarded at their use sites, and `lockNote`'s guard is the one with a
+meaning of its own: null says the template carries no such object, which
+`ModSettingsScreen.RenderLockNote` treats as no note and no error rather than as a wiring fault, so
+an older or hand-trimmed section template still renders, minus the note. (`widgetContainer`'s null
+case falls back to the section root; `header` and `hint` are simply skipped.)
 
 ### `LabelRow`
 
@@ -384,9 +391,13 @@ effect).
 
 The `Steps` `♦/♢` chain uses `♦`/`♢` escapes (pure-ASCII source; a literal diamond is
 encoding-unsafe in the Roslyn sandbox) and only renders in the `boldLarge` font atlas, so `Bind`
-switches a Steps-slider's value font accordingly. Implements `ISectionRow` (`Section` + a
-now-public `Refresh()`) — one of the two row classes the section-scoped reset reads a selected
-row's section from and redraws after a bulk write.
+switches a Steps-slider's value font accordingly. Implements `ISectionRow` — all three members:
+`Section`, a now-public `Refresh()`, and `StopWatching()`, whose contract is the non-obvious one.
+It exists because `Destroy` is deferred to the end of the frame, so a row already detached by
+`Populate` would otherwise still react to a write arriving in between; the row that is going away
+is unsubscribed explicitly rather than waiting for its own `OnDestroy`. `SettingWidget` is one of
+the two row classes the section-scoped reset reads a selected row's section from and redraws after
+a bulk write.
 
 The `List` kind is the one that does NOT render through `SettingWidget` — it has its own compact
 row plus a pushed detail screen:
