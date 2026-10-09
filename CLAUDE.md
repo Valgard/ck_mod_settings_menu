@@ -114,7 +114,8 @@ from `../utils/`.
   all `System.IO` in its own trusted assembly via `API.ConfigFilesystem`, so the
   framework (and consumers) stay **sandbox-clean** — no `skipSafetyChecks` (the `.asset`
   has `skipSafetyChecks: 0`). Auto-save (`SaveOnConfigSet`) is on, so every write
-  persists immediately.
+  persists immediately — unless General Mod Config Menu is installed, which switches
+  that flag off on every file (the title screen included); see `docs/roadmap.md`.
 
 ### `ModSettingsMenu.UI` (the rendered screen)
 
@@ -208,7 +209,8 @@ traps, each verified in-game. Full detail (with the code paths) lives in
   Editor **closed**, and never mutate prefab files while the user is in the Editor.
 
 `docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info,
-Separator/Label) and out-of-scope items.
+Separator/Label), out-of-scope items, and the open persistence bug with General Mod
+Config Menu.
 
 ## macOS / CrossOver
 

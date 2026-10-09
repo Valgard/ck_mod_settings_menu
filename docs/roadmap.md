@@ -88,6 +88,37 @@ separator can sit between option 3 and 4).
   clearer.
 - **Dual-range (min–max) slider** — too niche for the single-row raster.
 
+## Persist with an explicit Save — another mod can switch auto-save off
+
+A value changed in the menu is lost on the next launch whenever General Mod
+Config Menu (GMCM) is installed. Reported by the user on 2026-10-09 with
+Complete Tools' toggle: the menu showed "on", the file kept `false` through two
+writes, and the log showed no error. Changing it on the title screen did not
+save either; with GMCM disabled it saved at once.
+
+**Settled: GMCM is the cause (measured by disabling it), and its source shows
+how.** Its `ConfigSyncSystem.OnCreate`
+(`Scripts/ConfigSync/ConfigSyncSystem.cs:42-46`) walks
+`ConfigFile.AllConfigFilesReadOnly` and sets `SaveOnConfigSet = false` on every
+file except CoreLib's own — ours included. That the title screen is affected as
+well means the flag is already off before any world is entered; which code path
+does it there is not traced. This framework relies on exactly that flag:
+`SettingWidget.Adjust` writes `BoxedValue` and expects CoreLib to save, and
+`ConfigStore` says so in its summary. Every consumer mod is affected, not only
+one.
+
+**The fix: save explicitly.** After a write in `SettingWidget.Adjust`, and
+wherever else the framework writes a value (`SettingHandle<T>.Value` setters,
+`SectionReset` on v2), call `ConfigFile.Save()` on the owning file instead of
+trusting the flag, so no other mod can switch persistence off. The `v2`
+branch relies on the flag the same way and needs the same change.
+
+**To decide.** Whether to save on every adjust or once when the screen closes
+(`ModSettingsScreen.Deactivate`) — every adjust is simpler and loses nothing on
+a crash; closing saves fewer writes while a slider is skimmed. And whether to
+restore `SaveOnConfigSet` on our files at all, which would fight GMCM's own sync
+rather than sidestep it.
+
 ## Small fixes
 
 - **English label casing: "Mod Settings" → "Mod settings".** The
