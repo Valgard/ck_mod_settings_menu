@@ -839,14 +839,12 @@ working Choice, and one of them logs a line per keypress by design.
       it from the footer hint: `ChoiceStrings` returns to `Medium`, and
       `RangeDouble` still reads the value you hand-edited it to.
 
-      **Read both rows on screen, not back out of the `.cfg`.** With General Mod
-      Config Menu installed, its menu build clears `SaveOnConfigSet` on every
-      non-CoreLib config file (roadmap MSM-36), so nothing MSM writes in that
-      session need ever reach disk — and then the planted value stays in the
-      file whether the reset respected the Info row or wrote straight over it.
-      The screen says what happened; the file may just be stale. `ChoiceStrings`
-      snapping back to `Medium` is the control that the reset ran at all, and if
-      it does not, nothing else in this check means anything.
+      **Read both rows on screen first.** The `.cfg` agrees with them now — the
+      reset saves its file explicitly (`ConfigStore.Persist`), also when General
+      Mod Config Menu has cleared CoreLib's auto-save — but the screen is the
+      faster witness. `ChoiceStrings` snapping back to `Medium` is the control
+      that the reset ran at all, and if it does not, nothing else in this check
+      means anything.
 
       This is the regression that made `IsEditable` one property instead of a
       conjunction spelled out per caller: for one commit after the ReadOnly

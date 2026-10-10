@@ -1,3 +1,5 @@
+using CoreLib.Data.Configuration;
+
 namespace ModSettingsMenu.Settings
 {
     /// <summary>
@@ -43,6 +45,7 @@ namespace ModSettingsMenu.Settings
             if (section == null)
                 return false;
             bool restartRelevantChange = false;
+            ConfigEntryBase written = null;
             foreach (var def in section.Settings)
             {
                 if (!IsInScope(def))
@@ -50,13 +53,18 @@ namespace ModSettingsMenu.Settings
                 var entry = def.Entry;
                 var before = entry.BoxedValue;
                 // CoreLib's ConfigEntry<T>.Value setter clamps to any AcceptableValue*, returns
-                // early when the value is already equal, auto-saves (SaveOnConfigSet) and raises
-                // SettingChanged — which is what drives every consumer's SettingHandle<T>.OnChanged.
-                // So nothing here has to notify, persist or de-duplicate by hand.
+                // early when the value is already equal, and raises SettingChanged — which is what
+                // drives every consumer's SettingHandle<T>.OnChanged. So nothing here has to notify
+                // or de-duplicate by hand. Persisting is the exception: see below.
                 entry.BoxedValue = entry.DefaultValue;
+                written = entry;
                 if (def.RequiresRestart && !object.Equals(before, entry.BoxedValue))
                     restartRelevantChange = true;
             }
+            // One save for the whole reset, after the loop: a section is one ConfigFile, so the last
+            // entry written reaches it. CoreLib's own per-write save hangs on SaveOnConfigSet, which
+            // another mod can switch off (ConfigStore.Persist).
+            ConfigStore.Persist(written);
             return restartRelevantChange;
         }
 

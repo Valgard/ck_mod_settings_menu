@@ -10,7 +10,7 @@ namespace ModSettingsMenu.UI
     /// RadicalMenuOption so it joins menu navigation; labelText ("Label" child) +
     /// valueText ("Value" child) auto-assign in the base Awake. Left/right (or activate)
     /// adjusts the value via the type-agnostic ConfigEntryBase.BoxedValue; CoreLib clamps
-    /// + auto-saves. Value display is per-kind. The label and a Choice's per-option text are
+    /// and ConfigStore.Persist saves. Value display is per-kind. The label and a Choice's per-option text are
     /// localized through SettingDef.Label() / ValueLabel(), which own the term chain.
     /// </summary>
     public sealed class SettingWidget : RadicalMenuOption, ISectionRow
@@ -494,6 +494,10 @@ namespace ModSettingsMenu.UI
             try
             {
                 Apply(dir, e);
+                // Saved here rather than trusted to CoreLib: its auto-save is a flag another mod can
+                // switch off (ConfigStore.Persist). Inside the try, so a failing save is the same
+                // logged failure as a failing write.
+                ConfigStore.Persist(e);
                 // A restart-required setting that actually changed marks the menu dirty; leaving the
                 // screen (ModSettingsScreen.Deactivate) then raises CK's restart prompt.
                 if (_def.RequiresRestart && !object.Equals(before, e.BoxedValue))

@@ -316,7 +316,7 @@ float r = GlowMod.Radius.Value;
 ```
 
 **Set `Value`** to change it from code; CoreLib clamps to the widget's range,
-auto-saves, and raises `OnChanged`.
+the value is saved, and `OnChanged` is raised.
 
 **`OnChanged`** is for the cases where polling isn't enough and you must *react*
 at the moment of change — rebuild a cache, inject/remove a recipe, hide a HUD:
@@ -395,8 +395,8 @@ colour = Neutral
 ```
 
 - All settings land under the `[Settings]` section.
-- Writes **auto-save immediately** — setting `handle.Value` or editing in the
-  menu.
+- Writes **are saved immediately** — setting `handle.Value` or editing in the
+  menu — even when another mod has switched CoreLib's auto-save off.
 - The file is created on first run with your declared defaults.
 - **No `System.IO` on your side.** CoreLib does all file access in its own
   trusted assembly, so your mod stays inside the RoslynCSharp sandbox — you do
@@ -1022,9 +1022,10 @@ private void Adjust(int dir)
 ```
 
 Every write goes through CoreLib, which **clamps** to the `AcceptableValue*`
-attached at bind and **auto-saves**. That's why the API never has to re-validate
-ranges — CoreLib is the single choke point. `←/→` call `OnSkimLeft/Right`;
-click/Space call `OnActivated` → `Adjust(+1)` (step forward, like CK's stepper).
+attached at bind; MSM then saves the file itself. That's why the API never has
+to re-validate ranges — CoreLib is the single choke point. `←/→` call
+`OnSkimLeft/Right`; click/Space call `OnActivated` → `Adjust(+1)` (step forward,
+like CK's stepper).
 
 ### Per-kind value display (`ValueString`)
 
@@ -1058,8 +1059,11 @@ file = new ConfigFile($"{modId}/config.cfg", saveOnInit: true, info);
   `API.ConfigFilesystem`, so MSM (and the consumer) stay sandbox-clean — no
   `skipSafetyChecks`. This is the reason the framework can persist at all from
   inside the RoslynCSharp sandbox.
-- **`saveOnInit`** writes the file with defaults on first run; `SaveOnConfigSet`
-  (CoreLib default) makes every subsequent `handle.Value = …` persist immediately.
+- **`saveOnInit`** writes the file with defaults on first run. `SaveOnConfigSet`
+  (on by default) would make every later write persist on its own, but it is a
+  public flag that another mod can clear — General Mod Config Menu does, on
+  every file but CoreLib's — so MSM saves explicitly after each write
+  (`ConfigStore.Persist`).
 
 Each `SectionBuilder.<widget>` calls `_file.Bind("Settings", key, def, desc)` →
 a `ConfigEntry`. The `desc` carries the `AcceptableValueRange`/`AcceptableValueList`

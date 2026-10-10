@@ -585,6 +585,7 @@ namespace ModSettingsMenu.Settings
             try
             {
                 entry.Value = ListTokenizer.Join(reconciled);
+                ConfigStore.Persist(entry);
             }
             catch (Exception ex)
             {

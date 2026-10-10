@@ -477,14 +477,15 @@ just to a future colour one:
   **sandbox-legal** reflection surface — HealthBars runs with
   `skipSafetyChecks: false`. It also pitch-shifts the step SFX by position, which
   is why its sliders feel responsive rather than merely fast.
-- **Write amplification — the one to act on.** MSM persists through CoreLib's
-  `SaveOnConfigSet`, so **every** `Value` write hits the file. HealthBars instead
-  sets an `_isDirty` flag and writes at most every 10 s (`AutosaveInterval`),
-  and its colour setters even compare before marking dirty. Today MSM is fine
-  (one key press = one step = one write), but drag or a halved cooldown turns
-  that into dozens of writes per gesture. So this is not a present defect — it
-  is the precondition under which the two items above create one, and it should
-  be solved *with* them, not after.
+- **Write amplification — the one to act on.** MSM saves on every write
+  (CoreLib's `SaveOnConfigSet`, or `ConfigStore.Persist` where that is off), so
+  **every** `Value` write hits the file. HealthBars instead sets an `_isDirty`
+  flag and writes at most every 10 s (`AutosaveInterval`), and its colour
+  setters even compare before marking dirty. Today MSM is fine (one key press =
+  one step = one write), but drag or a halved cooldown turns that into dozens of
+  writes per gesture. So this is not a present defect — it is the precondition
+  under which the two items above create one, and it should be solved *with*
+  them, not after.
 
 ## HealthBars as MSM's reference target
 
@@ -861,40 +862,6 @@ would mean reopening the very ordering this point calls its shape.
   `TomlTypeConverter`. Both are in use in GMCM and in MSM but were not opened in
   the decompile or in CoreLib's source.
 
-## MSM-36 — With GMCM installed, nothing MSM writes reaches the disk
-
-**Derived from code, not yet observed in game.** Found while reviewing MSM-18's
-spec against General Mod Config Menu's source (mod.io modfile `7840263`). Four
-facts, each verified; the conclusion follows from them and has not been watched
-happening.
-
-- **MSM never calls `Save()`.** Not once in the whole mod — three comments
-  mention `SaveOnConfigSet`, and all three rely on it being on.
-- **CoreLib only writes when it is on.** `ConfigFile.OnSettingChanged` ends in
-  `if (SaveOnConfigSet) Save()`, and that is the path a value change takes.
-- **GMCM turns it off in three places**, on every config file whose path does
-  not start with `CoreLib`: `ConfigSyncSystem.cs:46` when its ECS system is
-  created, and `ModConfigMenu.cs:64` and `:151` while its own menu is built. It
-  then calls `Save()` explicitly for its own writes, so it is unaffected.
-- **MSM's files are in scope.** `ConfigStore` binds `"{modId}/config.cfg"`,
-  which is not a `CoreLib` path.
-
-So once GMCM has run, every consumer setting a player changes through MSM takes
-effect in memory and is gone at the next launch. The section reset is the
-loudest case — it writes many values at once — but a single toggle is affected
-the same way.
-
-- **Open — which side gives way.** MSM calling `Save()` after each write is the
-  obvious answer and the one that does not fight another mod for a shared
-  switch; the cost is a serialize per change on a path CoreLib deliberately
-  batches. Setting `SaveOnConfigSet` back would fight GMCM, which re-clears it
-  on every menu build.
-- **To check first:** whether the loss is real in a session with both mods, and
-  whether GMCM's own `Save()` happens to cover MSM's files by accident. Neither
-  was tested; the whole point rests on reading.
-- **Not part of MSM-18**, which only turned it up while its own design was read
-  against General Mod Config Menu's source, and deliberately left it alone.
-
 ## Small fixes
 
 - **MSM-20 — Format-override toggle / misclassification confirmation for
@@ -1002,9 +969,10 @@ Three ways for MSM to own the need, to be compared before any is chosen:
 
 1. **MSM reads a contract file itself** — ideally the proxy's own format, so its
    existing consumers keep working with no change on their side. Costs a second
-   store beside the CoreLib `.cfg`, synchronised by `rev`, in a mod where MSM-36
-   is already an open persistence fault, and turns a file format into a public
-   API that has to stay stable beside the C# one.
+   store beside the CoreLib `.cfg`, synchronised by `rev`, in a mod whose one
+   persistence path already needed an explicit save to survive another mod, and
+   turns a file format into a public API that has to stay stable beside the C#
+   one.
 2. **An optional binding through `API.Reflection`.** The proxy's rationale says
    reflection forces "Script (Elevated Access)"; MSM-09 records that
    `API.Reflection` is PugMod's sandbox-legal surface and that HealthBars uses it

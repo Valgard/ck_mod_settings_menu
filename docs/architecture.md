@@ -288,12 +288,14 @@ Restores one section's settings to the defaults their owning mod declared at `Bi
 Section-scoped by design: one `ModSection` is one `ConfigFile` is one owning mod, so a reset is one
 file, one owner, one confirmable sentence.
 
-`CanReset(ModSection)` reports whether the section has anything a reset could write (gates both
-the hint bar and the input poll); `ApplyAndCheckRestart(ModSection)` writes every in-scope entry's
-`ConfigEntryBase.BoxedValue` back to its `DefaultValue` — CoreLib's own setter clamps, auto-saves,
-and raises `SettingChanged` (the same path that drives `SettingHandle<T>.OnChanged`), so nothing
-here notifies or persists by hand — and returns whether a `RequiresRestart` entry actually changed,
-so the caller can raise the restart flag without `Settings` depending on `UI`.
+`CanReset(ModSection)` reports whether the section has anything a reset could write
+(gates both the hint bar and the input poll); `ApplyAndCheckRestart(ModSection)` writes
+every in-scope entry's `ConfigEntryBase.BoxedValue` back to its `DefaultValue` —
+CoreLib's own setter clamps and raises `SettingChanged` (the same path that drives
+`SettingHandle<T>.OnChanged`), so nothing here notifies by hand; one
+`ConfigStore.Persist` after the loop saves the file — and returns whether a
+`RequiresRestart` entry actually changed, so the caller can raise the restart flag
+without `Settings` depending on `UI`.
 
 Discovered (foreign) sections are included on purpose: a reset only ever writes back the value that
 mod itself declared, so unlike the list-editing write path it can never invent or lose a value.
@@ -321,7 +323,10 @@ A `Dictionary<modId, ConfigFile>` cache. Creates one CoreLib
 `ConfigFile($"{modId}/config.cfg", saveOnInit: true, info)` per consumer. CoreLib does all
 `System.IO` in its own trusted assembly via `API.ConfigFilesystem`, so the framework (and
 consumers) stay **sandbox-clean** — no `skipSafetyChecks` (the `.asset` has `skipSafetyChecks: 0`).
-Auto-save (`SaveOnConfigSet`) is on, so every write persists immediately.
+`Persist(entry)` saves the entry's file after every write the framework performs — the widget,
+the list drill-in, the section reset, the reconciled list default, the `SettingHandle<T>.Value`
+setters — whenever CoreLib's own auto-save (`SaveOnConfigSet`) is off, which General Mod Config
+Menu does to every file but CoreLib's. The flag is left as it is found; see `CLAUDE.md`.
 
 ## `ModSettingsMenu.UI` — the rendered screen
 
@@ -383,11 +388,11 @@ to `menuOptions`.
 ### `SettingWidget : RadicalMenuOption`
 
 One class renders the five **non-list** kinds. Drives the value through the non-generic
-`ConfigEntryBase.BoxedValue` (never sees `T`), casting per `Kind`; CoreLib clamps + auto-saves.
-`←/→` → `OnSkimLeft/Right`; click/Space → `OnActivated` → `Adjust(+1)`. Per-kind `ValueString`:
-Toggle on/off term, Stepper int, Choice localized-token, Slider Steps/`Number`/`Percent`; **Info**
-is an inert read-only row (its value shows but `Adjust` is a no-op and it takes no selection
-effect).
+`ConfigEntryBase.BoxedValue` (never sees `T`), casting per `Kind`; CoreLib clamps,
+`ConfigStore.Persist` saves. `←/→` → `OnSkimLeft/Right`; click/Space → `OnActivated` →
+`Adjust(+1)`. Per-kind `ValueString`: Toggle on/off term, Stepper int, Choice
+localized-token, Slider Steps/`Number`/`Percent`; **Info** is an inert read-only row
+(its value shows but `Adjust` is a no-op and it takes no selection effect).
 
 The `Steps` `♦/♢` chain uses `♦`/`♢` escapes (pure-ASCII source; a literal diamond is
 encoding-unsafe in the Roslyn sandbox) and only renders in the `boldLarge` font atlas, so `Bind`

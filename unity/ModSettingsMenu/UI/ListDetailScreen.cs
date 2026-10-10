@@ -1022,6 +1022,8 @@ namespace ModSettingsMenu.UI
             if (joined == ListTokenizer.Join(ListTokenizer.Tokenize(Value())))
                 return false;
             _activeDef.Entry.BoxedValue = joined;
+            // CoreLib's own save hangs on a flag another mod can switch off; see ConfigStore.Persist.
+            ConfigStore.Persist(_activeDef.Entry);
             // Mirrors SettingWidget.Adjust's identical line. The flag is static and consumed by
             // ModSettingsScreen.Deactivate, since this drill-in is only ever pushed on top of it.
             // It lives HERE rather than in OnRowTextCommitted so that every path which changes the

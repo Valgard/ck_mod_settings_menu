@@ -123,7 +123,7 @@ traps, each verified in-game. Some carry fuller detail (with the code paths) in
   error, nothing in the log). Every value write therefore goes through
   `ConfigStore.Persist`, which calls `ConfigFile.Save()` when the flag is off. The flag is
   deliberately left as GMCM set it: switching it back on would fight its sync instead of
-  sidestepping it. A new write path (reset, list edit, …) must call `Persist` too.
+  sidestepping it. Any new write path must call `Persist` too.
 - **The Editor reserializes prefabs on save**, overwriting hand-authored prefab YAML
   (resets background active/z, deletes objects). Per the project rule
   (`feedback_corekeeper_prefab_edits_in_editor` memory), make prefab edits with the
