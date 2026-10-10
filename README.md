@@ -287,18 +287,20 @@ in the patch, so changing the Choice in the menu takes effect immediately.
 
 ## Behaviour & gotchas
 
-- **Call in `IMod.Init` — or `IMod.EarlyInit` for values read during world/database
-  conversion.** Every mod's `Init` (consumers included) runs before the first
-  `Update`, so registering in `Init` still has all sections in place before the menu
-  first renders (the framework pre-warms after `Init`). **But** Core Keeper runs its
-  world/database conversion — where `PugDatabasePostConverter.PostConvert` bakes
-  recipes and other object data — *after* `EarlyInit` and *before* `Init`. If your
-  setting is consumed at that bake (a bake-time `RequiresRestart` knob), register the
-  section **and** bind its handle in `EarlyInit`; binding in `Init` lets the bake read
-  the handle before it exists, silently falling back to your hardcoded default.
-  `API.ConfigFilesystem` is initialised before any mod's `EarlyInit`, so the persisted
-  value is already loadable there. Settings read live (every frame/tick, long after
-  `Init`) can stay in `Init`.
+- **Call in `IMod.Init` — or `IMod.EarlyInit` for values read during
+  world/database conversion.** Every mod's `Init` (consumers included) runs
+  before the first `Update`, so registering in `Init` still has all sections in
+  place before the menu first renders (the framework pre-warms after `Init`).
+  **But** Core Keeper runs its startup database conversion — where
+  `PugDatabasePostConverter.PostConvert` bakes recipes and other object data —
+  *after* `EarlyInit` and *before* `Init` (the world conversions come later,
+  after `Init`). If your setting is consumed at that bake (a bake-time
+  `RequiresRestart` knob), register the section **and** bind its handle in
+  `EarlyInit`; binding in `Init` lets the bake read the handle before it exists,
+  silently falling back to your hardcoded default. `API.ConfigFilesystem` is
+  initialised before any mod's `EarlyInit`, so the persisted value is already
+  loadable there. Settings read live (every frame/tick, long after `Init`) can
+  stay in `Init`.
 - **`modId` = `metadata.name`.** The term prefix and config folder both use your
   internal name, not the display name.
 - **Values are live.** Read `handle.Value` at the point of use; don't cache it at

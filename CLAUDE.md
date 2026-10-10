@@ -204,13 +204,14 @@ traps, each verified in-game. Full detail (with the code paths) lives in
   rows and the frame drift apart. The 1.3 placement rules themselves are in
   `../docs/ck/ui-framework.md`.
 - **Never rely on CoreLib's `SaveOnConfigSet` — another mod can switch it off.** General
-  Mod Config Menu's `ConfigSyncSystem.OnCreate` sets it to `false` on every
-  `ConfigFile` except CoreLib's own, ours included and already on the title screen, so
-  a write that trusts the flag lives in memory only and is gone on the next launch (no
-  error, nothing in the log). Every value write therefore goes through
-  `ConfigStore.Persist`, which calls `ConfigFile.Save()` when the flag is off. The flag is
-  deliberately left as GMCM set it: switching it back on would fight its sync instead of
-  sidestepping it. A new write path (reset, list edit, …) must call `Persist` too.
+  Mod Config Menu sets it to `false` on every `ConfigFile` except CoreLib's own, ours
+  included, at three places (`ModConfigMenu.Awake` and `RegisterFile`, already on the
+  title screen, and `ConfigSyncSystem.OnCreate` in every world), so a write that trusts
+  the flag lives in memory only and is gone on the next launch (no error, nothing in the
+  log). Every value write therefore goes through `ConfigStore.Persist`, which calls
+  `ConfigFile.Save()` when the flag is off. The flag is deliberately left as GMCM set
+  it: switching it back on would fight its sync instead of sidestepping it. A new write
+  path (reset, list edit, …) must call `Persist` too.
 - **The Editor reserializes prefabs on save**, overwriting hand-authored prefab YAML
   (resets background active/z, deletes objects). Per the project rule
   (`feedback_corekeeper_prefab_edits_in_editor` memory), make prefab edits with the
