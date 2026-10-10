@@ -3,6 +3,13 @@
 All notable changes to this mod are documented here. The topmost `## [x.y.z]`
 entry is the version published to mod.io; its body is the modfile changelog.
 
+## [1.2.2]
+
+- Settings are saved even when General Mod Config Menu is installed. That mod
+  switches off the automatic saving of every other mod's settings file, so a
+  change made in the Mod Settings screen was shown but forgotten on the next
+  launch. Every change is now written to disk explicitly.
+
 ## [1.2.1]
 
 - Fixes text disappearing all over the game after the Mod Settings screen had

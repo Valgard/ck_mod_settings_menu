@@ -7,8 +7,8 @@ namespace ModSettingsMenu.UI
     /// One menu row for any setting kind (Toggle/Slider/Stepper/Choice). Inherits
     /// RadicalMenuOption so it joins menu navigation; labelText ("Label" child) +
     /// valueText ("Value" child) auto-assign in the base Awake. Left/right (or activate)
-    /// adjusts the value via the type-agnostic ConfigEntryBase.BoxedValue; CoreLib clamps
-    /// + auto-saves. Value display is per-kind. Label is the raw key for now (Phase 5
+    /// adjusts the value via the type-agnostic ConfigEntryBase.BoxedValue; CoreLib clamps,
+    /// ConfigStore.Persist saves. Value display is per-kind. Label is the raw key for now (Phase 5
     /// swaps to Loc.T(_def.Term); Choice value likewise Loc.T(term/token) ?? token).
     /// </summary>
     public sealed class SettingWidget : RadicalMenuOption
@@ -61,7 +61,8 @@ namespace ModSettingsMenu.UI
         }
 
         // Change the value one step in `dir` (Toggle flips regardless of sign). All writes go
-        // through ConfigEntryBase.BoxedValue → CoreLib clamps to the AcceptableValue* + auto-saves.
+        // through ConfigEntryBase.BoxedValue → CoreLib clamps to the AcceptableValue*; the write is
+        // then saved explicitly, since CoreLib's auto-save can be switched off by another mod.
         private void Adjust(int dir)
         {
             if (_def?.Entry == null)
@@ -97,6 +98,7 @@ namespace ModSettingsMenu.UI
             // slider already at its bound).
             if (_def.RequiresRestart && !object.Equals(before, e.BoxedValue))
                 ModSettingsScreen.RestartPending = true;
+            ConfigStore.Persist(e);
             Refresh();
         }
 

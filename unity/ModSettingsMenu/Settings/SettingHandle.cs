@@ -8,7 +8,8 @@ namespace ModSettingsMenu.Settings
     /// stores: a CoreLib ConfigEntry&lt;T&gt; directly (Toggle/Slider/Stepper), or a
     /// string-token ConfigEntry&lt;string&gt; mapped to/from T (Choice&lt;T&gt;, whose T
     /// may be any type — the token = value.ToString()). Reading Value returns the live
-    /// value; setting it persists (CoreLib auto-saves) and raises OnChanged.
+    /// value; setting it persists (saved explicitly, see ConfigStore.Persist) and raises
+    /// OnChanged.
     /// </summary>
     public sealed class SettingHandle<T>
     {
@@ -22,7 +23,11 @@ namespace ModSettingsMenu.Settings
         internal SettingHandle(ConfigEntry<T> entry)
         {
             _get = () => entry.Value;
-            _set = v => entry.Value = v;
+            _set = v =>
+            {
+                entry.Value = v;
+                ConfigStore.Persist(entry);
+            };
             entry.SettingChanged += (s, a) => OnChanged?.Invoke(_get());
         }
 
@@ -30,14 +35,18 @@ namespace ModSettingsMenu.Settings
         internal SettingHandle(ConfigEntry<string> tokenEntry, Func<string, T> fromToken, Func<T, string> toToken)
         {
             _get = () => fromToken(tokenEntry.Value);
-            _set = v => tokenEntry.Value = toToken(v);
+            _set = v =>
+            {
+                tokenEntry.Value = toToken(v);
+                ConfigStore.Persist(tokenEntry);
+            };
             tokenEntry.SettingChanged += (s, a) => OnChanged?.Invoke(_get());
         }
 
         public T Value
         {
             get => _get();
-            set => _set(value); // CoreLib clamps to any AcceptableValue*, auto-saves, raises SettingChanged
+            set => _set(value); // CoreLib clamps to any AcceptableValue* and raises SettingChanged; _set saves
         }
     }
 }

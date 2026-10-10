@@ -153,7 +153,7 @@ public event Action<T> OnChanged;     // fires on menu edit, code set, or reload
   ```
 
 - **Set `Value`** to change it from code; CoreLib clamps to the widget's range
-  (`Slider`/`Stepper` bounds, `Choice` list), auto-saves, and raises `OnChanged`.
+  (`Slider`/`Stepper` bounds, `Choice` list), saves it, and raises `OnChanged`.
 - **`OnChanged`** is handy if you must react at the moment of change (rebuild a
   cache, re-apply a patch) rather than polling `Value`.
 
@@ -207,8 +207,9 @@ enabled = true
 power = 5
 ```
 
-All settings land under the `[Settings]` section. Writes auto-save immediately
-(setting `handle.Value` or editing in the menu). The file is created on first
+All settings land under the `[Settings]` section. Writes are saved immediately
+(setting `handle.Value` or editing in the menu), also when another mod such as
+General Mod Config Menu has switched CoreLib's auto-save off. The file is created on first
 run with the declared defaults. No `System.IO` is involved on your side —
 CoreLib does all file access in its own trusted assembly, so your mod stays
 inside the RoslynCSharp sandbox (no `skipSafetyChecks` needed).

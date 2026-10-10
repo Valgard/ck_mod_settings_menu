@@ -113,9 +113,9 @@ from `../utils/`.
   `ConfigFile($"{modId}/config.cfg", saveOnInit: true, info)` per consumer. CoreLib does
   all `System.IO` in its own trusted assembly via `API.ConfigFilesystem`, so the
   framework (and consumers) stay **sandbox-clean** — no `skipSafetyChecks` (the `.asset`
-  has `skipSafetyChecks: 0`). Auto-save (`SaveOnConfigSet`) is on, so every write
-  persists immediately — unless General Mod Config Menu is installed, which switches
-  that flag off on every file (the title screen included); see `docs/roadmap.md`.
+  has `skipSafetyChecks: 0`). `Persist(entry)` saves the entry's file after every write
+  the framework performs (`SettingWidget.Adjust`, the `SettingHandle<T>.Value` setters)
+  whenever CoreLib's own auto-save (`SaveOnConfigSet`) is off — see the gotcha below.
 
 ### `ModSettingsMenu.UI` (the rendered screen)
 
@@ -137,7 +137,7 @@ from `../utils/`.
   visible box.
 - **`SettingWidget : RadicalMenuOption`** — one class renders **all four** kinds. Drives
   the value through the non-generic `ConfigEntryBase.BoxedValue` (never sees `T`),
-  casting per `Kind`; CoreLib clamps + auto-saves. `←/→` → `OnSkimLeft/Right`;
+  casting per `Kind`; CoreLib clamps, `ConfigStore.Persist` saves. `←/→` → `OnSkimLeft/Right`;
   click/Space → `OnActivated` → `Adjust(+1)`. Per-kind `ValueString`: Toggle on/off
   term, Stepper int, Choice localized-token, Slider Steps/`Number`/`Percent`. The
   `Steps` `♦/♢` chain uses `♦`/`♢` escapes (pure-ASCII source; a literal diamond is
@@ -203,14 +203,21 @@ traps, each verified in-game. Full detail (with the code paths) lives in
   units = 384 px) is what gets drawn. Change one and you must change the other, or the
   rows and the frame drift apart. The 1.3 placement rules themselves are in
   `../docs/ck/ui-framework.md`.
+- **Never rely on CoreLib's `SaveOnConfigSet` — another mod can switch it off.** General
+  Mod Config Menu's `ConfigSyncSystem.OnCreate` sets it to `false` on every
+  `ConfigFile` except CoreLib's own, ours included and already on the title screen, so
+  a write that trusts the flag lives in memory only and is gone on the next launch (no
+  error, nothing in the log). Every value write therefore goes through
+  `ConfigStore.Persist`, which calls `ConfigFile.Save()` when the flag is off. The flag is
+  deliberately left as GMCM set it: switching it back on would fight its sync instead of
+  sidestepping it. A new write path (reset, list edit, …) must call `Persist` too.
 - **The Editor reserializes prefabs on save**, overwriting hand-authored prefab YAML
   (resets background active/z, deletes objects). Per the project rule
   (`feedback_corekeeper_prefab_edits_in_editor` memory), make prefab edits with the
   Editor **closed**, and never mutate prefab files while the user is in the Editor.
 
 `docs/roadmap.md` tracks the next widget batch (Button/Action-Row, Info,
-Separator/Label), out-of-scope items, and the open persistence bug with General Mod
-Config Menu.
+Separator/Label), out-of-scope items, and small fixes.
 
 ## macOS / CrossOver
 
@@ -233,7 +240,7 @@ opening it unregisters the install even though its files stay.
 - `Editor/ModSettingsMenu.Editor.asmdef` references the mod.io plugin DLL via
   `overrideReferences: true` + `precompiledReferences: ["modio.UnityPlugin.dll"]`.
 - The published version comes from the topmost `## [x.y.z]` entry of `CHANGELOG.md`
-  (currently **1.2.0**); bump it before publishing.
+  (currently **1.2.2**); bump it before publishing.
 - The profile logo is `unity/ModSettingsMenu/Editor/logo.png` (readable, uncompressed; min 512×288).
 - The real mod ID is **`6211950`**, in `unity/ModSettingsMenu/Editor/ModSettingsMenu_modio.asset`.
 - The mod.io listing lists **CoreLib** as a dependency (synced from the `.asset`
