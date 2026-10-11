@@ -965,27 +965,117 @@ at 1.2.1 on 2026-10-02) removes that cost without touching MSM:
 It is a pure consumer of the public API — it copies no MSM code — which is why
 it is also the first thing an API change in this framework breaks.
 
-Three ways for MSM to own the need, to be compared before any is chosen:
+### How the proxy's consumers are built
 
-1. **MSM reads a contract file itself** — ideally the proxy's own format, so its
-   existing consumers keep working with no change on their side. Costs a second
-   store beside the CoreLib `.cfg`, synchronised by `rev`, in a mod whose one
-   persistence path already needed an explicit save to survive another mod, and
-   turns a file format into a public API that has to stay stable beside the C#
-   one.
-2. **An optional binding through `API.Reflection`.** The proxy's rationale says
-   reflection forces "Script (Elevated Access)"; MSM-09 records that
-   `API.Reflection` is PugMod's sandbox-legal surface and that HealthBars uses it
-   with `skipSafetyChecks: false`. Whether it reaches far enough to find and
-   call `ModSettings` at runtime is **unmeasured**, and it is the one option
-   that would keep callbacks.
-3. **Nothing in the core** — recommend the proxy in the tutorial and keep the
-   public API it binds stable on purpose.
+On the consumer side the proxy relies on `ModSettingsDeclaration.cs`, a
+copy-paste helper each mod drops into its own sources. `For(this)` finds the
+mod's own entry in `API.ModLoader.LoadedMods`, the builder (`Toggle`, `Slider`,
+`Stepper`, `Choice`, `Hint`, `RequiresRestart`) mirrors `SectionBuilder`,
+`Publish()` merges the declaration with the file on disk and fires one callback
+per setting, and `Poll()`, called from `Update`, re-reads the file about once a
+second and fires the callbacks whose value changed after `rev` moved. The poll
+replaces what a direct consumer gets for free: a `SettingHandle` shares the
+live `ConfigEntry` with MSM, while a consumer without the reference shares
+nothing but the file.
+
+The proxy's author ships the helper in thirteen of eighteen mods (read
+2026-10-11). Those thirteen copies are six distinct versions in three families
+once the namespace is ignored — one adds `LegacyId`, one drops the serializable
+file classes. The first two write the same field set; for the third that was
+only partly checked. Triple Chests and Mannequin Expansion dropped their
+settings pages, and each now deletes its own leftover contract at startup: the
+proxy kept rendering the stale file, whose sliders changed nothing, for as long
+as the mod stayed loaded.
+
+So the proxy's model has two weaknesses MSM should not inherit: the contract is
+generated at runtime and outlives its declaration, and the code that handles it
+exists once per mod and drifts.
+
+### What the platform allows
+
+Read in the decompile on 2026-10-11, not yet measured in game:
+
+- **Detecting MSM.** `API.ModLoader.LoadedMods` holds every mod that loaded
+  successfully — a `CompileFailed` or disabled mod is not in it — and the loader
+  fills it for all mods before the first `EarlyInit`. Matching
+  `Metadata.name == "ModSettingsMenu"` is therefore safe from `EarlyInit` on,
+  and the internal name becomes an interface the moment consumers match on it.
+- **Two roots, both readable for any mod.** `API.ConfigFilesystem` is a
+  `StandaloneFilesystem` rooted at `<SavePrefix>/mods/`, shared by all mods:
+  MSM's `config.cfg` lives at `<ModId>/config.cfg` under it, and nothing stops
+  one mod reading or writing another's folder. A mod's *installed* package is a
+  different place, reached through `LoadedMod.GetFile(path)`, which refuses
+  only paths outside that mod's own directory.
+- **No change notification.** `IConfigFilesystem` has no event, and
+  `FileSystemWatcher` is `System.IO`, which the sandbox refuses. Polling stays.
+  `GetFileTime` is `File.GetLastWriteTimeUtc` on this filesystem, so a poll can
+  compare a timestamp instead of reading and parsing; `rev` remains the actual
+  criterion, since the timestamp's resolution under Wine is unmeasured.
+- **`API.Reflection` cannot reach MSM.** `Invoke`, `GetValue` and `SetValue`
+  pass every member through `InvokeChecker.CheckType` (`PugMod.Loader`), which
+  admits only assemblies whose name starts with `Pug`, `Unity`,
+  `SpriteInstancing`, `I2` or `Rewired`. A mod compiles to an assembly named
+  after `Metadata.name`, so `ModSettingsMenu` is refused. Types and members can
+  be listed, not called — an optional binding without `skipSafetyChecks` is not
+  possible, and with it the last route to callbacks for a consumer without the
+  reference is gone.
+- **`API.Config` is file-backed per key.** PugMod's own store writes one JSON
+  file per entry under `<mod>/<section>-<key>.json` and re-reads it on every
+  `IConfigEntry.Value` access. Rail Network measured two such reads a frame at
+  about 7 ms. Usable as a value channel only if read sparingly.
+- **`Conf/*.json` ships as a plain file.** `ModBuilder.BuildConf` copies every
+  `.json` under the mod's `Conf/` folder into the package unbundled. The game
+  adds each loaded mod's `Conf/` to `Config.ConfFolders` but reads only the
+  subfolders `Factions`, `Loot`, `Fishing`, `Spawn` and `Talents`; a file
+  directly in `Conf/` is left alone.
+- **`IPugModBuilderProcessor` is the SDK's build hook.** The ModBuilder runs
+  every implementation in the editor before a build and hands it the mod's
+  asset list; files it adds are built with the mod. Pugstorm's own
+  `ModBuilderCustomScenesProcessor` uses it.
+- **Every mod compiles against every mod loaded before it.** `LoadScripts`
+  passes all previously loaded mod assemblies as references. Code generated
+  identically into several mods must be `internal`, or two mods expose the same
+  type to the next one's compilation.
+
+### Direction — not decided, needs a spec
+
+Three requirements, set on 2026-10-11, rule out the proxy's shape: the contract
+lives with the mod rather than in a shared folder, it is static — shipped with
+the mod, not written at runtime — and the code that handles it is maintained in
+one place rather than copied into every mod.
+
+- **The contract ships in the package** as `Conf/ModSettingsMenu.json`, and MSM
+  reads it with `LoadedMod.GetFile`. It disappears with the mod or its update,
+  so a stale contract cannot exist, and a disabled mod is never asked.
+- **Values stay where MSM keeps them now**, in `<ModId>/config.cfg`. A consumer
+  that moves from direct integration to the contract keeps its values and its
+  readable file, with no migration.
+- **The consumer's code comes from an SDK package.** A processor generates both
+  the contract and an `internal` client from one declaration, so keys and
+  defaults are stated once. The client reads `config.cfg`, using `GetFileTime`
+  as the cheap check. Generated on every build, it is never edited by hand, so
+  the drift becomes version skew between builds rather than divergent copies;
+  the contract therefore needs a `formatVersion` MSM can tolerate going back.
+  Every Core Keeper mod is built with the SDK in practice — the loader does not
+  enforce it, so a hand-made mod can still write the contract and copy the
+  client.
+
+What this leaves open:
 
 - **What a file cannot carry.** A contract is data, so `Button(onClick)`
   (MSM-01), `Info(Func<string>)` (MSM-02) and any lock whose condition is
-  computed are out of its reach by construction. Options 1 and 3 give such
-  consumers no path, and part of MSM would stay direct-integration-only.
+  computed stay direct-integration-only. With `API.Reflection` ruled out there
+  is no route for them.
+- **MSM-19 decides what a contract consumer sees on a server.** The client reads
+  the disk, and MSM-19 keeps a server's value in memory only, so as designed
+  there a server rule never reaches a contract consumer. Settle it with MSM-19,
+  not afterwards.
+- **To check before the spec:** that a `.cs` a processor adds is compiled and
+  then removed — the cleanup compares against the asset list after
+  `BuildScripts` has taken the scripts out of it, so generated files may stay
+  behind; that `GetFile` reads `Conf/` for a mod.io install, a Workshop install
+  and a fake-ID dev build under CrossOver; and the resolution of `GetFileTime`
+  under Wine.
 - **Two patches on the same method.** The proxy ships a Harmony fix for
   `PugTextEffectMenuOption.ResetEffect` that restores `PugTextEffect.text` and
   `optionComponent` so the method body *runs*; `PugTextEffectPatch` here *skips*
@@ -993,16 +1083,21 @@ Three ways for MSM to own the need, to be compared before any is chosen:
   outcome depends on which prefix runs first. What is at stake is the selection
   effect, not glyph lifetime: the body's recycling touches `glyphJumps`, a list
   of per-glyph bounce offsets, and never the text manager's glyph pool.
-- **Open — compatibility with the proxy.** If option 1 adopts its format, the
-  proxy must stand down for mods MSM already serves; it skips a mod whose
-  `ModId` is already registered, so registration order decides. How much this
-  weighs depends on who still uses the proxy: its author intends to move his own
-  mods onto MSM directly and archive it once MSM covers the need, so what
-  remains are other authors' mods, if any.
+- **Open — the proxy's existing consumers.** The direction above does not read
+  the proxy's format, so its thirteen consumers keep needing the proxy until
+  they move. The proxy's author intends to move those mods onto MSM and archive
+  the proxy once MSM covers the need; whether MSM should also read
+  `ModSettings/*.json` for the transition, or leave that to the proxy, is to be
+  agreed with that author before the format is fixed. Where both serve one mod, the
+  proxy skips a `ModId` that is already registered, so registration order
+  decides.
 
 Opened 2026-10-02 after the proxy's author got in touch, asking whether MSM
-would take this on. Asked the same day, he agreed to the approach going into
-2.0 and offered to help work out the details.
+would take this on. Asked the same day, the author agreed to the approach going
+into 2.0 and offered to help work out the details. Revised 2026-10-11 with the
+platform findings and the direction above; the earlier comparison of three
+options lost its reflection option to `InvokeChecker`, and its file option
+became the direction.
 
 ## MSM-39 — The two widgets do not share the lock cycle
 
