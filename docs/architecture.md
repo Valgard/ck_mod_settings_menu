@@ -417,6 +417,24 @@ follow the row's text colour. Read-only — the classification already happened 
 `ForeignConfigDiscovery`, so there is no per-row toggle. Implements `ISectionRow`, same as
 `SettingWidget`.
 
+### What the two row classes share — `EntryWatch` and `RowLockPaint`
+
+The two rows share no base beyond `RadicalMenuOption`, so what they have in common is held by
+composition, one object per row:
+
+- **`EntryWatch`** subscribes the row to its entry's `ConfigFile.SettingChanged` and handles an
+  outside write: skip a row on an inactive screen, refresh, re-measure, log a failure against
+  the row's owner, and end the subscription of a row that was destroyed without its `OnDestroy`.
+  The row supplies its `Refresh` and its height.
+- **`RowLockPaint`** paints a withheld row and hands back exactly what it overwrote. It is the
+  only place a locked paint is applied, so it is also the only place that checks the capture can
+  be restored — a refused paint logs once per row.
+
+What differs between the rows stays in them, deliberately visible: when the texts are captured,
+whether the label's effects are silenced as well, the refusal warning, and what follows a paint
+or a release. `RowLockPaint`'s constructor documents why a list row silences its label's effects
+and a settings row must not.
+
 ### `ListDetailScreen : RadicalMenu, IScrollable`
 
 Plus **`ListDetailBox`** — `title`, `itemContainer`, `itemTemplate`, `addRow` — and

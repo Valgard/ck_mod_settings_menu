@@ -1985,14 +1985,15 @@ effect array (`base.Awake` fills it afterwards), so the failure appears when a l
 *lifts* mid-open, not at first render: the row's selection colours stop working. That
 transition needs a live permission change and belongs to Task 5.
 
-**`PreWarm` capture, reviewed rather than walked.** `PreWarm` builds rows at load, where
-no player exists, so every scoped row is locked and a capture there records the locked
-state as "original". It cannot leak. The capture lives in widget instance fields
-(`_labelMemo`, `_valueMemo`, `_origMenuOptionEffects` and their kin in `SettingWidget`
-and `ListWidget`); `Populate` instantiates every row from the inactive templates, destroys
-all old rows before building new ones, and so discards each capture with its row. The
-only statics added are `SettingWidget.LockedSelectedColor` (immutable) and a stateless
-helper. The templates themselves are never bound, so they are never painted.
+**`PreWarm` capture, reviewed rather than walked.** `PreWarm` builds rows at
+load, where no player exists, so every scoped row is locked and a capture there
+records the locked state as "original". It cannot leak. The capture lives in
+per-row instance state (each widget's own `RowLockPaint` since MSM-39, widget
+fields before); `Populate` instantiates every row from the inactive templates,
+destroys all old rows before building new ones, and so discards each capture
+with its row. The only statics added are the locked colour (immutable, now on
+`RowLockPaint`) and a stateless helper. The templates themselves are never
+bound, so they are never painted.
 
 **Expected result:** the red and the lighter red appear on exactly the withheld rows,
 and `ServerInfo`, `ViewOnly` rows and every editable row look as they did.
@@ -2481,15 +2482,16 @@ Not walkable, and therefore unverified by this walk:
   `WriteValueFromRows` writes without re-checking `_editing`, so an editable
   drill-in that gets locked mid-session stays editable and its next write goes
   through. A known gap, left as it is.
-- *That a destroyed row stops listening.* The handler that a destroyed row leaves behind
-  ends itself silently (`this == null`, then `Stop()`), and a second subscription on a live
-  row only renders twice. Neither leaves a log line or a visible difference, so a walk that
-  opens and closes the screen repeatedly passes whether or not the unsubscribe works. The
+- *That a destroyed row stops listening.* The handler that a destroyed row
+  leaves behind ends itself silently (`EntryWatch` finds the row destroyed, then
+  `Stop()`s), and a second subscription on a live row only renders twice.
+  Neither leaves a log line or a visible difference, so a walk that opens and
+  closes the screen repeatedly passes whether or not the unsubscribe works. The
   lifetime handling rests on reading the code.
 - *That a **list** row is re-measured after an outside write changes its
   height.* Step 3 covers the `SettingWidget` rows, which are the ones
   `SettingRowHeightPx` sizes. A list row takes the other branch of the same
-  function, from `ListWidget.OnEntryChanged` with the preview's height, and no
+  function, from `EntryWatch` with the preview's height, and no
   fixture changes a list's preview height from outside: the trigger writes a
   Choice. That branch rests on reading the code.
 - *That a row on the inactive screen is left alone.* While the `ServerList`
