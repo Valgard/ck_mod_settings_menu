@@ -290,8 +290,8 @@ namespace ModSettingsMenu.UI
                 foreach (var text in old.GetComponentsInChildren<PugText>(includeInactive: true))
                     text.Clear();
                 // Stop each row's watch here too, before the detach. Destroy is deferred, so until end of
-                // frame the detached root is still active and a live object: neither of OnEntryChanged's
-                // guards (activeInHierarchy, this == null) would stop a config write arriving in that
+                // frame the detached root is still active and a live object: neither of EntryWatch's
+                // guards (activeInHierarchy, a destroyed row) would stop a config write arriving in that
                 // window from re-rendering the row, and the glyphs it took would be stranded by the
                 // pending Destroy. Stop() is idempotent, so the later OnDestroy stays harmless.
                 foreach (var row in old.GetComponentsInChildren<ISectionRow>(includeInactive: true))
@@ -425,7 +425,7 @@ namespace ModSettingsMenu.UI
         // Both columns, because the value is whatever a foreign mod stored and may wrap (see Populate).
         internal static int SettingRowHeightPx(SettingWidget widget) => Mathf.Max(RowHeightPx(widget.labelText), RowHeightPx(widget.valueText));
 
-        // A row's text changed after Populate sized it (SettingWidget/ListWidget.OnEntryChanged), so its
+        // A row's text changed after Populate sized it (EntryWatch, after an outside write), so its
         // height may no longer fit — and a row taller than its slot overhangs the one below. Re-measuring
         // is a comparison, and the layout runs only when the height actually moved: that is the narrow
         // path (this row's section, then the stack of sections), not RenderContent, which would also

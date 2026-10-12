@@ -18,7 +18,7 @@ namespace ModSettingsMenu.UI
         private SettingDef _def;
         private ModSection _section;
         private ListWidgetBox _box;
-        private SettingWidget.EntryWatch _watch;
+        private EntryWatch _watch;
 
         // What the row looked like before MSM first painted it locked. Per-widget fields: Populate
         // destroys and rebuilds every row, so a capture cannot outlive the row it describes.
@@ -45,37 +45,11 @@ namespace ModSettingsMenu.UI
             _section = section;
             _box = GetComponent<ListWidgetBox>();
             if (_watch == null)
-                _watch = new SettingWidget.EntryWatch(OnEntryChanged);
-            _watch.Watch(def?.Entry);
+                // Measured from the preview alone, because it is the one text of this row that can wrap
+                // (see Preview); a settings row takes the wider of its two columns instead.
+                _watch = new EntryWatch(this, Refresh, () => ModSettingsScreen.RowHeightPx(PreviewHeight()));
+            _watch.Watch(def, section);
             Render();
-        }
-
-        // See SettingWidget.OnEntryChanged: the same four decisions — Refresh() is the whole cycle
-        // including the drill tint and the lock appearance, a row on an inactive screen is left for
-        // the rebuild on return, a throwing render is logged against this row, and the height is
-        // re-measured. Only the last one differs, and only in where the height comes from: the
-        // preview, which can still wrap (see Preview), rather than the wider of the two text columns.
-        private void OnEntryChanged()
-        {
-            if (this == null)
-            {
-                _watch.Stop();
-                return;
-            }
-            try
-            {
-                if (gameObject.activeInHierarchy)
-                {
-                    Refresh();
-                    GetComponentInParent<ModSettingsScreen>()?.RemeasureRow(gameObject, ModSettingsScreen.RowHeightPx(PreviewHeight()));
-                }
-            }
-            catch (Exception e)
-            {
-                // The owner, not the key alone: on the discovery path a key is a foreign mod's bare
-                // field name, and the fixture set alone has several that repeat across files.
-                Debug.LogError($"[ModSettingsMenu] refreshing '{_section?.ModId}/{_def?.Key}' after an outside change failed: {e}");
-            }
         }
 
         public void StopWatching() => _watch?.Stop();
