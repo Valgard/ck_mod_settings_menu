@@ -551,34 +551,47 @@ namespace ModSettingsMenu.UI
         // The three inputs every lock decision rests on (spec § 0, § 4.7), kept apart rather than folded
         // into "is anything locked": Server locks on guestMode and Admin on adminPrivileges, so one
         // derived answer would not tell which of them moved. guestMode is the PLAYER's, which is the
-        // world flag AND adminPrivileges < 1 — the very value ConfigScope.Changeable() reads.
-        private bool _seenPlayer;
-        private bool _seenGuestMode;
-        private int _seenAdminPrivileges;
-
-        private static void ReadPermissions(out bool player, out bool guestMode, out int adminPrivileges)
+        // world flag AND adminPrivileges < 1 — the very value ConfigScope.Changeable() reads. Kept apart
+        // in one value rather than read through three out parameters, two of them adjacent bools that a
+        // call site could transpose without the compiler noticing.
+        private readonly struct Permissions
         {
-            var pc = Manager.main == null ? null : Manager.main.player;
-            player = pc != null;
-            guestMode = player && pc.guestMode;
-            adminPrivileges = player ? pc.adminPrivileges : 0;
+            public readonly bool Player;
+            public readonly bool GuestMode;
+            public readonly int AdminPrivileges;
+
+            private Permissions(bool player, bool guestMode, int adminPrivileges)
+            {
+                Player = player;
+                GuestMode = guestMode;
+                AdminPrivileges = adminPrivileges;
+            }
+
+            public static Permissions Read()
+            {
+                var pc = Manager.main == null ? null : Manager.main.player;
+                bool player = pc != null;
+                return new Permissions(player, player && pc.guestMode, player ? pc.adminPrivileges : 0);
+            }
+
+            public bool SameAs(Permissions other) => Player == other.Player && GuestMode == other.GuestMode && AdminPrivileges == other.AdminPrivileges;
         }
 
-        private void SnapshotPermissions() => ReadPermissions(out _seenPlayer, out _seenGuestMode, out _seenAdminPrivileges);
+        private Permissions _seen;
+
+        private void SnapshotPermissions() => _seen = Permissions.Read();
 
         // No event announces a change to either value (both ride a NetCode snapshot, spec § 4.7), so
         // this compares them with last frame's: three reads and no allocation on a quiet frame.
         private void PollPermissions()
         {
-            ReadPermissions(out bool player, out bool guestMode, out int adminPrivileges);
-            if (player == _seenPlayer && guestMode == _seenGuestMode && adminPrivileges == _seenAdminPrivileges)
+            var now = Permissions.Read();
+            if (now.SameAs(_seen))
                 return;
-            _seenPlayer = player;
-            _seenGuestMode = guestMode;
-            _seenAdminPrivileges = adminPrivileges;
+            _seen = now;
             if (DevFlags.Is("TestFixtures"))
                 Debug.Log(
-                    $"[ModSettingsMenu] permissions changed under the open screen: player={player} guestMode={guestMode} adminPrivileges={adminPrivileges}"
+                    $"[ModSettingsMenu] permissions changed under the open screen: player={now.Player} guestMode={now.GuestMode} adminPrivileges={now.AdminPrivileges}"
                 );
             FollowPermissionChange();
         }
