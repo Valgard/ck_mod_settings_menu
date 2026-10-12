@@ -1050,49 +1050,42 @@ namespace ModSettingsMenu
         private const string PermissionTriggerPath = "ModSettingsMenu/permission-trigger";
         private static bool _permissionTriggerBroken;
 
-        private static void PollPermissionTrigger()
-        {
-            if (_permissionTriggerBroken)
-                return;
-            try
-            {
-                if (!API.ConfigFilesystem.FileExists(PermissionTriggerPath))
-                    return;
+        private static void PollPermissionTrigger() =>
+            PollTrigger(
+                PermissionTriggerPath,
+                "permission",
+                ref _permissionTriggerBroken,
                 // Not ready (title screen, no ECS yet): leave the file where it is and say nothing, so a
                 // trigger written early is still there when the world is.
-                var player = Manager.main == null ? null : Manager.main.player;
-                var world = Manager.ecs == null ? null : Manager.ecs.ClientWorld;
-                if (player == null || world == null || !world.IsCreated || Manager.networking == null)
-                    return;
-                var token = System.Text.Encoding.UTF8.GetString(API.ConfigFilesystem.Read(PermissionTriggerPath)).Trim().ToLowerInvariant();
-                if (token.Length == 0)
-                    return; // caught mid-write: the content has not landed yet
-                API.ConfigFilesystem.Delete(PermissionTriggerPath);
-                switch (token)
+                ready: () =>
                 {
-                    case "revoke-admin":
-                        Manager.networking.RemoveAdmin(player, world);
-                        break;
-                    case "guest-on":
-                        Manager.networking.SetGuestMode(true, world);
-                        break;
-                    case "guest-off":
-                        Manager.networking.SetGuestMode(false, world);
-                        break;
-                    default:
-                        Debug.LogWarning($"[ModSettingsMenu] permission trigger: unknown token '{token}' (revoke-admin | guest-on | guest-off).");
-                        return;
+                    var world = Manager.ecs == null ? null : Manager.ecs.ClientWorld;
+                    return Manager.main != null && Manager.main.player != null && world != null && world.IsCreated && Manager.networking != null;
+                },
+                // Reads what ready() checked a moment earlier in the same call, so the two must keep
+                // checking and reading the same things.
+                dispatch: token =>
+                {
+                    var player = Manager.main.player;
+                    var world = Manager.ecs.ClientWorld;
+                    switch (token)
+                    {
+                        case "revoke-admin":
+                            Manager.networking.RemoveAdmin(player, world);
+                            break;
+                        case "guest-on":
+                            Manager.networking.SetGuestMode(true, world);
+                            break;
+                        case "guest-off":
+                            Manager.networking.SetGuestMode(false, world);
+                            break;
+                        default:
+                            Debug.LogWarning($"[ModSettingsMenu] permission trigger: unknown token '{token}' (revoke-admin | guest-on | guest-off).");
+                            return;
+                    }
+                    Debug.Log($"[ModSettingsMenu] permission trigger: sent '{token}'.");
                 }
-                Debug.Log($"[ModSettingsMenu] permission trigger: sent '{token}'.");
-            }
-            catch (System.Exception ex)
-            {
-                // Stop for the session rather than retry: a file that cannot be read or deleted would
-                // otherwise resend its RPC every frame.
-                _permissionTriggerBroken = true;
-                Debug.LogWarning($"[ModSettingsMenu] permission trigger disabled for this session: {ex.Message}");
-            }
-        }
+            );
 
         // MSM-10 task 6, drivable from outside the game for the reason the permission trigger is: the
         // row has to be changed by something other than itself while its screen stays open. Same
@@ -1105,41 +1098,62 @@ namespace ModSettingsMenu
 
         private static void PollRemeasureTrigger()
         {
-            if (_remeasureTriggerBroken || _remeasureEntry == null)
+            if (_remeasureEntry == null)
+                return;
+            PollTrigger(
+                RemeasureTriggerPath,
+                "remeasure",
+                ref _remeasureTriggerBroken,
+                ready: () => true,
+                dispatch: token =>
+                {
+                    string next;
+                    switch (token)
+                    {
+                        case "short":
+                            next = RemeasureShort;
+                            break;
+                        case "long":
+                            next = RemeasureLong;
+                            break;
+                        case "toggle":
+                            next = _remeasureEntry.Value == RemeasureShort ? RemeasureLong : RemeasureShort;
+                            break;
+                        default:
+                            Debug.LogWarning($"[ModSettingsMenu] remeasure trigger: unknown token '{token}' (short | long | toggle).");
+                            return;
+                    }
+                    _remeasureEntry.Value = next;
+                    Debug.Log($"[ModSettingsMenu] remeasure trigger: wrote the {(next == RemeasureShort ? "short" : "long")} value for '{token}'.");
+                }
+            );
+        }
+
+        // The shell both triggers share: one token in a file, read, acted on and deleted. A file that is
+        // not ready to act on is left where it is, an empty one is left for its content to land, and the
+        // token is consumed BEFORE dispatch, so a dispatch that throws cannot run again on the same file.
+        // Any failure stops that trigger for the session rather than retrying: a file that cannot be read
+        // or deleted would otherwise fail, and log, again every frame.
+        private static void PollTrigger(string path, string name, ref bool broken, System.Func<bool> ready, System.Action<string> dispatch)
+        {
+            if (broken)
                 return;
             try
             {
-                if (!API.ConfigFilesystem.FileExists(RemeasureTriggerPath))
+                if (!API.ConfigFilesystem.FileExists(path))
                     return;
-                var token = System.Text.Encoding.UTF8.GetString(API.ConfigFilesystem.Read(RemeasureTriggerPath)).Trim().ToLowerInvariant();
+                if (!ready())
+                    return;
+                var token = System.Text.Encoding.UTF8.GetString(API.ConfigFilesystem.Read(path)).Trim().ToLowerInvariant();
                 if (token.Length == 0)
                     return; // caught mid-write: the content has not landed yet
-                API.ConfigFilesystem.Delete(RemeasureTriggerPath);
-                string next;
-                switch (token)
-                {
-                    case "short":
-                        next = RemeasureShort;
-                        break;
-                    case "long":
-                        next = RemeasureLong;
-                        break;
-                    case "toggle":
-                        next = _remeasureEntry.Value == RemeasureShort ? RemeasureLong : RemeasureShort;
-                        break;
-                    default:
-                        Debug.LogWarning($"[ModSettingsMenu] remeasure trigger: unknown token '{token}' (short | long | toggle).");
-                        return;
-                }
-                _remeasureEntry.Value = next;
-                Debug.Log($"[ModSettingsMenu] remeasure trigger: wrote the {(next == RemeasureShort ? "short" : "long")} value for '{token}'.");
+                API.ConfigFilesystem.Delete(path);
+                dispatch(token);
             }
             catch (System.Exception ex)
             {
-                // Stop for the session rather than retry, as the permission trigger does: a file that
-                // cannot be read or deleted would otherwise write every frame.
-                _remeasureTriggerBroken = true;
-                Debug.LogWarning($"[ModSettingsMenu] remeasure trigger disabled for this session: {ex.Message}");
+                broken = true;
+                Debug.LogWarning($"[ModSettingsMenu] {name} trigger disabled for this session: {ex.Message}");
             }
         }
 
