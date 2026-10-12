@@ -22,84 +22,15 @@ namespace ModSettingsMenu.UI
         private const char StepActive = '\u2666';
         private const char StepInactive = '\u2662';
 
-        /// <summary>What a withheld row's text looked like before MSM painted it, so lifting the lock
-        /// can hand back the row it found rather than a guess at it.
-        ///
-        /// Invariant, and the one thing both users owe this type: a text may be painted only if its
-        /// memo is <see cref="Restorable"/>. The check therefore sits at the PAINT, not at the capture
-        /// — a precondition guarded only where the memo is taken would let a row be painted that can
-        /// never be handed back, since painting repeats and the capture need not. Callers refuse to
-        /// paint rather than retry the capture, so "painted" and "restorable" cannot come apart. A
-        /// missing text is restorable: there is nothing to paint and nothing to give back.
-        ///
-        /// How often a memo is taken is each user's own business, and the two differ.
-        /// <see cref="SettingWidget.CapturePaint"/> is one-shot on <c>_paintCaptured</c>, because it
-        /// also captures the value effects' enabled states and must hand back the prefab's.
-        /// <see cref="ListWidget"/> captures while <c>!_lockPainted</c> instead, so it re-takes the memo
-        /// on every unpainted call. Same guarantee either way — an unpainted row's texts are whatever
-        /// the last render left, so a re-capture reads the same state a one-shot one kept.</summary>
-        internal struct TextPaintMemo
-        {
-            private Color _color;
-            private bool _dontResetEffectsOnRender;
-            private bool _present;
-
-            public bool Restorable { get; private set; }
-
-            public static TextPaintMemo Of(PugText t) =>
-                t == null
-                    ? new TextPaintMemo { Restorable = true }
-                    : new TextPaintMemo
-                    {
-                        _color = t.style != null ? t.style.color : default,
-                        _dontResetEffectsOnRender = t.dontResetEffectsOnRender,
-                        _present = true,
-                        Restorable = t.style != null,
-                    };
-
-            public void RestoreTo(PugText t)
-            {
-                if (t == null || !_present || !Restorable)
-                    return;
-                t.dontResetEffectsOnRender = _dontResetEffectsOnRender;
-                t.style.color = _color;
-                t.SetTempColor(_color);
-            }
-        }
-
-        /// <summary>The selected tone of a locked row: CK's selection factor applied channel-wise to
-        /// UNSELECTABLE_TEXT_COLOR, so it reads as a lighter red rather than as selection blue
-        /// (spec § 4.4 gives the derivation).</summary>
-        internal static readonly Color LockedSelectedColor = new Color(0.642f, 0.263f, 0.277f, 1f);
-
-        /// <summary>The one write a withheld row's text takes, shared with ListWidget: stop CK's render
-        /// path from repainting it (dontResetEffectsOnRender), then set the base colour a render would
-        /// use and the live glyphs, which a render does not run for.</summary>
-        internal static void PaintLocked(PugText t, Color c)
-        {
-            if (t == null || t.style == null)
-                return;
-            t.dontResetEffectsOnRender = true;
-            t.style.color = c;
-            t.SetTempColor(c);
-        }
-
         private SettingDef _def;
         private ModSection _section;
         private EntryWatch _watch;
 
-        // What this row looked like before MSM first touched it. Per-widget fields on purpose: Populate
-        // destroys and rebuilds every row, so nothing here can outlive the row it describes — PreWarm's
-        // load-time rows, where every scoped row is locked, are discarded with the rest.
-        private bool _paintCaptured;
-        private TextPaintMemo _labelMemo;
-        private TextPaintMemo _valueMemo;
-        private PugTextEffect[] _valueEffects;
-        private bool[] _valueEffectsEnabled;
-        private bool _effectsCaptured;
-        private PugTextEffectMenuOption[] _origMenuOptionEffects;
-        private bool _lockPainted; // we hold a mutation that has to be handed back when the lock lifts
-        private bool _paintRefusalWarned; // latched: ApplyLockAppearance is reached per selection change
+        // What this row looked like before MSM first touched it, and the paint over it. Created on first
+        // use because a field initializer cannot hand out lambdas over this row's own fields; the texts
+        // are read at each call, not at construction. The label's effects are left running — see RowLockPaint's constructor for why.
+        private RowLockPaint _paint;
+        private RowLockPaint Paint => _paint ?? (_paint = new RowLockPaint(() => labelText, () => valueText, silenceFirstTextEffects: false));
 
         public ModSection Section => _section;
 
@@ -168,19 +99,12 @@ namespace ModSettingsMenu.UI
         private void MakeValueReadOnly()
         {
             CapturePaint();
-            DisableValueEffects();
+            // Both value effects off, so the colour transition and the pop-in never animate. The prior
+            // state is in the capture just taken, which is what ReleaseLockAppearance hands back.
+            Paint.DisableEffects();
             valueText.dontResetEffectsOnRender = true;
             if (valueText.style != null)
                 valueText.style.color = PugTextEffectMenuOption.UNSELECTED_TEXT_COLOR;
-        }
-
-        // Both value effects off, so the colour transition and the pop-in never animate. The prior state
-        // is in _valueEffectsEnabled (CapturePaint runs first at both call sites), which is what
-        // ReleaseLockAppearance hands back.
-        private void DisableValueEffects()
-        {
-            foreach (var fx in valueText.GetComponents<PugTextEffect>())
-                fx.enabled = false;
         }
 
         // RadicalMenuOption.OnSelected/OnDeselected recolour every menuOptionEffect DIRECTLY (they
@@ -191,30 +115,19 @@ namespace ModSettingsMenu.UI
         {
             if (_def == null || _def.IsEditable || menuOptionEffects == null)
                 return;
-            CaptureEffects(); // before the filter, so lifting a lock never hands back a thinned array
+            Paint.CaptureMenuEffects(menuOptionEffects); // before the filter, so lifting a lock never hands back a thinned array
             menuOptionEffects = System.Array.FindAll(menuOptionEffects, fx => fx != null && !fx.isValueText);
         }
 
-        // Record what the row looked like before MSM's first write to it. Called at the point of the
-        // first mutation, never from Bind: base.Awake fills menuOptionEffects AFTER Bind runs, so a
-        // capture there would save a null and the restore would wipe the row's effects.
-        private void CaptureEffects()
-        {
-            if (_effectsCaptured || menuOptionEffects == null)
-                return;
-            _origMenuOptionEffects = menuOptionEffects;
-            _effectsCaptured = true;
-        }
-
+        // This row's capture policy: one-shot until the next release, because MakeValueReadOnly changes
+        // the value's effects and colour OUTSIDE a lock, and a re-capture after that would take the
+        // read-only state for the prefab's. Without a value text nothing is captured, so the default
+        // memos make a later paint refuse rather than paint a half row.
         private void CapturePaint()
         {
-            if (_paintCaptured || valueText == null)
+            if (Paint.TextsCaptured || valueText == null)
                 return;
-            _labelMemo = TextPaintMemo.Of(labelText);
-            _valueMemo = TextPaintMemo.Of(valueText);
-            _valueEffects = valueText.GetComponents<PugTextEffect>();
-            _valueEffectsEnabled = System.Array.ConvertAll(_valueEffects, fx => fx.enabled);
-            _paintCaptured = true;
+            Paint.CaptureTexts();
         }
 
         /// <summary>Paints the row for its current lock state, or hands back what it painted. Idempotent;
@@ -237,43 +150,28 @@ namespace ModSettingsMenu.UI
                 return;
             }
             CapturePaint();
-            if (!_labelMemo.Restorable || !_valueMemo.Restorable)
-            {
-                // Refuse to paint what cannot be handed back (see TextPaintMemo) — and say so, since
-                // this is the one branch in this widget where a withheld row comes out unmarked.
-                // Restorable is false exactly when a PugText is present with no style, so the
-                // condition reports a prefab that is not wired as expected, which is what the
-                // template guards in ModSettingsScreen warn about.
-                //
-                // How such a row then LOOKS is deliberately not predicted here, because CK's own
-                // colouring reaches the very same field: PugText.SetTempColor dereferences style
-                // (Pug.Other:368127), and that is the path this text's own PugTextEffectMenuOption
-                // takes on every render (ResetEffect → EndEffectImmediate, :366078 → :366114). An
-                // unstyled text is therefore a fault for the game as much as for MSM. What is certain
-                // is the part worth logging: nothing MSM owns marks this row as withheld. Latched per
-                // row, because this is reached on every selection change.
-                if (!_paintRefusalWarned)
-                {
-                    _paintRefusalWarned = true;
-                    Debug.LogWarning(
-                        $"[ModSettingsMenu] '{_section?.ModId}/{_def.Key}' is withheld but nothing marks it as such — its label or value PugText has no style, so the paint is refused rather than left unrestorable. Check the prefab wiring."
-                    );
-                }
-                return;
-            }
-            CaptureEffects();
-            if (_effectsCaptured)
-                menuOptionEffects = new PugTextEffectMenuOption[0];
             // A row built editable still has its value effects running, because only a row bound
-            // read-only went through MakeValueReadOnly. The live poll is what relocks such a row, and
-            // an enabled effect would tick over the colour painted below. Captured first, so the
-            // release gives back exactly the states the prefab had (JuicyAppear stays disabled).
-            if (valueText != null)
-                DisableValueEffects();
-            var c = selected ? LockedSelectedColor : PugTextEffectMenuOption.UNSELECTABLE_TEXT_COLOR;
-            PaintLocked(labelText, c);
-            PaintLocked(valueText, c);
-            _lockPainted = true;
+            // read-only went through MakeValueReadOnly. The live poll is what relocks such a row, and an
+            // enabled effect would tick over the colour painted here, so TryPaint switches them off —
+            // from the capture above, so the release gives back exactly the states the prefab had
+            // (JuicyAppear stays disabled).
+            //
+            // A refused paint leaves a withheld row unmarked. It is refused when a PugText is present with
+            // no style, and when there is no value text at all, so nothing was captured (see
+            // CapturePaint); the warning names only the first, and both report a prefab that is not wired
+            // as expected, which is what the template guards in ModSettingsScreen warn about. How such a
+            // row then LOOKS is deliberately not predicted here, because CK's own colouring reaches the
+            // very same field: PugText.SetTempColor dereferences style (Pug.Other:368127), and that is
+            // the path this text's own PugTextEffectMenuOption takes on every render (ResetEffect →
+            // EndEffectImmediate, :366078 → :366114). An unstyled text is therefore a fault for the game
+            // as much as for MSM. What is certain is the part worth logging: nothing MSM owns marks this
+            // row as withheld.
+            Paint.TryPaint(
+                ref menuOptionEffects,
+                selected,
+                () =>
+                    $"[ModSettingsMenu] '{_section?.ModId}/{_def.Key}' is withheld but nothing marks it as such — its label or value PugText has no style, so the paint is refused rather than left unrestorable. Check the prefab wiring."
+            );
         }
 
         // The lock lifted under a row that was painted: give back what MSM overwrote, then re-impose the
@@ -281,19 +179,8 @@ namespace ModSettingsMenu.UI
         // render's ResetEffects (no longer suppressed) is what colours the row.
         private void ReleaseLockAppearance()
         {
-            if (!_lockPainted)
+            if (!Paint.Release(ref menuOptionEffects))
                 return;
-            _lockPainted = false;
-            if (_effectsCaptured)
-                menuOptionEffects = _origMenuOptionEffects;
-            _effectsCaptured = false;
-            _labelMemo.RestoreTo(labelText);
-            _valueMemo.RestoreTo(valueText);
-            if (_valueEffects != null)
-                for (int i = 0; i < _valueEffects.Length; i++)
-                    if (_valueEffects[i] != null)
-                        _valueEffects[i].enabled = _valueEffectsEnabled[i];
-            _paintCaptured = false;
             if (!_def.IsEditable && valueText != null)
                 MakeValueReadOnly();
         }
