@@ -2070,6 +2070,15 @@ the game's own buttons, because reaching those means leaving the settings screen
 exactly what the criteria forbid. Steps 0 to 2, 2b and 2c run from one account; steps 3
 to 6 need a second one holding admin rights, for the reason the next paragraph gives.
 
+**Precondition: the walking account must hold `privileges: 1`, not `2`.** The first
+player to join a server with an empty admin list is entered at `2`, and
+`RemoveAdminInternal` only matches entries at `1` or below — so against a fresh server
+`revoke-admin` is accepted, logged on the client as sent, and changes nothing: the
+server log gains no `Remove admin index` line, and the client no `permissions changed`
+line. Check `DedicatedServer/Admins.json` under `LocalLow/Pugstorm/Core Keeper/` first;
+with the server **stopped**, lower the entry to `1` (`docs/ck/multiplayer-and-server.md`
+has the levels).
+
 **The trigger.** A `TestFixtures` build polls a file and sends the RPC the game's own
 buttons would send. The file lives at
 
