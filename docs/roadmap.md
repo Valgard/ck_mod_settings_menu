@@ -837,18 +837,11 @@ toggle it — and `Admin` entries are not subject to the `adminOnly` branch at a
 which tests `accessLevel == Server`. Even with the switch set, the switch stays
 reachable for admins.
 
-**Unresolved — an operator can only tighten what an author already offered.**
-MSM-18 settles the default access level as `Client`, so a setting whose author
-said nothing never syncs and never locks, and `AdminOnly` does not reach it: the
-switch governs *who* may change a server-scoped value, not *which* values are
-server-scoped. Nothing in this design lets an operator claim one an author left
-alone. That is the honest reading of "the mod author decides what their setting
-means", and it is also a server on which a house rule cannot be enforced because
-one mod did not opt in — an operator who installs a mod on their own machine may
-reasonably expect a say in it. Decide it before the transport is built rather
-than after: an operator-side override would change what travels and who wins, not
-merely who is permitted to ask, and retrofitting it onto a finished send path
-would mean reopening the very ordering this point calls its shape.
+**`AdminOnly` does not reach a setting its author left at `Client`**: the switch
+governs *who* may change a server-scoped value, not *which* values are
+server-scoped. Whether an operator can claim such a setting was open here and
+had to be settled before the transport, because it changes what travels and who
+wins; it is settled now, in [Operator pins](#operator-pins--the-author-permits-the-operator-chooses) below.
 
 - **Effort:** small once the transport stands, and "small" here is not an
   estimate: one `Bind(..., ConfigAccessLevel.Admin)` in MSM's own section plus one
@@ -861,6 +854,106 @@ would mean reopening the very ordering this point calls its shape.
   and, for serialising values, `Get`/`SetSerializedValue` with
   `TomlTypeConverter`. Both are in use in GMCM and in MSM but were not opened in
   the decompile or in CoreLib's source.
+
+### Operator pins — the author permits, the operator chooses
+
+Decided 2026-10-14. MSM is a framework, so it sets no policy of its own here:
+the author of a mod declares which of its settings an operator may pin to a fixed
+value, the operator decides which of those actually are, and MSM carries both.
+
+**The author declares it through the same cascade as the restart flag.**
+`operatorLockable` is a nullable parameter on `Section`, `Group` and every widget,
+the innermost statement wins, and an `.OperatorLockable()` modifier follows a
+widget — the shape `requiresRestart` already has.
+
+| Resolved `access` | unstated | `true` | `false` |
+|---|---|---|---|
+| `Client` | not pinnable | pinnable | not pinnable |
+| `Server` / `Admin` | pinnable | pinnable | not pinnable |
+
+- **The default follows the scope because the risk does.** A pinned `Server`
+  value always takes effect, since the server reads it itself. A pinned `Client`
+  value takes effect only if the consumer reads `handle.Value` live and copes
+  with it changing mid-session — which only its author knows. Opting a `Client`
+  value in is that promise, and the tutorial has to say so.
+- **A discovered foreign entry cannot declare anything**, so the default alone
+  applies: its `Server` and `Admin` entries are pinnable.
+- **`operatorLockable` together with `requiresRestart` is refused on every
+  scope**, since a pinned value arriving mid-session cannot take effect before a
+  restart. The setting stays in the menu and is not pinnable, and an error names
+  the mod, the key and where each of the two values came from — section, group,
+  widget, or the scope default. That holds when the conflict arises only through
+  inheritance as well: it is exactly the case nobody finds by reading one line. A
+  discovered foreign entry with `requireReload` resolves the same way, silently,
+  because its author has never heard of this mod.
+- **This is the third value through the cascade**, the point at which ADR-012
+  says it should become one mechanism. Resolution then has to return the value
+  *and* the level it came from, because the error above names the second.
+
+**The operator pins in a rules file per mod; the value stays in `config.cfg`.**
+Beside each mod's `config.cfg`, in its config folder `mods/<ModId>/`, sits a
+rules file — `server-rules.cfg` for now, the name is not settled:
+
+~~~ini
+General/enabled = true
+Rules/xpFactor  = false
+~~~
+
+- **The file says only whether an entry is pinned.** The value is the server's
+  own `config.cfg` entry: one source per value, edited where the operator already
+  finds its section, key, type and acceptable values. An invalid value there is
+  CoreLib's to handle, and CoreLib corrects it silently — `ClampValue` moves a
+  number to the nearest bound, and an unknown choice becomes the first acceptable
+  one — as it does for every entry today.
+- **Per mod, not one central file under `mods/ModSettingsMenu/`, and not in the
+  install folder**: that one changes with every release's `fileId`, and in a
+  symlinked server setup it is the client's own.
+- **`false` means not pinned**, exactly like an absent line. It exists so an
+  operator can switch a rule off without losing the key.
+- **MSM creates the file at server start** — on a dedicated server and when a
+  player hosts, which in practice includes many singleplayer runs; a file of
+  `false` lines changes nothing. Every pinnable key is listed as `false`, and keys
+  a mod update adds are appended. The operator's lines — values, order, comments
+  — are never rewritten, so this is appending line by line, not
+  `ConfigFile.Save()`, which rewrites a whole file from memory. A key that no
+  longer exists stays in place and is reported. A mod with nothing pinnable gets
+  no file.
+- **A bad line costs that line, never the server start.** An unknown key, a key
+  that is not pinnable, or a value other than `true` or `false` is ignored — the
+  entry stays unpinned — and an error names the file, the line and the reason.
+- **Pinning a `Client` value needs the mod on the server too**, or there is no
+  `config.cfg` entry to take the value from — a client-only mod included.
+- **An in-game editor for the file comes later.** MSM-19 ships the file alone.
+
+**A pin holds admins too, except the owner.** Only `adminPrivileges >= 2` may
+change a pinned value: the host or first player, and offline play at
+`int.MaxValue`. A stage-1 admin is held like everyone else. The owner changes
+the value through the ordinary row and send path, the server writes it into its
+`config.cfg`, and the pin carries the new value to everyone; the pin itself
+changes only in the file. The server decides, the client only shows the result.
+
+- On a dedicated server stage 2 goes to whoever connects while `Admins.json` is
+  empty (`NetworkingManager.OnPlayerConnect`: `adminList.Count == 0 ||
+  isLocalPlayer`). The operator documentation has to tell operators to enter
+  themselves at stage 2 first. Changing that rule is not this mod's business.
+
+**The player sees a withheld row.** A new `LockReason.OperatorLocked`, which
+`AccessLock.IsTransient` must classify as transient — it belongs to the session —
+so the row renders greyed out ([ADR-013](adrs/013-a-lock-describes-the-moment-not-the-row.md)), showing the server's value, and
+the section note says the server operator fixed it. It is kept apart from
+`ConditionUnmet` because "you lack a right" and "the operator fixed this for
+everyone" call for different reactions: only in the first does asking an admin
+help.
+
+- **To check before the spec:** the `adminPrivileges` stages, which come from
+  the handbook, and that a stage-2 entry written into `Admins.json` is applied on
+  connect; whether singleplayer and hosting can be told apart, which only the
+  documentation needs; and that `API.ConfigFilesystem` roots at the same `mods/`
+  folder on a dedicated server.
+- **Open:** whether `AdminOnly` is still needed beside pins. The two are of
+  different strength — `AdminOnly` leaves server values to every admin, a pin
+  holds them for everyone below the owner — so neither replaces the other
+  outright, but carrying both should be a decision rather than inertia.
 
 ## Small fixes
 
