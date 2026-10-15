@@ -846,9 +846,8 @@ wins; it is settled now, in [Operator pins](#operator-pins--the-author-permits-t
 - **Effort:** small once the transport stands, and "small" here is not an
   estimate: one `Bind(..., ConfigAccessLevel.Admin)` in MSM's own section plus one
   `&& !adminOnly` in the server's accept check.
-- **Open:** whether MSM brings the switch itself or whether it belongs to
-  whatever carries the sync — if that turns out to be CoreLib, the switch
-  probably belongs there too.
+- **Settled:** MSM brings the switch itself, because MSM carries the sync, and
+  MSM-19 ships it beside pins.
 - **To check before building on it:** two pieces above come from a subagent
   report and were not looked up first-hand — `PugSimulationSystemBase`/`isServer`
   and, for serialising values, `Get`/`SetSerializedValue` with
@@ -878,21 +877,28 @@ widget — the shape `requiresRestart` already has.
   value in is that promise, and the tutorial has to say so.
 - **A discovered foreign entry cannot declare anything**, so the default alone
   applies: its `Server` and `Admin` entries are pinnable.
-- **`operatorLockable` together with `requiresRestart` is refused on every
-  scope**, since a pinned value arriving mid-session cannot take effect before a
-  restart. The setting stays in the menu and is not pinnable, and an error names
-  the mod, the key and where each of the two values came from — section, group,
-  widget, or the scope default. That holds when the conflict arises only through
-  inheritance as well: it is exactly the case nobody finds by reading one line. A
-  discovered foreign entry with `requireReload` resolves the same way, silently,
-  because its author has never heard of this mod.
+- **`operatorLockable` together with `requiresRestart` is refused on a `Client`
+  entry**, since a pinned `Client` value arrives on a client mid-session and
+  cannot take effect there before a restart. On a `Server` or `Admin` entry the
+  combination is allowed: a pinned value takes effect after the server restarts
+  exactly like an unpinned one. The setting stays in the menu and is not
+  pinnable, and an error names the mod, the key and where each of the two values
+  came from — section, group, widget, or the scope default. That holds when the
+  conflict arises only through inheritance as well: it is exactly the case
+  nobody finds by reading one line. A discovered foreign entry with
+  `requireReload` resolves the same way, silently, because its author has never
+  heard of this mod.
 - **This is the third value through the cascade**, the point at which ADR-012
   says it should become one mechanism. Resolution then has to return the value
   *and* the level it came from, because the error above names the second.
 
-**The operator pins in a rules file per mod; the value stays in `config.cfg`.**
-Beside each mod's `config.cfg`, in its config folder `mods/<ModId>/`, sits a
-rules file — `server-rules.cfg` for now, the name is not settled:
+**The operator pins in a rules file per config file; the value stays in the
+config file.** Beside each config file, in the same folder and named after it,
+sits a rules file — `FasterTalents/config.cfg` gets `config.rules.cfg`,
+`PlacementPlus/PlacementPlus.cfg` gets `PlacementPlus.rules.cfg`, and a mod
+with several CoreLib config files gets one per file. CoreLib's own files, the
+one such case today, stay out of sync and pins as in GMCM. The naming pattern
+is not settled:
 
 ~~~ini
 General/enabled = true
@@ -905,9 +911,9 @@ Rules/xpFactor  = false
   CoreLib's to handle, and CoreLib corrects it silently — `ClampValue` moves a
   number to the nearest bound, and an unknown choice becomes the first acceptable
   one — as it does for every entry today.
-- **Per mod, not one central file under `mods/ModSettingsMenu/`, and not in the
-  install folder**: that one changes with every release's `fileId`, and in a
-  symlinked server setup it is the client's own.
+- **Beside the config file, not one central file under `mods/ModSettingsMenu/`,
+  and not in the install folder**: that one changes with every release's
+  `fileId`, and in a symlinked server setup it is the client's own.
 - **`false` means not pinned**, exactly like an absent line. It exists so an
   operator can switch a rule off without losing the key.
 - **MSM creates the file at server start** — on a dedicated server and when a
@@ -916,8 +922,8 @@ Rules/xpFactor  = false
   a mod update adds are appended. The operator's lines — values, order, comments
   — are never rewritten, so this is appending line by line, not
   `ConfigFile.Save()`, which rewrites a whole file from memory. A key that no
-  longer exists stays in place and is reported. A mod with nothing pinnable gets
-  no file.
+  longer exists stays in place and is reported. A config file with nothing
+  pinnable gets no rules file.
 - **A bad line costs that line, never the server start.** An unknown key, a key
   that is not pinnable, or a value other than `true` or `false` is ignored — the
   entry stays unpinned — and an error names the file, the line and the reason.
@@ -950,10 +956,9 @@ help.
   connect; whether singleplayer and hosting can be told apart, which only the
   documentation needs; and that `API.ConfigFilesystem` roots at the same `mods/`
   folder on a dedicated server.
-- **Open:** whether `AdminOnly` is still needed beside pins. The two are of
-  different strength — `AdminOnly` leaves server values to every admin, a pin
-  holds them for everyone below the owner — so neither replaces the other
-  outright, but carrying both should be a decision rather than inertia.
+- **Settled: `AdminOnly` ships beside pins.** The two are of different
+  strength — `AdminOnly` leaves server values to every admin, a pin holds them
+  for everyone below the owner — so neither replaces the other.
 
 ## Small fixes
 
