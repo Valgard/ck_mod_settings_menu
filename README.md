@@ -557,6 +557,38 @@ in the patch, so changing the Choice in the menu takes effect immediately.
 
 ---
 
+## Versioning
+
+Mod Settings Menu's version follows [Semantic Versioning](https://semver.org/), applied to the API your
+mod writes against:
+
+| Release | What it may do to your mod |
+|---|---|
+| **Major** (`2.x` → `3.0`) | break it — a member removed or renamed, a parameter or default changed. The changelog says what changed and what to do. |
+| **Minor** (`x.1` → `x.2`) | nothing you have to act on — new methods, widgets, optional parameters or enum members. |
+| **Patch** (`x.y.1` → `x.y.2`) | nothing — fixes only. |
+
+**What counts as the API:** `ModSettings`, `SectionBuilder`, `SettingHandle<T>`,
+the enums `SettingKind`, `SliderDisplay`, `OptionSort` and `ListEditing`, and
+the localisation term names under **Localization** above. `ModSection` and
+`SettingDef` are public only because the screen reads them, and are not covered;
+neither is anything in `ModSettingsMenu.UI`.
+
+**Nothing disappears without warning.** What is going away is first marked
+`[Obsolete]` in a minor release, naming its replacement, and is removed no
+earlier than the next major — so you see a compiler warning while there is
+still time.
+
+**Compatible means your source still compiles.** Your scripts are compiled
+against whatever version of this mod the player has installed, every time the
+game starts, so that is what the promise is about. Core Keeper cannot pin a
+dependency to a version, and mod.io and the Workshop always deliver the newest
+release — the number tells you when to look, it cannot hold an update back.
+
+The decision and the alternatives weighed against it: [ADR-014](docs/adrs/014-the-consumer-api-follows-semver.md).
+
+---
+
 ## Behaviour & gotchas
 
 - **Call in `IMod.Init` — or `IMod.EarlyInit` for values read during world/database
