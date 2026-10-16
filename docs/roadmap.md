@@ -1163,3 +1163,44 @@ into 2.0 and offered to help work out the details. Revised 2026-10-11 with the
 platform findings and the direction above; the earlier comparison of three
 options lost its reflection option to `InvokeChecker`, and its file option
 became the direction.
+
+## MSM-40 — One page per mod, as a player's choice
+
+**The settings screen is one continuous scroll.** Every consumer's section is
+stacked into the same screen, so a player with many mods installed — or one mod
+with many options — scrolls past everything else to reach the part they came
+for. A second layout lists the mods, and opening one shows a page with that
+mod's settings alone.
+
+**Both layouts stay, and the player picks.** Neither is better in general: the
+single list shows everything at a glance with no extra step, which is what a
+handful of mods wants; one page per mod scales with the number of mods.
+
+- **The default is the single list**, the layout MSM has today. Nobody who
+  updates finds the screen rearranged; a player who prefers pages switches once.
+- **One switch for the whole menu**, not one per mod. It decides how the menu is
+  laid out, and a per-mod choice has nothing to decide.
+- **Nothing changes for a consumer.** A section already is the unit "one mod";
+  the page layout shows the same sections one at a time. Existing consumers and
+  discovered foreign mods get it without a rebuild or a new call.
+- **Reset stays per section**, which on a page means exactly the mod on it —
+  the same scope as today, reached the same way.
+
+Open:
+
+- **Where the switch lives.** MSM has no player-facing setting of its own yet;
+  its one setting today, `reportForeignNamingStages`, is deliberately kept out
+  of the menu. Registering MSM as a section of its own puts the switch where a
+  player looks, at the price of MSM appearing in its own list.
+- **Navigation.** The mod list is one level more: selecting a mod pushes its
+  page, and Back has to return to the list with the same mod still selected, on
+  keyboard, mouse and controller alike. The drill-in lists already push and pop
+  a level; whether that mechanism carries a whole section is the first thing to
+  check.
+- **What a list row shows.** The mod's heading at least; whether it also
+  carries the section's `Hint`, or a marker for a mod that needs a restart, is
+  undecided.
+
+Opened 2026-10-16. The trigger was a second settings framework for Core Keeper
+mods, *Mod Options*, whose author named a page per mod as one of two reasons for
+building their own.
