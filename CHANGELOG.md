@@ -122,6 +122,12 @@ entry is the version published to mod.io; its body is the modfile changelog.
   admin-only access. A mod rendering its own surface over `ModSettings.Sections`
   can ask `SettingDef.IsEditable` whether a row may be operated at all, rather
   than combining the permission and the widget shape itself.
+- **For mod authors: nothing you wrote against 1.x needs changing.** Every 1.x
+  declaration still compiles as it is, and all new parameters are optional; the
+  General Mod Config Menu syncing change above is the one difference your
+  players may notice. From this release on, the version number follows Semantic
+  Versioning for the API your mod writes against; the README's Versioning
+  section says what each kind of release may change.
 
 ## [1.2.2]
 
