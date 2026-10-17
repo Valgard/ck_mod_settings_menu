@@ -65,10 +65,20 @@ changelog then says that nothing changed for consumers.
 the `ModSettingsMenu.Settings` types `ModSettings`, `SectionBuilder` and
 `SettingHandle<T>`, the enums `SettingKind`, `SliderDisplay`, `OptionSort` and
 `ListEditing`, and the localisation term scheme a consumer's own terms are
-looked up under. `ModSection` and `SettingDef` are public because the screen
-reads them, not because a consumer should — they are excluded, as is everything
-in `ModSettingsMenu.UI` and anything `internal`. The README names the same
-surface, so an author does not have to read this record to find it.
+looked up under.
+
+`ModSection` and `SettingDef` are covered for **reading only**. They are what
+`ModSettings.Sections` hands out, and a mod rendering its own surface over the
+registered settings is told to read them — `SettingDef.IsEditable` exists for
+exactly that caller. Writing to them is not covered: their fields are public
+because the screen and the discovery fill them in, and a member may become
+read-only in any release. That split costs little, because a field turning into
+a read-only property breaks only an assignment, and every reader still compiles
+— which is precisely what happened to `SettingDef.RequiresRestart` in 2.0.0.
+
+Not covered at all: everything in `ModSettingsMenu.UI` and anything `internal`.
+The README names the same surface, so an author does not have to read this
+record to find it.
 
 **Removal is announced first.** A member that is going away is marked
 `[Obsolete]` in a minor release, with the replacement named in its message, and

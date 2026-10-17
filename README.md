@@ -571,8 +571,10 @@ mod writes against:
 **What counts as the API:** `ModSettings`, `SectionBuilder`, `SettingHandle<T>`,
 the enums `SettingKind`, `SliderDisplay`, `OptionSort` and `ListEditing`, and
 the localisation term names under **Localization** above. `ModSection` and
-`SettingDef` are public only because the screen reads them, and are not covered;
-neither is anything in `ModSettingsMenu.UI`.
+`SettingDef` — what `ModSettings.Sections` returns — are covered for **reading**:
+a mod that renders its own surface can rely on them. Assigning to their fields
+is not supported, and a field may become read-only in any release. Nothing in
+`ModSettingsMenu.UI` is covered.
 
 **Nothing disappears without warning.** What is going away is first marked
 `[Obsolete]` in a minor release, naming its replacement, and is removed no
