@@ -204,9 +204,10 @@ traps, each verified in-game. Full detail (with the code paths) lives in
   rows and the frame drift apart. The 1.3 placement rules themselves are in
   `../docs/ck/ui-framework.md`.
 - **Never rely on CoreLib's `SaveOnConfigSet` — another mod can switch it off.** General
-  Mod Config Menu sets it to `false` on every `ConfigFile` except CoreLib's own, ours
+  Mod Config Menu sets it to `false` on every `ConfigFile` that exists when it runs, ours
   included, at three places (`ModConfigMenu.Awake` and `RegisterFile`, already on the
-  title screen, and `ConfigSyncSystem.OnCreate` in every world), so a write that trusts
+  title screen, and `ConfigSyncSystem.OnCreate` in every world) — `Awake` and `OnCreate`
+  skip CoreLib's own files, `RegisterFile` does not — so a write that trusts
   the flag lives in memory only and is gone on the next launch (no error, nothing in the
   log). Every value write therefore goes through `ConfigStore.Persist`, which calls
   `ConfigFile.Save()` when the flag is off. The flag is deliberately left as GMCM set
